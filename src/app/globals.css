@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #0a0a0a;
+  --color-coal: #111214;
+  --color-smoke: #1a1c1f;
+  --color-line: #2a2d33;
+  --color-gold: #f5c518;
+  --color-golddeep: #b8860b;
+  --color-goldsoft: #ffe9a3;
+  --color-paper: #ffffff;
+  --color-muted: #9aa0a8;
+  --color-up: #22c55e;
+  --color-down: #ef4444;
+  --font-display: "Arial Black", "Helvetica Neue", sans-serif;
+}
+
+html {
+  background: var(--color-ink);
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+}
+
+.gold-text {
+  background: linear-gradient(135deg, #ffe9a3 0%, #f5c518 40%, #b8860b 70%, #f5c518 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.gold-border {
+  border: 1px solid rgba(245, 197, 24, 0.35);
+}
+
+.card {
+  background: linear-gradient(180deg, #141619 0%, #0e0f11 100%);
+  border: 1px solid #2a2d33;
+  border-radius: 12px;
+}
+
+.card-glow {
+  box-shadow: 0 0 24px rgba(245, 197, 24, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.ticker {
+  display: flex;
+  gap: 2.5rem;
+  white-space: nowrap;
+  animation: ticker-scroll 40s linear infinite;
+}
+
+@keyframes ticker-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@keyframes pulse-gold {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.live-dot {
+  animation: pulse-gold 1.6s ease-in-out infinite;
+}
+
+.steam-flash {
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.18), rgba(239, 68, 68, 0.05));
+  border-left: 3px solid #ef4444;
+}
+
+.best-price {
+  background: linear-gradient(90deg, rgba(245, 197, 24, 0.22), rgba(245, 197, 24, 0.06));
+  border: 1px solid rgba(245, 197, 24, 0.5);
+  border-radius: 6px;
+  font-weight: 700;
+}
+
+.hero-grid {
+  background-image:
+    linear-gradient(rgba(245, 197, 24, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245, 197, 24, 0.05) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+.btn-gold {
+  background: linear-gradient(135deg, #ffe9a3, #f5c518 55%, #d4a017);
+  color: #0a0a0a;
+  font-weight: 800;
+  border-radius: 10px;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.btn-gold:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(245, 197, 24, 0.35);
+}
+
+.btn-ghost {
+  border: 1px solid #2a2d33;
+  border-radius: 10px;
+  color: #fff;
+  transition: border-color 0.12s ease;
+}
+
+.btn-ghost:hover {
+  border-color: rgba(245, 197, 24, 0.6);
+}

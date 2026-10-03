@@ -1,0 +1,86 @@
+{
+ "note": "All-Time Record for MoyLine AI begins October 1, 2026 \u2014 nothing before that date counts. Seeded from verified graded briefs only.",
+ "picks": [
+  {
+   "book": "BetMGM",
+   "date": "2026-10-01",
+   "edition": "late",
+   "final": "Oilers 9-7",
+   "game": "Oilers @ Canucks",
+   "id": "seed-1",
+   "line": "+180",
+   "play": "Canucks ML",
+   "result": "Loss",
+   "sport": "NHL",
+   "star": true
+  },
+  {
+   "book": "FanDuel",
+   "date": "2026-10-01",
+   "edition": "late",
+   "final": "Browns 27-24",
+   "game": "Steelers @ Browns",
+   "id": "seed-2",
+   "line": "+126",
+   "play": "Browns ML",
+   "result": "Win",
+   "sport": "NFL"
+  },
+  {
+   "book": "FanDuel",
+   "date": "2026-10-01",
+   "edition": "late",
+   "final": "Aces 94-83",
+   "game": "Fever @ Aces",
+   "id": "seed-3",
+   "line": "-188",
+   "play": "Aces ML",
+   "result": "Win",
+   "sport": "WNBA"
+  },
+  {
+   "book": "consensus",
+   "date": "2026-10-01",
+   "edition": "late",
+   "final": "Costa Rica 3-0",
+   "game": "Nicaragua vs Costa Rica",
+   "id": "seed-4",
+   "line": "1.48",
+   "play": "Costa Rica ML",
+   "result": "Win",
+   "sport": "Nations League"
+  },
+  {
+   "book": "FanDuel",
+   "date": "2026-10-02",
+   "edition": "7am",
+   "final": "Bruins 4-3 (OT)",
+   "game": "Bruins @ Jets",
+   "id": "oct2-1",
+   "line": "+104",
+   "play": "Bruins ML",
+   "result": "Win",
+   "sport": "NHL",
+   "star": true
+  },
+  {
+   "book": "DraftKings",
+   "date": "2026-10-02",
+   "edition": "7am",
+   "final": "Valkyries 77-73",
+   "game": "Wings @ Valkyries",
+   "id": "oct2-2",
+   "line": "-118",
+   "play": "Wings +8.5",
+   "result": "Win",
+   "sport": "WNBA",
+   "star": false
+  }
+ ],
+ "startDate": "2026-10-01",
+ "totals": {
+  "w": 5,
+  "l": 1,
+  "p": 0
+ }
+}
