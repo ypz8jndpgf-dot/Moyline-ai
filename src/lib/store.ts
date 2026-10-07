@@ -46,6 +46,8 @@ export interface TrackPick {
   star?: boolean;
   result: "Win" | "Loss" | "Push";
   final: string;
+  conf?: string;
+  clv?: string;
 }
 
 export interface TrackRecord {

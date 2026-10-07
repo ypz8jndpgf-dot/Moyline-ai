@@ -7,6 +7,40 @@ export default async function TrackRecordPage() {
   const { w, l, p } = rec.totals;
   const winPct = w + l > 0 ? ((w / (w + l)) * 100).toFixed(1) : "—";
 
+  const tally = (list: typeof rec.picks) => {
+    const cw = list.filter((x) => x.result === "Win").length;
+    const cl = list.filter((x) => x.result === "Loss").length;
+    const cp = list.filter((x) => x.result === "Push").length;
+    const pct = cw + cl > 0 ? ((cw / (cw + cl)) * 100).toFixed(1) + "%" : "—";
+    return { cw, cl, cp, pct };
+  };
+  const stars = tally(rec.picks.filter((x) => x.star));
+  const conf4 = tally(rec.picks.filter((x) => x.conf === "4"));
+  const bySport = new Map<string, typeof rec.picks>();
+  for (const x of rec.picks) {
+    const s = x.sport || "Other";
+    if (!bySport.has(s)) bySport.set(s, []);
+    bySport.get(s)!.push(x);
+  }
+  let bestSport: { name: string; t: ReturnType<typeof tally> } | null = null;
+  for (const [name, list] of bySport) {
+    const t = tally(list);
+    if (t.cw + t.cl >= 8 && (!bestSport || parseFloat(t.pct) > parseFloat(bestSport.t.pct))) {
+      bestSport = { name, t };
+    }
+  }
+  const featured: [string, string, string][] = [
+    ["★ Featured plays", `${stars.cw}-${stars.cl}${stars.cp ? `-${stars.cp}` : ""}`, stars.pct],
+    ["Conf-4 top plays", `${conf4.cw}-${conf4.cl}-${conf4.cp}`, conf4.pct],
+  ];
+  if (bestSport) {
+    featured.push([
+      `Best sport (${bestSport.name})`,
+      `${bestSport.t.cw}-${bestSport.t.cl}${bestSport.t.cp ? `-${bestSport.t.cp}` : ""}`,
+      bestSport.t.pct,
+    ]);
+  }
+
   return (
     <div>
       <p className="text-xs font-bold uppercase tracking-[0.3em] text-gold mb-2">Verified results only</p>
@@ -30,6 +64,20 @@ export default async function TrackRecordPage() {
           </div>
         ))}
       </div>
+
+      <p className="text-xs font-bold uppercase tracking-[0.3em] text-gold mb-2 mt-10">Featured angles</p>
+      <div className="grid grid-cols-3 gap-3 mb-8 max-w-2xl">
+        {featured.map(([label, val, pct]) => (
+          <div key={label} className="card p-4 text-center">
+            <div className="font-display text-2xl text-gold">{val}</div>
+            <div className="text-[11px] uppercase tracking-widest text-muted">{label}</div>
+            <div className="text-xs text-muted mt-1">{pct} of decided</div>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-muted mb-8 max-w-2xl">
+        Featured slices are defined subsets of the full verified record below — biggest-edge ★ plays, confidence-4 top plays, and the best-performing sport (min. 8 decided). Nothing is hidden: every pick is listed.
+      </p>
 
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">

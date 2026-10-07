@@ -18,6 +18,8 @@
    "result": "Win",
    "final": "Oilers 9-7",
    "sport": "NHL",
+   "conf": "3",
+   "clv": "Loss",
    "star": true
   },
   {
@@ -30,7 +32,9 @@
    "book": "DraftKings",
    "result": "Loss",
    "final": "Browns 27-24",
-   "sport": "NFL"
+   "sport": "NFL",
+   "conf": "3",
+   "clv": "N/A"
   },
   {
    "id": "ah-3",
@@ -42,7 +46,9 @@
    "book": "BetMGM",
    "result": "Push",
    "final": "UNT 45-44 OT",
-   "sport": "CFB"
+   "sport": "CFB",
+   "conf": "2",
+   "clv": "Loss"
   },
   {
    "id": "ah-4",
@@ -54,7 +60,9 @@
    "book": "market avg",
    "result": "Loss",
    "final": "Wales 2-1 Norway",
-   "sport": "UNL"
+   "sport": "UNL",
+   "conf": "2",
+   "clv": "N/A"
   },
   {
    "id": "ah-5",
@@ -66,7 +74,9 @@
    "book": "market avg",
    "result": "Win",
    "final": "Portugal 4-2 Denmark",
-   "sport": "UNL"
+   "sport": "UNL",
+   "conf": "2",
+   "clv": "N/A"
   },
   {
    "id": "ah-6",
@@ -78,7 +88,9 @@
    "book": "market avg",
    "result": "Loss",
    "final": "Greece 2-2 Netherlands",
-   "sport": "UNL"
+   "sport": "UNL",
+   "conf": "2",
+   "clv": "N/A"
   },
   {
    "id": "ah-7",
@@ -90,7 +102,9 @@
    "book": "DraftKings",
    "result": "Win",
    "final": "Aces 94-83",
-   "sport": "WNBA"
+   "sport": "WNBA",
+   "conf": "2",
+   "clv": "N/A"
   },
   {
    "id": "ah-8",
@@ -102,7 +116,9 @@
    "book": "",
    "result": "Loss",
    "final": "Rangers 5-1",
-   "sport": "NHL"
+   "sport": "NHL",
+   "conf": "2",
+   "clv": "Win"
   },
   {
    "id": "ah-9",
@@ -114,7 +130,9 @@
    "book": "FanDuel",
    "result": "Loss",
    "final": "NMSU 34-13",
-   "sport": "CFB"
+   "sport": "CFB",
+   "conf": "2",
+   "clv": "N/A"
   },
   {
    "id": "ai-1",
@@ -127,6 +145,8 @@
    "result": "Loss",
    "final": "UNT 45-44 OT",
    "sport": "CFB",
+   "conf": "3",
+   "clv": "N/A",
    "star": true
   },
   {
@@ -139,7 +159,9 @@
    "book": "Betsson",
    "result": "Loss",
    "final": "Germany 2-0 Serbia",
-   "sport": "UNL"
+   "sport": "UNL",
+   "conf": "3",
+   "clv": "N/A"
   },
   {
    "id": "ai-5",
@@ -151,7 +173,9 @@
    "book": "",
    "result": "Loss",
    "final": "Portugal 4-2 Denmark",
-   "sport": "UNL"
+   "sport": "UNL",
+   "conf": "3",
+   "clv": "N/A"
   },
   {
    "id": "ai-6",
@@ -163,7 +187,9 @@
    "book": "Betano",
    "result": "Loss",
    "final": "Wales 2-1 Norway",
-   "sport": "UNL"
+   "sport": "UNL",
+   "conf": "2",
+   "clv": "N/A"
   },
   {
    "id": "ai-7",
@@ -175,7 +201,9 @@
    "book": "",
    "result": "Win",
    "final": "Ireland 2-2 Austria",
-   "sport": "UNL"
+   "sport": "UNL",
+   "conf": "2",
+   "clv": "N/A"
   },
   {
    "id": "ai-8",
@@ -187,7 +215,9 @@
    "book": "",
    "result": "Loss",
    "final": "Israel 0-0 Kosovo",
-   "sport": "UNL"
+   "sport": "UNL",
+   "conf": "2",
+   "clv": "N/A"
   },
   {
    "id": "aj-2",
@@ -199,7 +229,9 @@
    "book": "FanDuel",
    "result": "Win",
    "final": "Oilers 9-7",
-   "sport": "NHL"
+   "sport": "NHL",
+   "conf": "3",
+   "clv": "N/A"
   },
   {
    "id": "aj-5",
@@ -211,7 +243,9 @@
    "book": "BetMGM",
    "result": "Loss",
    "final": "Rangers 5-1",
-   "sport": "NHL"
+   "sport": "NHL",
+   "conf": "2",
+   "clv": "N/A"
   },
   {
    "id": "ak-1",
@@ -224,6 +258,8 @@
    "result": "Loss",
    "final": "Oilers 9-7",
    "sport": "NHL",
+   "conf": "4",
+   "clv": "N/A",
    "star": true
   },
   {
@@ -236,7 +272,9 @@
    "book": "FanDuel",
    "result": "Win",
    "final": "Browns 27-24",
-   "sport": "NFL"
+   "sport": "NFL",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "ak-3",
@@ -248,7 +286,9 @@
    "book": "FanDuel",
    "result": "Win",
    "final": "Aces 94-83",
-   "sport": "WNBA"
+   "sport": "WNBA",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "ak-4",
@@ -260,7 +300,9 @@
    "book": "consensus",
    "result": "Win",
    "final": "Costa Rica 3-0 Nicaragua",
-   "sport": "CNL"
+   "sport": "CNL",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "al-1",
@@ -273,6 +315,8 @@
    "result": "Win",
    "final": "Bruins 4-3",
    "sport": "",
+   "conf": "4",
+   "clv": "N/A",
    "star": true
   },
   {
@@ -285,7 +329,9 @@
    "book": "DraftKings",
    "result": "Win",
    "final": "Valkyries 77-73",
-   "sport": ""
+   "sport": "",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "am-1",
@@ -298,6 +344,8 @@
    "result": "Win",
    "final": "Bruins 4-3",
    "sport": "",
+   "conf": "4",
+   "clv": "N/A",
    "star": true
   },
   {
@@ -311,6 +359,8 @@
    "result": "Win",
    "final": "Bruins 4-3",
    "sport": "",
+   "conf": "4",
+   "clv": "N/A",
    "star": true
   },
   {
@@ -323,7 +373,9 @@
    "book": "DraftKings",
    "result": "Loss",
    "final": "Buccaneers 17-14",
-   "sport": "NFL"
+   "sport": "NFL",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "ao-2",
@@ -335,7 +387,9 @@
    "book": "DraftKings",
    "result": "Loss",
    "final": "Missouri 45-17",
-   "sport": "CFB"
+   "sport": "CFB",
+   "conf": "4",
+   "clv": "Win"
   },
   {
    "id": "ao-3",
@@ -347,7 +401,9 @@
    "book": "DraftKings",
    "result": "Win",
    "final": "Rams 24-20",
-   "sport": "NFL"
+   "sport": "NFL",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "ao-4",
@@ -359,7 +415,9 @@
    "book": "",
    "result": "Win",
    "final": "BYU 17-10",
-   "sport": "CFB"
+   "sport": "CFB",
+   "conf": "4",
+   "clv": "Loss"
   },
   {
    "id": "ao-5",
@@ -371,7 +429,9 @@
    "book": "BetMGM",
    "result": "Loss",
    "final": "Tennessee 24-14",
-   "sport": "CFB"
+   "sport": "CFB",
+   "conf": "4",
+   "clv": "Win"
   },
   {
    "id": "ap-1",
@@ -383,7 +443,9 @@
    "book": "FanDuel",
    "result": "Loss",
    "final": "Predators 2-1",
-   "sport": "NHL"
+   "sport": "NHL",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "ap-2",
@@ -395,7 +457,9 @@
    "book": "",
    "result": "Loss",
    "final": "Missouri 45-17",
-   "sport": "CFB"
+   "sport": "CFB",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "aq-1",
@@ -407,7 +471,9 @@
    "book": "DraftKings",
    "result": "Win",
    "final": "Dodgers 5-3",
-   "sport": "MLB"
+   "sport": "MLB",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "aq-2",
@@ -419,7 +485,9 @@
    "book": "consensus",
    "result": "Loss",
    "final": "Ohio State 31-14",
-   "sport": "CFB"
+   "sport": "CFB",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "ar-1",
@@ -431,7 +499,9 @@
    "book": "",
    "result": "Push",
    "final": "Iowa State 45-42",
-   "sport": "CFB"
+   "sport": "CFB",
+   "conf": "4",
+   "clv": "Loss"
   },
   {
    "id": "ar-2",
@@ -443,7 +513,9 @@
    "book": "BetMGM",
    "result": "Win",
    "final": "Air Force 14-9",
-   "sport": "CFB"
+   "sport": "CFB",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "ar-3",
@@ -455,7 +527,9 @@
    "book": "",
    "result": "Win",
    "final": "Alabama 56-23",
-   "sport": "CFB"
+   "sport": "CFB",
+   "conf": "4",
+   "clv": "Win"
   },
   {
    "id": "as-1",
@@ -467,7 +541,9 @@
    "book": "",
    "result": "Win",
    "final": "Eastern Michigan 38-14",
-   "sport": "CFB"
+   "sport": "CFB",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "as-2",
@@ -479,7 +555,9 @@
    "book": "",
    "result": "Loss",
    "final": "Tennessee 24-14",
-   "sport": "CFB"
+   "sport": "CFB",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "as-3",
@@ -491,7 +569,9 @@
    "book": "",
    "result": "Loss",
    "final": "Missouri 45-17",
-   "sport": "CFB"
+   "sport": "CFB",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "as-4",
@@ -503,7 +583,9 @@
    "book": "",
    "result": "Loss",
    "final": "Ohio State 31-14",
-   "sport": "CFB"
+   "sport": "CFB",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "au-1",
@@ -515,7 +597,9 @@
    "book": "DraftKings",
    "result": "Win",
    "final": "BYU 17-10",
-   "sport": "CFB"
+   "sport": "CFB",
+   "conf": "4",
+   "clv": "Win"
   },
   {
    "id": "av-1",
@@ -528,6 +612,8 @@
    "result": "Loss",
    "final": "Golden Knights 3-2",
    "sport": "NHL",
+   "conf": "4",
+   "clv": "Win",
    "star": true
   },
   {
@@ -540,7 +626,9 @@
    "book": "bet365",
    "result": "Win",
    "final": "Portugal 2-1",
-   "sport": "UNL,"
+   "sport": "UNL,",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "av-3",
@@ -552,7 +640,9 @@
    "book": "BetRivers",
    "result": "Win",
    "final": "Brewers 4-3",
-   "sport": "NLDS"
+   "sport": "NLDS",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "aw-1",
@@ -565,6 +655,8 @@
    "result": "Win",
    "final": "Rams 24-20",
    "sport": "NFL",
+   "conf": "4",
+   "clv": "N/A",
    "star": true
   },
   {
@@ -577,7 +669,9 @@
    "book": "BetRivers",
    "result": "Win",
    "final": "Kraken 6-1",
-   "sport": "NHL"
+   "sport": "NHL",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "aw-3",
@@ -589,7 +683,9 @@
    "book": "FanDuel",
    "result": "Loss",
    "final": "Braves 3-2",
-   "sport": "NLDS"
+   "sport": "NLDS",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "aw-4",
@@ -601,7 +697,9 @@
    "book": "",
    "result": "Win",
    "final": "Jets 3-2",
-   "sport": "NHL"
+   "sport": "NHL",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "aw-5",
@@ -613,7 +711,9 @@
    "book": "Fanatics",
    "result": "Loss",
    "final": "Seahawks 30-23; JSN 5 catches, 76 yards, no TD",
-   "sport": "NFL"
+   "sport": "NFL",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "ax-1",
@@ -626,6 +726,8 @@
    "result": "Win",
    "final": "Kraken 6-1",
    "sport": "NHL",
+   "conf": "4",
+   "clv": "N/A",
    "star": true
   },
   {
@@ -638,7 +740,9 @@
    "book": "BetRivers",
    "result": "Loss",
    "final": "Golden Knights 3-2",
-   "sport": "NHL"
+   "sport": "NHL",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "ax-3",
@@ -650,7 +754,9 @@
    "book": "FanDuel",
    "result": "Loss",
    "final": "Braves 3-2",
-   "sport": "NLDS"
+   "sport": "NLDS",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "ba-1",
@@ -663,6 +769,8 @@
    "result": "Win",
    "final": "White Sox 4-3",
    "sport": "MLB,",
+   "conf": "4",
+   "clv": "N/A",
    "star": true
   },
   {
@@ -675,7 +783,9 @@
    "book": "BetRivers",
    "result": "Win",
    "final": "Lightning 4-1",
-   "sport": "NHL"
+   "sport": "NHL",
+   "conf": "4",
+   "clv": "Win"
   },
   {
    "id": "ba-3",
@@ -687,7 +797,9 @@
    "book": "FanDuel",
    "result": "Loss",
    "final": "Rays 5-2",
-   "sport": "MLB,"
+   "sport": "MLB,",
+   "conf": "4",
+   "clv": "Loss"
   },
   {
    "id": "ba-4",
@@ -699,7 +811,9 @@
    "book": "best price",
    "result": "Win",
    "final": "Italy 3-1",
-   "sport": "UNL"
+   "sport": "UNL",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "bb-1",
@@ -712,6 +826,8 @@
    "result": "Win",
    "final": "White Sox 4-3",
    "sport": "MLB,",
+   "conf": "4",
+   "clv": "N/A",
    "star": true
   },
   {
@@ -725,6 +841,8 @@
    "result": "Loss",
    "final": "Senators 4-1",
    "sport": "NHL",
+   "conf": "4",
+   "clv": "N/A",
    "star": true
   },
   {
@@ -737,7 +855,9 @@
    "book": "BetMGM",
    "result": "Win",
    "final": "Lightning 4-1",
-   "sport": "NHL"
+   "sport": "NHL",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "bd-1",
@@ -750,6 +870,8 @@
    "result": "Loss",
    "final": "Troy 55-34",
    "sport": "CFB",
+   "conf": "4",
+   "clv": "N/A",
    "star": true
   },
   {
@@ -762,7 +884,9 @@
    "book": "market best",
    "result": "Loss",
    "final": "Chicago Fire 3-1",
-   "sport": "MLS"
+   "sport": "MLS",
+   "conf": "4",
+   "clv": "Loss"
   },
   {
    "id": "bd-3",
@@ -774,7 +898,9 @@
    "book": "BetRivers",
    "result": "Win",
    "final": "Red Wings 5-3",
-   "sport": "NHL"
+   "sport": "NHL",
+   "conf": "4",
+   "clv": "Win"
   },
   {
    "id": "be-1",
@@ -787,6 +913,8 @@
    "result": "Loss",
    "final": "Troy 55-34",
    "sport": "CFB",
+   "conf": "4",
+   "clv": "N/A",
    "star": true
   },
   {
@@ -799,7 +927,9 @@
    "book": "BetRivers",
    "result": "Loss",
    "final": "Chicago Fire 3-1",
-   "sport": "MLS"
+   "sport": "MLS",
+   "conf": "4",
+   "clv": "N/A"
   },
   {
    "id": "bf-1",
@@ -812,6 +942,8 @@
    "result": "Win",
    "final": "Panthers 2-1",
    "sport": "NHL",
+   "conf": "4",
+   "clv": "Loss",
    "star": true
   },
   {
@@ -824,7 +956,9 @@
    "book": "BetRivers",
    "result": "Win",
    "final": "Rangers 5-2",
-   "sport": "NHL"
+   "sport": "NHL",
+   "conf": "4",
+   "clv": "Win"
   },
   {
    "id": "bf-3",
@@ -836,7 +970,9 @@
    "book": "BetRivers",
    "result": "Loss",
    "final": "Chicago Fire 3-1",
-   "sport": "MLS"
+   "sport": "MLS",
+   "conf": "4",
+   "clv": "Loss"
   }
  ]
 }
