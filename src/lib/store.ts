@@ -126,9 +126,14 @@ export async function setSubscription(email: string, rec: SubRecord): Promise<vo
   await writeJson(SUBS_FILE, all);
 }
 
-/** Owner bypass + active/trialing check. */
+/** Owner bypass + beta allowlist + active/trialing check. */
 export function hasAccess(email: string | null | undefined, sub: SubRecord): boolean {
   const admin = (process.env.ADMIN_EMAIL || "").toLowerCase();
   if (email && admin && email.toLowerCase() === admin) return true;
+  const beta = (process.env.BETA_EMAILS || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  if (email && beta.includes(email.toLowerCase())) return true;
   return sub.status === "active" || sub.status === "trialing";
 }
