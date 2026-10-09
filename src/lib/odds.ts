@@ -27,7 +27,7 @@ const DEFAULT_SPORTS = [
   "soccer_spain_la_liga",
   "soccer_germany_bundesliga",
   "soccer_italy_serie_a",
-  "soccer_france_ligue_1",
+  "soccer_france_ligue_one",
   "soccer_brazil_campeonato",
   "soccer_uefa_champs_league",
 ];
