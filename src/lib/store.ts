@@ -44,7 +44,7 @@ export interface TrackPick {
   line: string;
   book: string;
   star?: boolean;
-  result: "Win" | "Loss" | "Push";
+  result: "Win" | "Loss" | "Push" | "Pending";
   final: string;
   conf?: string;
   clv?: string;
@@ -52,6 +52,7 @@ export interface TrackPick {
 
 export interface TrackRecord {
   startDate: string;
+  optimizedStartDate?: string;
   note: string;
   picks: TrackPick[];
   totals: { w: number; l: number; p: number };
