@@ -29,15 +29,15 @@ function Nav() {
   return (
     <header className="border-b border-line/70 bg-ink/90 backdrop-blur sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-        <Link href="/" className="font-display text-2xl">
+        <Link href="/" className="font-display text-xl sm:text-2xl shrink-0">
           <span className="gold-text">MOYLINE</span>{" "}
           <span className="text-paper">AI</span>
         </Link>
-        <nav className="flex items-center gap-1 sm:gap-2 text-sm font-bold">
-          <Link href="/" className="px-3 py-1.5 rounded hover:text-gold">Lines</Link>
-          <Link href="/picks" className="px-3 py-1.5 rounded hover:text-gold">Picks 🔒</Link>
-          <Link href="/track-record" className="px-3 py-1.5 rounded hover:text-gold">Record</Link>
-          <Link href="/pricing" className="px-3 py-1.5 rounded btn-gold">Go Pro</Link>
+        <nav className="flex items-center gap-0.5 sm:gap-2 text-xs sm:text-sm font-bold">
+          <Link href="/" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold">Lines</Link>
+          <Link href="/picks" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold">Picks 🔒</Link>
+          <Link href="/track-record" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold">Record</Link>
+          <Link href="/pricing" className="px-2.5 sm:px-3 py-1.5 rounded btn-gold whitespace-nowrap">Go Pro</Link>
         </nav>
       </div>
     </header>

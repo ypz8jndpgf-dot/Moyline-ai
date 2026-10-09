@@ -75,7 +75,31 @@ function GameCard({ game }: { game: GameVM }) {
       <h3 className="font-display text-lg mb-3">
         {game.away} <span className="text-muted">@</span> {game.home}
       </h3>
-      <div className="overflow-x-auto">
+      {/* Mobile: stacked per-book market rows */}
+      <div className="md:hidden space-y-3">
+        {game.books.map((b) => (
+          <div key={b.key} className="border-t border-line/60 pt-2.5 first:border-t-0 first:pt-0">
+            <div className="font-bold text-goldsoft text-xs mb-1.5">{b.label}</div>
+            <div className="space-y-1.5">
+              {(
+                [
+                  ["Spread", b.spreadAway, b.spreadHome, `${game.away} spread`, `${game.home} spread`],
+                  ["Total", b.totalOver, b.totalUnder, "Total over", "Total under"],
+                  ["ML", b.mlAway, b.mlHome, `${game.away} ML`, `${game.home} ML`],
+                ] as [string, CellVM | null, CellVM | null, string, string][]
+              ).map(([label, c1, c2, l1, l2]) => (
+                <div key={label} className="flex items-center gap-2">
+                  <div className="w-14 shrink-0 text-[10px] uppercase tracking-widest text-muted">{label}</div>
+                  <div className="flex-1 min-w-0"><Cell cell={c1} label={l1} /></div>
+                  <div className="flex-1 min-w-0"><Cell cell={c2} label={l2} /></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* Desktop: full 7-column table */}
+      <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-[10px] uppercase tracking-widest text-muted">
