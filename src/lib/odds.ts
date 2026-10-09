@@ -23,8 +23,6 @@ const DEFAULT_SPORTS = [
   "basketball_nba",
   "baseball_mlb",
   "basketball_wnba",
-  "soccer_usa_mls",
-  "soccer_epl",
 ];
 
 const BOOKS = ["draftkings", "fanduel", "betmgm", "caesars"];
