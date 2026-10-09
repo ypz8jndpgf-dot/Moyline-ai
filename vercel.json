@@ -1,1 +1,1 @@
-{"$schema":"https://openapi.vercel.sh/vercel.json","crons":[{"path":"/api/refresh","schedule":"0 21 * * *"},{"path":"/api/refresh","schedule":"0 15 * * 0,6"}]}
+{"$schema":"https://openapi.vercel.sh/vercel.json","crons":[{"path":"/api/refresh","schedule":"0 12 * * *"},{"path":"/api/refresh","schedule":"0 15 * * *"},{"path":"/api/refresh","schedule":"0 21 * * *"},{"path":"/api/refresh","schedule":"0 1 * * *"}]}

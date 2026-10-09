@@ -22,7 +22,14 @@ const DEFAULT_SPORTS = [
   "icehockey_nhl",
   "basketball_nba",
   "baseball_mlb",
-  "basketball_wnba",
+  "soccer_usa_mls",
+  "soccer_epl",
+  "soccer_spain_la_liga",
+  "soccer_germany_bundesliga",
+  "soccer_italy_serie_a",
+  "soccer_france_ligue_1",
+  "soccer_brazil_campeonato",
+  "soccer_uefa_champs_league",
 ];
 
 const BOOKS = ["draftkings", "fanduel", "betmgm", "caesars"];
@@ -34,7 +41,7 @@ function getConfig() {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean),
-    ttlMin: Number(process.env.ODDS_CACHE_TTL_MIN || 30),
+    ttlMin: Number(process.env.ODDS_CACHE_TTL_MIN || 15),
   };
 }
 
