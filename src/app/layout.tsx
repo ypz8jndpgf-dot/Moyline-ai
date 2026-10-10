@@ -36,6 +36,7 @@ function Nav() {
         <nav className="flex items-center gap-0.5 sm:gap-2 text-xs sm:text-sm font-bold">
           <Link href="/" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold">Lines</Link>
           <Link href="/picks" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold">Picks 🔒</Link>
+          <Link href="/lab" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold">Lab 🔒</Link>
           <Link href="/track-record" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold">Record</Link>
           <Link href="/pricing" className="px-2.5 sm:px-3 py-1.5 rounded btn-gold whitespace-nowrap">Go Pro</Link>
         </nav>

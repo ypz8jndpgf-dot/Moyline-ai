@@ -19,6 +19,8 @@ type PicksFeed = {
   slot: string; // e.g. "7am", "11am", "6pm", "sat2pm"
   updated_at: string; // ISO timestamp
   picks: FeedPick[];
+  /** Notable player props — eligible parlay legs for the Lab builder. */
+  props?: FeedPick[];
   teaser: {
     legs: string[];
     points: number;
