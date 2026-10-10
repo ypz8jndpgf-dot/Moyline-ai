@@ -191,7 +191,7 @@ export default function OddsBoard({
       </div>
 
       <p className="text-xs text-muted mb-4">
-        Updated {updated} ET · <span className="text-green-400 font-bold">green cell</span> = best price · ▲▼ = move from open · 🔥 = steam move
+        Updated {updated} ET · gold cell = best price · ▲▼ = move from open · 🔥 = steam move
         {quotaNote && <span className="text-down"> · {quotaNote}</span>}
       </p>
 
