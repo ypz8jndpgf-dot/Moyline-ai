@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { getSubscription, hasAccess } from "@/lib/store";
-import { getPicksFeed } from "@/lib/picks";
+import { getPicksFeed, PicksFeed } from "@/lib/picks";
 
 export const dynamic = "force-dynamic";
 
@@ -12,34 +12,102 @@ const SLOT_LABEL: Record<string, string> = {
   sat2pm: "Saturday",
 };
 
+/**
+ * Paywall preview: shows what tonight's card contains without revealing
+ * any actual pick. Game matchups are public; plays, prices and reasoning
+ * are never rendered for non-members (not even blurred — they're omitted).
+ */
+function PaywallPreview({
+  feed,
+  ctaHref,
+  ctaLabel,
+  subline,
+}: {
+  feed: PicksFeed | null;
+  ctaHref: string;
+  ctaLabel: string;
+  subline: string;
+}) {
+  const picks = feed?.picks || [];
+  return (
+    <div className="max-w-2xl mx-auto">
+      <div className="text-center py-10">
+        <h1 className="font-display text-4xl mb-4">
+          PRO PICKS <span className="gold-text">🔒</span>
+        </h1>
+        <p className="text-muted mb-2">{subline}</p>
+        <p className="text-sm text-muted mb-6 max-w-lg mx-auto">
+          Every morning our desk grinds the full slate — spreads, totals, props,
+          weather, injuries, line movement — and distills it into a tight card of
+          only the plays that clear our strict confidence bar. Members also get
+          the Teaser and Parlay of the Day.
+        </p>
+        <Link href={ctaHref} className="btn-gold px-8 py-3 inline-block">
+          {ctaLabel}
+        </Link>
+      </div>
+
+      {picks.length > 0 && (
+        <>
+          <h2 className="font-display text-2xl mb-4 text-center">
+            Tonight&apos;s card <span className="text-sm text-muted font-sans">({picks.length} plays)</span>
+          </h2>
+          <div className="grid gap-4 md:grid-cols-2 relative">
+            {picks.map((p, i) => (
+              <div key={i} className="card p-5 relative overflow-hidden">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold uppercase tracking-widest text-gold">
+                    #{i + 1} {p.star && "★"}
+                  </span>
+                  <span className="text-xs text-muted">Conf {p.confidence}/5</span>
+                </div>
+                <h3 className="font-display text-xl mb-3">{p.game}</h3>
+                <div className="rounded bg-white/5 px-3 py-2 text-sm text-muted blur-[6px] select-none" aria-hidden="true">
+                  Locked pick — members only
+                </div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-2xl">🔒</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 mt-4">
+            <div className="card p-5 text-center">
+              <span className="text-xs font-bold uppercase tracking-widest text-gold">Teaser of the Day</span>
+              <p className="text-sm text-muted mt-2">🔒 Members only</p>
+            </div>
+            <div className="card p-5 text-center">
+              <span className="text-xs font-bold uppercase tracking-widest text-gold">Parlay of the Day</span>
+              <p className="text-sm text-muted mt-2">🔒 Members only</p>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default async function PicksPage() {
   const session = await auth();
   const email = session?.user?.email || null;
   const sub = await getSubscription(email || "");
   const allowed = hasAccess(email, sub);
-
-  if (!session?.user) {
-    return (
-      <div className="max-w-xl mx-auto text-center py-16">
-        <h1 className="font-display text-4xl mb-4">PRO PICKS <span className="gold-text">🔒</span></h1>
-        <p className="text-muted mb-6">Sign in to see if you have access to tonight&apos;s card.</p>
-        <Link href="/signin" className="btn-gold px-8 py-3 inline-block">Sign in</Link>
-      </div>
-    );
-  }
+  const feed = await getPicksFeed();
 
   if (!allowed) {
     return (
-      <div className="max-w-xl mx-auto text-center py-16">
-        <h1 className="font-display text-4xl mb-4">PRO PICKS <span className="gold-text">🔒</span></h1>
-        <p className="text-muted mb-2">Tonight&apos;s card is locked.</p>
-        <p className="text-muted mb-6">Signed in as <span className="text-paper">{email}</span> — no active subscription.</p>
-        <Link href="/pricing" className="btn-gold px-8 py-3 inline-block">Unlock with Pro</Link>
-      </div>
+      <PaywallPreview
+        feed={feed}
+        ctaHref={session?.user ? "/pricing" : "/signin"}
+        ctaLabel={session?.user ? "Unlock with Pro" : "Sign in"}
+        subline={
+          session?.user
+            ? `Signed in as ${email} — no active subscription.`
+            : "Sign in to see if you have access to tonight's card."
+        }
+      />
     );
   }
-
-  const feed = await getPicksFeed();
   const slotLabel = feed ? SLOT_LABEL[feed.slot] || feed.slot : null;
 
   return (
