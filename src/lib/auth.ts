@@ -56,7 +56,9 @@ function cleanEnv(v: string | undefined): string {
   // surrounding quotes.
   let s = (v || "").trim();
   const eq = s.indexOf("=");
-  if (eq > 0 && /^[A-Za-z_][A-Za-z0-9_]*$/.test(s.slice(0, eq))) {
+  // Only strip a KEY= prefix when it looks like an env var name (ALL_CAPS).
+  // A bare base64 token may itself contain "=" padding — never strip that.
+  if (eq > 0 && /^[A-Z][A-Z0-9_]{2,}$/.test(s.slice(0, eq))) {
     s = s.slice(eq + 1).trim();
   }
   return s.replace(/^["']+|["']+$/g, "");
