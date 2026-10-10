@@ -39,7 +39,7 @@ async function tcpCheck(host: string, port: number): Promise<{ ok: boolean; deta
   });
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const out: Record<string, unknown> = {};
   const server = process.env.EMAIL_SERVER || "";
   const from = process.env.EMAIL_FROM || "";
@@ -91,6 +91,39 @@ export async function GET() {
     }
   } else {
     out.smtp = { ok: false, error: "skipped — TCP failed" };
+  }
+
+  // 5. Optional one-time real send test: ?send_to=addr — attempts one sendMail
+  // and returns the exact result/error. TEMPORARY diagnostic.
+  const sendTo = new URL(req.url).searchParams.get("send_to");
+  if (sendTo && (out.smtp as { ok?: boolean })?.ok && url) {
+    try {
+      const nodemailer = await import("nodemailer");
+      const transport = nodemailer.createTransport(server, {
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 15000,
+      });
+      const info = await withTimeout(
+        transport.sendMail({
+          to: sendTo,
+          from: from || "MoyLine AI <onboarding@resend.dev>",
+          subject: "MoyLine AI email deliverability test",
+          text: "One-time test — please ignore.",
+        }),
+        25000,
+        "sendMail"
+      );
+      out.send_test = {
+        ok: true,
+        to: sendTo,
+        messageId: (info as { messageId?: string }).messageId,
+        response: String((info as { response?: unknown }).response || "").slice(0, 200),
+      };
+      try { transport.close(); } catch { /* noop */ }
+    } catch (e) {
+      out.send_test = { ok: false, to: sendTo, error: (e as Error).message };
+    }
   }
 
   return NextResponse.json(out);
