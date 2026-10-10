@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Redis } from "@upstash/redis";
+import { mergeKey } from "@/lib/card-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -62,15 +63,22 @@ function isValidFeed(b: unknown): b is PicksFeed {
   );
 }
 
-const pickKey = (p: FeedPick) =>
-  `${(p.game || "").trim().toLowerCase()}|${(p.play || "").trim().toLowerCase()}`;
+const pickKey = (p: FeedPick) => mergeKey(p);
 
-/** Merge incoming picks into existing: same game+play replaces, new ones append. */
+/** Merge incoming picks into existing: same game+market+side replaces, new ones append. */
 function mergePicks(existing: FeedPick[], incoming: FeedPick[]): FeedPick[] {
   const byKey = new Map<string, FeedPick>();
   for (const p of existing) byKey.set(pickKey(p), p);
   for (const p of incoming) byKey.set(pickKey(p), p);
-  return [...byKey.values()];
+  const merged = [...byKey.values()];
+  // Single ★ per card: a new edition crowning a star demotes earlier ones.
+  if (incoming.some((p) => p.star)) {
+    const incomingStars = new Set(incoming.filter((p) => p.star).map((p) => pickKey(p)));
+    for (const p of merged) {
+      if (p.star && !incomingStars.has(pickKey(p))) p.star = false;
+    }
+  }
+  return merged;
 }
 
 /**

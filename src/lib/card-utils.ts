@@ -8,6 +8,11 @@ export function parseGameTeams(game: string): { away: string; home: string } | n
   return { away: m[1].trim(), home: m[2].trim() };
 }
 
+/** Normalize a game label for dedupe: strips rankings ("#19 "), lowercases, collapses spaces. */
+export function normalizeGame(game: string): string {
+  return norm(game.replace(/#\d+\s*/g, ""));
+}
+
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
 
 /** True if every word of `short` appears in `full` (order-independent). */
@@ -81,4 +86,34 @@ export function steamForGame(game: GameVM, movers: MoverVM[]): MoverVM[] {
     const homeHit = home.split(" ").some((w) => w.length > 2 && label.includes(w));
     return m.steam && (awayHit || homeHit);
   });
+}
+
+/**
+ * Merge key for the holistic card: normalized game + market + side.
+ * A re-published play at a changed line (e.g. "Penn State -1.5" -> "-2")
+ * replaces the earlier one; a different bet on the same game
+ * (side vs total) stays as its own entry.
+ */
+export function mergeKey(p: { game: string; play: string; market?: string }): string {
+  const game = normalizeGame(p.game);
+  const play = norm(p.play);
+  const market = (p.market || "").toLowerCase();
+
+  let side: string;
+  if (market === "total" || /\bover\b/.test(play)) {
+    side = "total:over";
+  } else if (/\bunder\b/.test(play)) {
+    side = "total:under";
+  } else if (/\bdraw\b/.test(play)) {
+    side = "ml:draw";
+  } else if (market === "ml" || /\bml\b/.test(play)) {
+    side = "ml:" + play.replace(/\bml\b/g, "").trim();
+  } else if (market === "prop") {
+    side = "prop:" + play;
+  } else {
+    // Spread (default): the team before the +/-number, e.g. "Nevada -9.5" -> "nevada".
+    const m = play.match(/^(.+?)\s*[+-]\d/);
+    side = "spread:" + (m ? m[1].trim() : play);
+  }
+  return `${game}|${side}`;
 }
