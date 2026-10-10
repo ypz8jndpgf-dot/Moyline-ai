@@ -69,7 +69,18 @@ const pickKey = (p: FeedPick) => mergeKey(p);
 function mergePicks(existing: FeedPick[], incoming: FeedPick[]): FeedPick[] {
   const byKey = new Map<string, FeedPick>();
   for (const p of existing) byKey.set(pickKey(p), p);
-  for (const p of incoming) byKey.set(pickKey(p), p);
+  const now = new Date().toISOString();
+  for (const p of incoming) {
+    const key = pickKey(p);
+    const prev = byKey.get(key);
+    byKey.set(key, {
+      ...p,
+      // First appearance keeps its birth timestamp; re-published plays keep
+      // the original added_at and record when they were last updated.
+      added_at: prev?.added_at || (p as FeedPick).added_at || now,
+      updated_at: prev ? now : (p as FeedPick).updated_at,
+    });
+  }
   const merged = [...byKey.values()];
   // Single ★ per card: a new edition crowning a star demotes earlier ones.
   if (incoming.some((p) => p.star)) {

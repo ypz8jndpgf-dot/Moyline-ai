@@ -75,18 +75,49 @@ function StatusBadge({ status }: { status: Status }) {
   return null;
 }
 
+/** "2026-10-10" -> "Sat, Oct 10". */
+function formatCardDate(dateStr?: string): string {
+  if (!dateStr) return "";
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d, 12));
+  return dt.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "America/New_York",
+  });
+}
+
+/** ISO timestamp -> "2:14pm" ET. */
+function formatTimeET(iso?: string): string {
+  if (!iso) return "";
+  const dt = new Date(iso);
+  if (isNaN(dt.getTime())) return "";
+  return dt
+    .toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: "America/New_York",
+    })
+    .replace(" ", "")
+    .toLowerCase();
+}
+
 function PickCard({
   p,
   index,
   status,
   best,
   initiallyTailed,
+  cardDate,
 }: {
   p: FeedPick;
   index: number;
   status: Status;
   best: BestPrice;
   initiallyTailed: boolean;
+  cardDate: string;
 }) {
   return (
     <div className="card card-glow p-5">
@@ -100,10 +131,24 @@ function PickCard({
         </span>
       </div>
       <h3 className="font-display text-xl mb-1">{p.game}</h3>
-      {p.starts && <p className="text-xs text-muted mb-1">🕐 {p.starts}</p>}
+      {p.starts && (
+        <p className="text-xs text-muted mb-1">
+          🕐 {cardDate ? `${cardDate} · ` : ""}
+          {p.starts}
+        </p>
+      )}
       <p className="text-lg font-bold text-goldsoft mb-1">
         {p.play} <span className="text-sm text-muted">{p.price}</span>
       </p>
+      {(p.added_at || p.updated_at) && (
+        <p className="text-[11px] text-muted mb-1">
+          {p.updated_at && p.updated_at !== p.added_at
+            ? `Updated ${formatTimeET(p.updated_at)}`
+            : p.added_at
+              ? `Added ${formatTimeET(p.added_at)}`
+              : ""}
+        </p>
+      )}
       {best && (
         <p className="text-xs mb-2">
           <span className="inline-block bg-gold/15 text-gold font-bold px-2 py-0.5 rounded">
@@ -191,7 +236,11 @@ function PaywallPreview({
               <span className="text-xs text-muted">Conf {freePick.confidence}/5</span>
             </div>
             <h3 className="font-display text-xl mb-1">{freePick.game}</h3>
-            {freePick.starts && <p className="text-xs text-muted mb-1">🕐 {freePick.starts}</p>}
+            {freePick.starts && (
+              <p className="text-xs text-muted mb-1">
+                🕐 {formatCardDate(feed?.date)} · {freePick.starts}
+              </p>
+            )}
             <p className="text-lg font-bold text-goldsoft mb-2">
               {freePick.play} <span className="text-sm text-muted">{freePick.price}</span>
             </p>
@@ -213,7 +262,7 @@ function PaywallPreview({
                     #{i + 1} {p.star && "★"}
                   </span>
                   <span className="text-xs text-muted">
-                    Conf {p.confidence}/5{p.starts ? ` · ${p.starts}` : ""}
+                    Conf {p.confidence}/5{p.starts ? ` · ${formatCardDate(feed?.date)} ${p.starts}` : ""}
                   </span>
                 </div>
                 <h3 className="font-display text-xl mb-3">{p.game}</h3>
@@ -267,6 +316,7 @@ export default async function PicksPage() {
   const editions = (feed?.editions || (feed?.slot ? [feed.slot] : []))
     .map((s) => SLOT_LABEL[s] || s)
     .join(" · ");
+  const cardDate = formatCardDate(feed?.date);
   const nowMins = nowETMinutes();
 
   // Odds board for best-price badges + steam detection (cached read, no API burn).
@@ -370,6 +420,7 @@ export default async function PicksPage() {
                       status={status}
                       best={bestByPick.get(key) || null}
                       initiallyTailed={tailedSet.has(key)}
+                      cardDate={cardDate}
                     />
                   );
                 })}

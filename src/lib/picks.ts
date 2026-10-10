@@ -21,6 +21,10 @@ export type FeedPick = {
   market?: "spread" | "total" | "ml" | "prop";
   /** Raw line for spread/total picks, e.g. "-1.5", "5.5". Optional. */
   line?: string;
+  /** ISO timestamp when the pick first appeared on the card. Set by the merge. */
+  added_at?: string;
+  /** ISO timestamp when the pick was last re-published (e.g. changed line). Set by the merge. */
+  updated_at?: string;
 };
 
 export type PicksFeed = {
