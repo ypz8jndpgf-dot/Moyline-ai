@@ -1,5 +1,7 @@
 import NextAuth from "next-auth";
 import Nodemailer from "next-auth/providers/nodemailer";
+import { Redis } from "@upstash/redis";
+import { UpstashRedisAdapter } from "@auth/upstash-redis-adapter";
 import { fileAdapter } from "./auth-adapter";
 
 /**
@@ -42,8 +44,24 @@ function emailProvider() {
   });
 }
 
+/**
+ * Adapter: Upstash Redis in production (durable across serverless instances),
+ * file adapter as a local-dev fallback. The file adapter cannot work on Vercel —
+ * the filesystem is ephemeral, so verification tokens written by one instance
+ * are invisible to the next and every magic link fails.
+ */
+function getAdapter() {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (url && token) {
+    return UpstashRedisAdapter(new Redis({ url, token }));
+  }
+  console.warn("[auth] Upstash env vars not set — using ephemeral file adapter (dev only).");
+  return fileAdapter();
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: fileAdapter(),
+  adapter: getAdapter(),
   session: { strategy: "jwt" },
   trustHost: true,
   providers: [emailProvider()],
