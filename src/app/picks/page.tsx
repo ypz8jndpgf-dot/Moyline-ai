@@ -55,7 +55,7 @@ export default async function PicksPage() {
   return (
     <div>
       <h1 className="font-display text-4xl mb-1">TONIGHT&apos;S <span className="gold-text">CARD</span></h1>
-      <p className="text-muted text-sm mb-6">Pro members only · {email}</p>
+      <p className="text-muted text-sm mb-6">Pro members only · {email} · 🕐 Card refreshes daily each morning</p>
       <div className="grid gap-4 md:grid-cols-2">
         {PRO_PICKS.map((p, i) => (
           <div key={i} className="card card-glow p-5">
@@ -72,6 +72,28 @@ export default async function PicksPage() {
             <p className="text-sm text-muted">{p.reasoning}</p>
           </div>
         ))}
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 mt-4">
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-gold">
+              Teaser of the Day
+            </span>
+          </div>
+          <p className="text-sm text-muted">
+            Teasers post with the morning card — check back tomorrow.
+          </p>
+        </div>
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-gold">
+              Parlay of the Day
+            </span>
+          </div>
+          <p className="text-sm text-muted">
+            Parlays post with the morning card — check back tomorrow.
+          </p>
+        </div>
       </div>
       <p className="text-xs text-muted mt-8">Analysis for entertainment purposes — not financial advice.</p>
     </div>
