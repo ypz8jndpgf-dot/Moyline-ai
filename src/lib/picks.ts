@@ -13,6 +13,8 @@ export type FeedPick = {
   starts?: string;
   /** Detailed 2-4 sentence write-up justifying the pick. Optional. */
   writeup?: string;
+  /** Long-form deep dive: matchup, trends, line movement, situational factors, edge. Optional. */
+  deep_dive?: string;
   /** Quantified edge in cents, e.g. 30 = ~30c edge vs fair price. Optional. */
   edge_cents?: number;
   /** Market type for ticket construction. Optional. */

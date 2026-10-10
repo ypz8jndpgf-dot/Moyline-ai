@@ -14,6 +14,7 @@ type FeedPick = {
   reasoning?: string;
   starts?: string;
   writeup?: string;
+  deep_dive?: string;
 };
 
 type PicksFeed = {

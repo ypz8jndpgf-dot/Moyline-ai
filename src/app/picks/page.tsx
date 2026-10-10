@@ -151,6 +151,19 @@ export default async function PicksPage() {
                     <p className="text-sm text-paper/90 mt-2 leading-relaxed">{p.writeup}</p>
                   </details>
                 )}
+                {p.deep_dive && (
+                  <details className="mt-2 group">
+                    <summary className="text-sm font-bold text-gold cursor-pointer list-none flex items-center gap-1">
+                      <span className="transition-transform group-open:rotate-90">▶</span>
+                      Deep dive
+                    </summary>
+                    <div className="text-sm text-paper/90 mt-2 leading-relaxed space-y-2">
+                      {p.deep_dive.split("\n\n").map((para, j) => (
+                        <p key={j}>{para}</p>
+                      ))}
+                    </div>
+                  </details>
+                )}
               </div>
             ))}
           </div>
