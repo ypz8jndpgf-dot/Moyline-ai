@@ -50,10 +50,22 @@ function emailProvider() {
  * the filesystem is ephemeral, so verification tokens written by one instance
  * are invisible to the next and every magic link fails.
  */
+function cleanEnv(v: string | undefined): string {
+  // Defensively strip whitespace and surrounding quotes (easy to paste from
+  // `KEY="value"` displays).
+  return (v || "").trim().replace(/^["']+|["']+$/g, "");
+}
+
 function getAdapter() {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const url = cleanEnv(process.env.UPSTASH_REDIS_REST_URL);
+  const token = cleanEnv(process.env.UPSTASH_REDIS_REST_TOKEN);
   if (url && token) {
+    if (!/^https:\/\//.test(url)) {
+      throw new Error(
+        `[auth] UPSTASH_REDIS_REST_URL looks malformed (${url.slice(0, 12)}…). ` +
+          `It should be the bare https:// REST URL from Upstash, with no quotes.`
+      );
+    }
     return UpstashRedisAdapter(new Redis({ url, token }));
   }
   console.warn("[auth] Upstash env vars not set — using ephemeral file adapter (dev only).");
