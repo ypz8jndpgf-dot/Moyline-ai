@@ -51,9 +51,15 @@ function emailProvider() {
  * are invisible to the next and every magic link fails.
  */
 function cleanEnv(v: string | undefined): string {
-  // Defensively strip whitespace and surrounding quotes (easy to paste from
-  // `KEY="value"` displays).
-  return (v || "").trim().replace(/^["']+|["']+$/g, "");
+  // Defensively normalize pasted values: strip whitespace, a pasted `KEY=` prefix
+  // (e.g. copying the whole `UPSTASH_REDIS_REST_TOKEN="..."` line), and
+  // surrounding quotes.
+  let s = (v || "").trim();
+  const eq = s.indexOf("=");
+  if (eq > 0 && /^[A-Za-z_][A-Za-z0-9_]*$/.test(s.slice(0, eq))) {
+    s = s.slice(eq + 1).trim();
+  }
+  return s.replace(/^["']+|["']+$/g, "");
 }
 
 function getAdapter() {
