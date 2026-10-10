@@ -42,6 +42,7 @@ export interface GameVM {
   home: string;
   books: BookVM[];
   steamCount: number;
+  edgeScore: number; // max line-move magnitude across all cells — drives top-edges sort
 }
 
 export interface MoverVM {
@@ -143,6 +144,7 @@ export function buildBoard(
     // Second pass: finalize cells with best flags + collect movers
     const books: BookVM[] = [];
     let steamCount = 0;
+    let edgeScore = 0;
     for (const rb of rawBooks) {
       const finalCells = {} as Record<Col, CellVM | null>;
       for (const col of COLS) {
@@ -153,6 +155,8 @@ export function buildBoard(
         }
         const c = makeCell(raw.open, raw.cur, bestByCol[col] === rb.key);
         finalCells[col] = c;
+        const mag = Math.abs(c.pointDelta ?? 0) * 10 + Math.abs(c.priceDelta ?? 0) / 10;
+        if (c.moved) edgeScore = Math.max(edgeScore, mag);
         if (c.steam) {
           steamCount++;
           movers.push({
@@ -161,7 +165,7 @@ export function buildBoard(
             label: `${raw.name} ${c.openDisplay} → ${c.display}`,
             detail: `${rb.label} · ${colLabel(col)}`,
             steam: true,
-            magnitude: Math.abs(c.pointDelta ?? 0) * 10 + Math.abs(c.priceDelta ?? 0) / 10,
+            magnitude: mag,
           });
         } else if (c.moved && Math.abs(c.pointDelta ?? 0) >= 1) {
           movers.push({
@@ -170,7 +174,7 @@ export function buildBoard(
             label: `${raw.name} ${c.openDisplay} → ${c.display}`,
             detail: `${rb.label} · ${colLabel(col)}`,
             steam: false,
-            magnitude: Math.abs(c.pointDelta ?? 0) * 10 + Math.abs(c.priceDelta ?? 0) / 10,
+            magnitude: mag,
           });
         }
       }
@@ -195,11 +199,17 @@ export function buildBoard(
       home: ev.home_team,
       books,
       steamCount,
+      edgeScore,
     });
   }
 
-  // Sort games: steam first, then by start time
-  games.sort((a, b) => b.steamCount - a.steamCount || +new Date(a.commence) - +new Date(b.commence));
+  // Sort games: biggest edge (max line-move magnitude) first, then steam, then start time
+  games.sort(
+    (a, b) =>
+      b.edgeScore - a.edgeScore ||
+      b.steamCount - a.steamCount ||
+      +new Date(a.commence) - +new Date(b.commence)
+  );
   movers.sort((a, b) => b.magnitude - a.magnitude);
 
   return { games, movers: movers.slice(0, 10), sports: [...sportSet] };
