@@ -49,6 +49,36 @@ function Cell({ cell, label }: { cell: CellVM | null; label: string }) {
   );
 }
 
+function CompactCell({ cells, tags }: { cells: (CellVM | null)[]; tags: [string, string] }) {
+  return (
+    <div className="py-1 space-y-0.5">
+      {cells.map((cell, i) =>
+        !cell ? (
+          <div key={i} className="text-muted/40 text-[11px]">—</div>
+        ) : (
+          <div
+            key={i}
+            className={`text-[12px] leading-tight whitespace-nowrap rounded px-1 -mx-1 ${
+              cell.steam ? "steam-flash" : ""
+            } ${cell.best ? "best-price" : ""}`}
+          >
+            <span className="text-muted text-[9px] font-bold mr-0.5">{tags[i]}</span>
+            {cell.display}
+            <DeltaBadge cell={cell} />
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+const SHORT_BOOK: Record<string, string> = {
+  DraftKings: "DK",
+  FanDuel: "FD",
+  BetMGM: "MGM",
+  Caesars: "CZR",
+};
+
 function GameCard({ game }: { game: GameVM }) {
   const kickoff = new Date(game.commence);
   const timeStr = kickoff.toLocaleString("en-US", {
@@ -75,28 +105,30 @@ function GameCard({ game }: { game: GameVM }) {
       <h3 className="font-display text-lg mb-3">
         {game.away} <span className="text-muted">@</span> {game.home}
       </h3>
-      {/* Mobile: stacked per-book market rows */}
-      <div className="md:hidden space-y-3">
-        {game.books.map((b) => (
-          <div key={b.key} className="border-t border-line/60 pt-2.5 first:border-t-0 first:pt-0">
-            <div className="font-bold text-goldsoft text-xs mb-1.5">{b.label}</div>
-            <div className="space-y-1.5">
-              {(
-                [
-                  ["Spread", b.spreadAway, b.spreadHome, `${game.away} spread`, `${game.home} spread`],
-                  ["Total", b.totalOver, b.totalUnder, "Total over", "Total under"],
-                  ["ML", b.mlAway, b.mlHome, `${game.away} ML`, `${game.home} ML`],
-                ] as [string, CellVM | null, CellVM | null, string, string][]
-              ).map(([label, c1, c2, l1, l2]) => (
-                <div key={label} className="flex items-center gap-2">
-                  <div className="w-14 shrink-0 text-[10px] uppercase tracking-widest text-muted">{label}</div>
-                  <div className="flex-1 min-w-0"><Cell cell={c1} label={l1} /></div>
-                  <div className="flex-1 min-w-0"><Cell cell={c2} label={l2} /></div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
+      {/* Mobile: single compact table — one row per book, both sides stacked */}
+      <div className="md:hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-widest text-muted">
+              <th className="text-left py-1 w-10">Book</th>
+              <th className="text-left py-1">Spread</th>
+              <th className="text-left py-1">Total</th>
+              <th className="text-left py-1">ML</th>
+            </tr>
+          </thead>
+          <tbody>
+            {game.books.map((b) => (
+              <tr key={b.key} className="border-t border-line/60 align-top">
+                <td className="py-1 font-bold text-goldsoft text-[11px] whitespace-nowrap">
+                  {SHORT_BOOK[b.label] || b.label}
+                </td>
+                <td><CompactCell cells={[b.spreadAway, b.spreadHome]} tags={["A", "H"]} /></td>
+                <td><CompactCell cells={[b.totalOver, b.totalUnder]} tags={["O", "U"]} /></td>
+                <td><CompactCell cells={[b.mlAway, b.mlHome]} tags={["A", "H"]} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
       {/* Desktop: full 7-column table */}
       <div className="hidden md:block overflow-x-auto">
