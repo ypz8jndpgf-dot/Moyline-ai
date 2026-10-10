@@ -3,6 +3,7 @@ import Link from "next/link";
 import "./globals.css";
 import PwaRegister from "@/components/PwaRegister";
 import Providers from "@/components/Providers";
+import { auth } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "MoyLine AI — Live Sports Betting Lines",
@@ -25,7 +26,9 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-function Nav() {
+async function Nav() {
+  const session = await auth();
+  const email = session?.user?.email || null;
   return (
     <header className="border-b border-line/70 bg-ink/90 backdrop-blur sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -39,6 +42,22 @@ function Nav() {
           <Link href="/lab" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold">Lab 🔒</Link>
           <Link href="/track-record" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold">Record</Link>
           <Link href="/my-tails" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold">Tails</Link>
+          {email ? (
+            <Link
+              href="/my-tails"
+              className="px-2 sm:px-3 py-1.5 rounded text-gold whitespace-nowrap"
+              title={email}
+            >
+              {email.split("@")[0]}
+            </Link>
+          ) : (
+            <Link
+              href="/signin"
+              className="px-2.5 sm:px-3 py-1.5 rounded border border-gold/60 text-gold whitespace-nowrap hover:bg-gold/10"
+            >
+              Sign in
+            </Link>
+          )}
           <Link href="/pricing" className="px-2.5 sm:px-3 py-1.5 rounded btn-gold whitespace-nowrap">Go Pro</Link>
         </nav>
       </div>
