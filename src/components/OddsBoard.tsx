@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { GameVM, MoverVM, CellVM } from "@/lib/board";
+import type { GameVM, MoverVM, CellVM, BookVM } from "@/lib/board";
 import { SPORT_LABELS } from "@/lib/odds-shared";
 
 function DeltaBadge({ cell }: { cell: CellVM }) {
@@ -29,45 +29,16 @@ function DeltaBadge({ cell }: { cell: CellVM }) {
   return null;
 }
 
-function Cell({ cell, label }: { cell: CellVM | null; label: string }) {
-  if (!cell) return <div className="px-2 py-1.5 text-muted/40 text-xs">—</div>;
+function SideCell({ cell }: { cell: CellVM | null }) {
+  if (!cell) return <div className="py-1.5 text-muted/40 text-[11px]">—</div>;
   return (
     <div
-      className={`px-2 py-1.5 ${cell.steam ? "steam-flash rounded" : ""} ${
-        cell.best ? "best-price" : ""
-      }`}
-      title={label}
+      className={`py-1.5 px-1 text-[12px] whitespace-nowrap rounded ${
+        cell.steam ? "steam-flash" : ""
+      } ${cell.best ? "best-price" : ""}`}
     >
-      <div className="text-[13px] whitespace-nowrap">
-        {cell.display}
-        <DeltaBadge cell={cell} />
-      </div>
-      <div className="text-[10px] text-muted whitespace-nowrap">
-        open {cell.openDisplay}
-      </div>
-    </div>
-  );
-}
-
-function CompactCell({ cells, tags }: { cells: (CellVM | null)[]; tags: [string, string] }) {
-  return (
-    <div className="py-1 space-y-0.5">
-      {cells.map((cell, i) =>
-        !cell ? (
-          <div key={i} className="text-muted/40 text-[11px]">—</div>
-        ) : (
-          <div
-            key={i}
-            className={`text-[12px] leading-tight whitespace-nowrap rounded px-1 -mx-1 ${
-              cell.steam ? "steam-flash" : ""
-            } ${cell.best ? "best-price" : ""}`}
-          >
-            <span className="text-muted text-[9px] font-bold mr-0.5">{tags[i]}</span>
-            {cell.display}
-            <DeltaBadge cell={cell} />
-          </div>
-        )
-      )}
+      {cell.display}
+      <DeltaBadge cell={cell} />
     </div>
   );
 }
@@ -78,6 +49,15 @@ const SHORT_BOOK: Record<string, string> = {
   BetMGM: "MGM",
   Caesars: "CZR",
 };
+
+const MARKET_ROWS: { label: string; tag: string; get: (b: BookVM) => CellVM | null }[] = [
+  { label: "Spread", tag: "A", get: (b) => b.spreadAway },
+  { label: "Spread", tag: "H", get: (b) => b.spreadHome },
+  { label: "Total", tag: "O", get: (b) => b.totalOver },
+  { label: "Total", tag: "U", get: (b) => b.totalUnder },
+  { label: "ML", tag: "A", get: (b) => b.mlAway },
+  { label: "ML", tag: "H", get: (b) => b.mlHome },
+];
 
 function GameCard({ game }: { game: GameVM }) {
   const kickoff = new Date(game.commence);
@@ -105,55 +85,33 @@ function GameCard({ game }: { game: GameVM }) {
       <h3 className="font-display text-lg mb-3">
         {game.away} <span className="text-muted">@</span> {game.home}
       </h3>
-      {/* Mobile: single compact table — one row per book, both sides stacked */}
-      <div className="md:hidden">
+      {/* Books side by side: columns = books, rows = markets */}
+      <div className="overflow-x-auto -mx-1 px-1">
         <table className="w-full">
           <thead>
             <tr className="text-[10px] uppercase tracking-widest text-muted">
-              <th className="text-left py-1 w-10">Book</th>
-              <th className="text-left py-1">Spread</th>
-              <th className="text-left py-1">Total</th>
-              <th className="text-left py-1">ML</th>
-            </tr>
-          </thead>
-          <tbody>
-            {game.books.map((b) => (
-              <tr key={b.key} className="border-t border-line/60 align-top">
-                <td className="py-1 font-bold text-goldsoft text-[11px] whitespace-nowrap">
+              <th className="text-left py-1 pr-2 w-14"></th>
+              {game.books.map((b) => (
+                <th
+                  key={b.key}
+                  className="text-left py-1 pr-2 font-bold text-goldsoft text-[11px] whitespace-nowrap"
+                >
                   {SHORT_BOOK[b.label] || b.label}
-                </td>
-                <td><CompactCell cells={[b.spreadAway, b.spreadHome]} tags={["A", "H"]} /></td>
-                <td><CompactCell cells={[b.totalOver, b.totalUnder]} tags={["O", "U"]} /></td>
-                <td><CompactCell cells={[b.mlAway, b.mlHome]} tags={["A", "H"]} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {/* Desktop: full 7-column table */}
-      <div className="hidden md:block overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-[10px] uppercase tracking-widest text-muted">
-              <th className="text-left py-1 pr-2">Book</th>
-              <th className="text-left py-1 pr-2">Spread (A)</th>
-              <th className="text-left py-1 pr-2">Spread (H)</th>
-              <th className="text-left py-1 pr-2">Total O</th>
-              <th className="text-left py-1 pr-2">Total U</th>
-              <th className="text-left py-1 pr-2">ML (A)</th>
-              <th className="text-left py-1">ML (H)</th>
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {game.books.map((b) => (
-              <tr key={b.key} className="border-t border-line/60">
-                <td className="py-1 pr-2 font-bold text-goldsoft text-xs whitespace-nowrap">{b.label}</td>
-                <td className="pr-2"><Cell cell={b.spreadAway} label={`${game.away} spread`} /></td>
-                <td className="pr-2"><Cell cell={b.spreadHome} label={`${game.home} spread`} /></td>
-                <td className="pr-2"><Cell cell={b.totalOver} label="Total over" /></td>
-                <td className="pr-2"><Cell cell={b.totalUnder} label="Total under" /></td>
-                <td className="pr-2"><Cell cell={b.mlAway} label={`${game.away} ML`} /></td>
-                <td><Cell cell={b.mlHome} label={`${game.home} ML`} /></td>
+            {MARKET_ROWS.map((row, ri) => (
+              <tr key={ri} className="border-t border-line/60">
+                <td className="py-1 pr-2 text-[10px] uppercase tracking-widest text-muted whitespace-nowrap">
+                  {row.label} <span className="text-paper font-bold">{row.tag}</span>
+                </td>
+                {game.books.map((b) => (
+                  <td key={b.key} className="pr-2">
+                    <SideCell cell={row.get(b)} />
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>
