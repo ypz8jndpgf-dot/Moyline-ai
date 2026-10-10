@@ -18,7 +18,7 @@ export type FeedPick = {
   /** Quantified edge in cents, e.g. 30 = ~30c edge vs fair price. Optional. */
   edge_cents?: number;
   /** Market type for ticket construction. Optional. */
-  market?: "spread" | "total" | "ml";
+  market?: "spread" | "total" | "ml" | "prop";
   /** Raw line for spread/total picks, e.g. "-1.5", "5.5". Optional. */
   line?: string;
 };
@@ -26,6 +26,8 @@ export type FeedPick = {
 export type PicksFeed = {
   date: string;
   slot: string;
+  /** All contributing editions merged into today's card. */
+  editions?: string[];
   updated_at: string;
   picks: FeedPick[];
   /** Notable player props from the brief — eligible legs for the Lab's parlay builder. */

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { getSubscription, hasAccess } from "@/lib/store";
-import { getPicksFeed, PicksFeed } from "@/lib/picks";
+import { getPicksFeed, PicksFeed, FeedPick } from "@/lib/picks";
 
 export const dynamic = "force-dynamic";
 
@@ -10,10 +10,112 @@ const SLOT_LABEL: Record<string, string> = {
   "11am": "Midday",
   "6pm": "Evening",
   sat2pm: "Saturday",
+  cfbdeepdive: "Evening Deep Dive",
 };
 
+/** Parse "7:00pm ET" / "2:45pm ET" -> minutes after midnight ET. Null if unparseable. */
+function parseStart(starts?: string): number | null {
+  if (!starts) return null;
+  const m = starts.match(/(\d{1,2}):(\d{2})\s*(am|pm)/i);
+  if (!m) return null;
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  const ap = m[3].toLowerCase();
+  if (ap === "pm" && h !== 12) h += 12;
+  if (ap === "am" && h === 12) h = 0;
+  return h * 60 + min;
+}
+
+type Window = "Morning" | "Afternoon" | "Evening" | "Night" | "More plays";
+
+function windowFor(mins: number | null): Window {
+  if (mins === null) return "More plays";
+  if (mins < 12 * 60) return "Morning";
+  if (mins < 18 * 60) return "Afternoon";
+  if (mins < 22 * 60) return "Evening";
+  return "Night";
+}
+
+const WINDOW_ORDER: Window[] = ["Morning", "Afternoon", "Evening", "Night", "More plays"];
+
+type Status = "upcoming" | "live" | "final";
+
+/** Live window: started within the last 3.5h. After that, final (result pending grading). */
+function statusFor(startMins: number | null, nowMins: number): Status {
+  if (startMins === null) return "upcoming";
+  if (nowMins < startMins) return "upcoming";
+  if (nowMins < startMins + 210) return "live";
+  return "final";
+}
+
+function nowETMinutes(): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+  }).formatToParts(new Date());
+  const h = parseInt(parts.find((p) => p.type === "hour")?.value || "0", 10);
+  const m = parseInt(parts.find((p) => p.type === "minute")?.value || "0", 10);
+  return h * 60 + m;
+}
+
+function StatusBadge({ status }: { status: Status }) {
+  if (status === "live")
+    return (
+      <span className="text-[11px] font-bold uppercase tracking-wider text-down">● Live</span>
+    );
+  if (status === "final")
+    return <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Final</span>;
+  return null;
+}
+
+function PickCard({ p, index, status }: { p: FeedPick; index: number; status: Status }) {
+  return (
+    <div className="card card-glow p-5">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-bold uppercase tracking-widest text-gold">
+          #{index + 1} {p.star && "★"}
+        </span>
+        <span className="flex items-center gap-2">
+          <StatusBadge status={status} />
+          <span className="text-xs text-muted">Conf {p.confidence}/5</span>
+        </span>
+      </div>
+      <h3 className="font-display text-xl mb-1">{p.game}</h3>
+      {p.starts && <p className="text-xs text-muted mb-1">🕐 {p.starts}</p>}
+      <p className="text-lg font-bold text-goldsoft mb-2">
+        {p.play} <span className="text-sm text-muted">{p.price}</span>
+      </p>
+      {p.reasoning && <p className="text-sm text-muted">{p.reasoning}</p>}
+      {p.writeup && p.writeup !== p.reasoning && (
+        <details className="mt-3 group">
+          <summary className="text-sm font-bold text-gold cursor-pointer list-none flex items-center gap-1">
+            <span className="transition-transform group-open:rotate-90">▶</span>
+            Why this pick
+          </summary>
+          <p className="text-sm text-paper/90 mt-2 leading-relaxed">{p.writeup}</p>
+        </details>
+      )}
+      {p.deep_dive && (
+        <details className="mt-2 group">
+          <summary className="text-sm font-bold text-gold cursor-pointer list-none flex items-center gap-1">
+            <span className="transition-transform group-open:rotate-90">▶</span>
+            Deep dive
+          </summary>
+          <div className="text-sm text-paper/90 mt-2 leading-relaxed space-y-2">
+            {p.deep_dive.split("\n\n").map((para, j) => (
+              <p key={j}>{para}</p>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
 /**
- * Paywall preview: shows what tonight's card contains without revealing
+ * Paywall preview: shows what today's card contains without revealing
  * any actual pick. Game matchups are public; plays, prices and reasoning
  * are never rendered for non-members (not even blurred — they're omitted).
  */
@@ -37,10 +139,10 @@ function PaywallPreview({
         </h1>
         <p className="text-muted mb-2">{subline}</p>
         <p className="text-sm text-muted mb-6 max-w-lg mx-auto">
-          Every morning our desk grinds the full slate — spreads, totals, props,
-          weather, injuries, line movement — and distills it into a tight card of
-          only the plays that clear our strict confidence bar. Members also get
-          the Teaser and Parlay of the Day.
+          Our desk grinds every slate — spreads, totals, props, weather,
+          injuries, line movement — and distills it into one card of only the
+          plays that clear our strict confidence bar. Members also get the
+          Teaser and Parlay of the Day, plus the Parlay Lab builder.
         </p>
         <Link href={ctaHref} className="btn-gold px-8 py-3 inline-block">
           {ctaLabel}
@@ -50,7 +152,7 @@ function PaywallPreview({
       {picks.length > 0 && (
         <>
           <h2 className="font-display text-2xl mb-4 text-center">
-            Tonight&apos;s card <span className="text-sm text-muted font-sans">({picks.length} plays)</span>
+            Today&apos;s card <span className="text-sm text-muted font-sans">({picks.length} plays)</span>
           </h2>
           <div className="grid gap-4 md:grid-cols-2 relative">
             {picks.map((p, i) => (
@@ -59,7 +161,9 @@ function PaywallPreview({
                   <span className="text-xs font-bold uppercase tracking-widest text-gold">
                     #{i + 1} {p.star && "★"}
                   </span>
-                  <span className="text-xs text-muted">Conf {p.confidence}/5</span>
+                  <span className="text-xs text-muted">
+                    Conf {p.confidence}/5{p.starts ? ` · ${p.starts}` : ""}
+                  </span>
                 </div>
                 <h3 className="font-display text-xl mb-3">{p.game}</h3>
                 <div className="rounded bg-white/5 px-3 py-2 text-sm text-muted blur-[6px] select-none" aria-hidden="true">
@@ -103,19 +207,39 @@ export default async function PicksPage() {
         subline={
           session?.user
             ? `Signed in as ${email} — no active subscription.`
-            : "Sign in to see if you have access to tonight's card."
+            : "Sign in to see if you have access to today's card."
         }
       />
     );
   }
-  const slotLabel = feed ? SLOT_LABEL[feed.slot] || feed.slot : null;
+
+  const editions = (feed?.editions || (feed?.slot ? [feed.slot] : []))
+    .map((s) => SLOT_LABEL[s] || s)
+    .join(" · ");
+  const nowMins = nowETMinutes();
+
+  // Group picks by time window, sorted by start time within each window.
+  const groups = new Map<Window, { p: FeedPick; status: Status; mins: number | null }[]>();
+  for (const p of feed?.picks || []) {
+    const mins = parseStart(p.starts);
+    const w = windowFor(mins);
+    const arr = groups.get(w) || [];
+    arr.push({ p, status: statusFor(mins, nowMins), mins });
+    groups.set(w, arr);
+  }
+  for (const arr of groups.values()) {
+    arr.sort((a, b) => (a.mins ?? 9999) - (b.mins ?? 9999));
+  }
+  let cardIndex = 0;
 
   return (
     <div>
-      <h1 className="font-display text-4xl mb-1">TONIGHT&apos;S <span className="gold-text">CARD</span></h1>
+      <h1 className="font-display text-4xl mb-1">
+        TODAY&apos;S <span className="gold-text">CARD</span>
+      </h1>
       <p className="text-muted text-sm mb-6">
-        Pro members only · {email} · 🕐 Card refreshes daily each morning
-        {slotLabel && <> · {slotLabel} edition</>}
+        Pro members only · {email}
+        {editions && <> · {editions} edition{editions.includes("·") ? "s" : ""}</>}
       </p>
 
       {!feed || feed.picks.length === 0 ? (
@@ -125,48 +249,19 @@ export default async function PicksPage() {
         </div>
       ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-2">
-            {feed.picks.map((p, i) => (
-              <div key={i} className="card card-glow p-5">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold uppercase tracking-widest text-gold">
-                    #{i + 1} {p.star && "★"}
-                  </span>
-                  <span className="text-xs text-muted">Conf {p.confidence}/5</span>
-                </div>
-                <h3 className="font-display text-xl mb-1">{p.game}</h3>
-                {p.starts && (
-                  <p className="text-xs text-muted mb-1">🕐 {p.starts}</p>
-                )}
-                <p className="text-lg font-bold text-goldsoft mb-2">
-                  {p.play} <span className="text-sm text-muted">{p.price}</span>
-                </p>
-                {p.reasoning && <p className="text-sm text-muted">{p.reasoning}</p>}
-                {p.writeup && p.writeup !== p.reasoning && (
-                  <details className="mt-3 group">
-                    <summary className="text-sm font-bold text-gold cursor-pointer list-none flex items-center gap-1">
-                      <span className="transition-transform group-open:rotate-90">▶</span>
-                      Why this pick
-                    </summary>
-                    <p className="text-sm text-paper/90 mt-2 leading-relaxed">{p.writeup}</p>
-                  </details>
-                )}
-                {p.deep_dive && (
-                  <details className="mt-2 group">
-                    <summary className="text-sm font-bold text-gold cursor-pointer list-none flex items-center gap-1">
-                      <span className="transition-transform group-open:rotate-90">▶</span>
-                      Deep dive
-                    </summary>
-                    <div className="text-sm text-paper/90 mt-2 leading-relaxed space-y-2">
-                      {p.deep_dive.split("\n\n").map((para, j) => (
-                        <p key={j}>{para}</p>
-                      ))}
-                    </div>
-                  </details>
-                )}
+          {WINDOW_ORDER.filter((w) => (groups.get(w) || []).length > 0).map((w) => (
+            <div key={w} className="mb-8">
+              <h2 className="font-display text-2xl mb-4">
+                {w === "More plays" ? "More plays" : `${w} window`}
+                <span className="text-sm text-muted font-sans"> ({groups.get(w)!.length})</span>
+              </h2>
+              <div className="grid gap-4 md:grid-cols-2">
+                {groups.get(w)!.map(({ p, status }) => (
+                  <PickCard key={`${p.game}|${p.play}`} p={p} index={cardIndex++} status={status} />
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
 
           <div className="grid gap-4 md:grid-cols-2 mt-4">
             <div className="card p-5">

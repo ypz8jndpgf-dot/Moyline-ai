@@ -15,28 +15,30 @@ type FeedPick = {
   starts?: string;
   writeup?: string;
   deep_dive?: string;
+  edge_cents?: number;
+  market?: "spread" | "total" | "ml" | "prop";
+  line?: string;
+};
+
+type Ticket = {
+  legs: string[];
+  points?: number;
+  odds?: string;
+  book?: string;
+  confidence: number;
+  reasoning?: string;
 };
 
 type PicksFeed = {
   date: string; // YYYY-MM-DD (ET)
-  slot: string; // e.g. "7am", "11am", "6pm", "sat2pm"
+  slot: string; // latest contributing slot, e.g. "6pm"
+  editions: string[]; // all contributing slots for the day
   updated_at: string; // ISO timestamp
   picks: FeedPick[];
   /** Notable player props — eligible parlay legs for the Lab builder. */
   props?: FeedPick[];
-  teaser: {
-    legs: string[];
-    points: number;
-    confidence: number;
-    reasoning?: string;
-  } | null;
-  parlay: {
-    legs: string[];
-    odds: string;
-    book: string;
-    confidence: number;
-    reasoning?: string;
-  } | null;
+  teaser: Ticket | null;
+  parlay: Ticket | null;
 };
 
 function cleanEnv(v: string | undefined): string {
@@ -45,7 +47,7 @@ function cleanEnv(v: string | undefined): string {
   if (eq > 0 && /^[A-Z][A-Z0-9_]{2,}$/.test(s.slice(0, eq))) {
     s = s.slice(eq + 1).trim();
   }
-  return s.replace(/^["']+|["']+$/g, "");
+  return s.replace(/^[\"']+|[\"']+$/g, "");
 }
 
 function isValidFeed(b: unknown): b is PicksFeed {
@@ -60,10 +62,25 @@ function isValidFeed(b: unknown): b is PicksFeed {
   );
 }
 
+const pickKey = (p: FeedPick) =>
+  `${(p.game || "").trim().toLowerCase()}|${(p.play || "").trim().toLowerCase()}`;
+
+/** Merge incoming picks into existing: same game+play replaces, new ones append. */
+function mergePicks(existing: FeedPick[], incoming: FeedPick[]): FeedPick[] {
+  const byKey = new Map<string, FeedPick>();
+  for (const p of existing) byKey.set(pickKey(p), p);
+  for (const p of incoming) byKey.set(pickKey(p), p);
+  return [...byKey.values()];
+}
+
 /**
- * Receives the day's picks feed from the brief pipeline (off-Vercel worker).
- * Authenticated with a dedicated PICKS_UPDATE_SECRET bearer token.
- * Stores the feed in Upstash Redis; the /picks page reads it at request time.
+ * Receives a picks feed from the brief pipeline (off-Vercel worker).
+ * Authenticated with a dedicated PICKS_UPDATE_SECRET Bearer <redacted>
+ *
+ * HOLISTIC CARD: pushes MERGE into the day's feed instead of replacing it.
+ * Each brief/deep-dive edition contributes its picks; same game+play updates
+ * in place, new plays append. A null teaser/parlay never erases an earlier
+ * edition's ticket. The /picks page renders the merged day grouped by window.
  */
 export async function POST(req: Request) {
   const secret = cleanEnv(process.env.PICKS_UPDATE_SECRET);
@@ -98,12 +115,43 @@ export async function POST(req: Request) {
 
   try {
     const redis = new Redis({ url, token });
-    const feed: PicksFeed = {
-      ...body,
+
+    // Load today's existing card (if any) to merge into.
+    let existing: PicksFeed | null = null;
+    try {
+      const raw = await redis.get<string>(FEED_KEY);
+      if (raw) {
+        const parsed = (typeof raw === "string" ? JSON.parse(raw) : raw) as PicksFeed;
+        if (parsed && parsed.date === body.date && Array.isArray(parsed.picks)) {
+          existing = parsed;
+        }
+      }
+    } catch {
+      existing = null;
+    }
+
+    const merged: PicksFeed = {
+      date: body.date,
+      slot: body.slot,
+      editions: Array.from(
+        new Set([...(existing?.editions || []), ...(existing?.slot ? [existing.slot] : []), body.slot])
+      ),
       updated_at: new Date().toISOString(),
+      picks: mergePicks(existing?.picks || [], body.picks),
+      props: mergePicks(existing?.props || [], body.props || []),
+      // Latest non-null ticket wins; null never erases an earlier edition's ticket.
+      teaser: body.teaser || existing?.teaser || null,
+      parlay: body.parlay || existing?.parlay || null,
     };
-    await redis.set(FEED_KEY, JSON.stringify(feed));
-    return NextResponse.json({ ok: true, picks: feed.picks.length, slot: feed.slot });
+
+    await redis.set(FEED_KEY, JSON.stringify(merged));
+    return NextResponse.json({
+      ok: true,
+      picks: merged.picks.length,
+      slot: merged.slot,
+      editions: merged.editions,
+      merged_into_existing: !!existing,
+    });
   } catch (e) {
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message.slice(0, 200) : "Redis write failed" },
