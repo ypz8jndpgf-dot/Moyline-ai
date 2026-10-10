@@ -79,8 +79,8 @@ body {
 }
 
 .best-price {
-  background: linear-gradient(90deg, rgba(245, 197, 24, 0.22), rgba(245, 197, 24, 0.06));
-  border: 1px solid rgba(245, 197, 24, 0.5);
+  background: linear-gradient(90deg, rgba(74, 222, 128, 0.22), rgba(74, 222, 128, 0.06));
+  border: 1px solid rgba(74, 222, 128, 0.55);
   border-radius: 6px;
   font-weight: 700;
 }
