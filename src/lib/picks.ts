@@ -9,6 +9,8 @@ export type FeedPick = {
   confidence: number;
   star?: boolean;
   reasoning?: string;
+  /** Start time, e.g. "6:00pm ET". Optional. */
+  starts?: string;
   /** Quantified edge in cents, e.g. 30 = ~30c edge vs fair price. Optional. */
   edge_cents?: number;
   /** Market type for ticket construction. Optional. */

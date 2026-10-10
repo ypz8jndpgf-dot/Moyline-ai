@@ -135,6 +135,9 @@ export default async function PicksPage() {
                   <span className="text-xs text-muted">Conf {p.confidence}/5</span>
                 </div>
                 <h3 className="font-display text-xl mb-1">{p.game}</h3>
+                {p.starts && (
+                  <p className="text-xs text-muted mb-1">🕐 {p.starts}</p>
+                )}
                 <p className="text-lg font-bold text-goldsoft mb-2">
                   {p.play} <span className="text-sm text-muted">{p.price}</span>
                 </p>

@@ -12,6 +12,7 @@ type FeedPick = {
   confidence: number;
   star?: boolean;
   reasoning?: string;
+  starts?: string;
 };
 
 type PicksFeed = {

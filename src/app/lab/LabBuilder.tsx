@@ -230,6 +230,9 @@ export default function LabBuilder({
               <li key={i} className="border-b border-line/50 pb-3 last:border-0 last:pb-0">
                 <p className="font-bold">
                   {leg.game} {leg.star && <span className="text-gold">★</span>}
+                  {leg.starts && (
+                    <span className="text-xs font-normal text-muted ml-2">🕐 {leg.starts}</span>
+                  )}
                 </p>
                 <p className="text-sm text-muted">
                   {betType === "parlay" ? (
