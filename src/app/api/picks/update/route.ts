@@ -19,6 +19,8 @@ type FeedPick = {
   edge_cents?: number;
   market?: "spread" | "total" | "ml" | "prop";
   line?: string;
+  added_at?: string;
+  updated_at?: string;
 };
 
 type Ticket = {
