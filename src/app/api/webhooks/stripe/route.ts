@@ -42,12 +42,25 @@ export async function POST(req: Request) {
         const s = event.data.object as Stripe.Checkout.Session;
         const email = s.metadata?.email || s.customer_email || (s.customer ? await emailForCustomer(s.customer as string) : null);
         if (email) {
-          await setSubscription(email, {
-            status: "active",
-            customerId: (s.customer as string) || undefined,
-            subscriptionId: (s.subscription as string) || undefined,
-            updatedAt: new Date().toISOString(),
-          });
+          const tier = s.metadata?.tier || "monthly";
+          if (s.mode === "payment") {
+            // One-time day/week pass: grant time-limited access.
+            const days = tier === "weekly" ? 7 : 1;
+            const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+            await setSubscription(email, {
+              status: "active",
+              customerId: (s.customer as string) || undefined,
+              updatedAt: new Date().toISOString(),
+              expiresAt,
+            });
+          } else {
+            await setSubscription(email, {
+              status: "active",
+              customerId: (s.customer as string) || undefined,
+              subscriptionId: (s.subscription as string) || undefined,
+              updatedAt: new Date().toISOString(),
+            });
+          }
         }
         break;
       }

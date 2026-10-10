@@ -114,22 +114,68 @@ export interface SubRecord {
   customerId?: string;
   subscriptionId?: string;
   updatedAt: string;
+  /** For one-time day/week passes: ISO timestamp when access lapses. */
+  expiresAt?: string;
 }
 
 const SUBS_FILE = "subscriptions.json";
+const SUB_KEY_PREFIX = "moyline:sub:";
+
+function redisConfigured(): boolean {
+  const url = (process.env.UPSTASH_REDIS_REST_URL || "").trim();
+  const token = (process.env.UPSTASH_REDIS_REST_TOKEN || "").trim();
+  return !!url && !!token;
+}
+
+async function redisClient() {
+  const { Redis } = await import("@upstash/redis");
+  const clean = (v: string | undefined) => {
+    let s = (v || "").trim();
+    const eq = s.indexOf("=");
+    if (eq > 0 && /^[A-Z][A-Z0-9_]{2,}$/.test(s.slice(0, eq))) s = s.slice(eq + 1).trim();
+    return s.replace(/^["']+|["']+$/g, "");
+  };
+  return new Redis({
+    url: clean(process.env.UPSTASH_REDIS_REST_URL),
+    token: clean(process.env.UPSTASH_REDIS_REST_TOKEN),
+  });
+}
+
+const subKey = (email: string) => SUB_KEY_PREFIX + email.toLowerCase();
 
 export async function getSubscription(email: string): Promise<SubRecord> {
+  const none: SubRecord = { status: "none", updatedAt: new Date().toISOString() };
+  if (redisConfigured()) {
+    try {
+      const redis = await redisClient();
+      const raw = await redis.get<string>(subKey(email));
+      if (!raw) return none;
+      return (typeof raw === "string" ? JSON.parse(raw) : raw) as SubRecord;
+    } catch {
+      return none;
+    }
+  }
+  // Local-dev fallback: JSON file.
   const all = await readJson<Record<string, SubRecord>>(SUBS_FILE, {});
-  return all[email.toLowerCase()] || { status: "none", updatedAt: new Date().toISOString() };
+  return all[email.toLowerCase()] || none;
 }
 
 export async function setSubscription(email: string, rec: SubRecord): Promise<void> {
+  if (redisConfigured()) {
+    try {
+      const redis = await redisClient();
+      await redis.set(subKey(email), JSON.stringify(rec));
+      return;
+    } catch {
+      // fall through to file
+    }
+  }
   const all = await readJson<Record<string, SubRecord>>(SUBS_FILE, {});
   all[email.toLowerCase()] = rec;
   await writeJson(SUBS_FILE, all);
 }
 
-/** Owner bypass + beta allowlist + active/trialing check. */
+/** Owner bypass + beta allowlist + active/trialing check + unexpired pass check. */
 export function hasAccess(email: string | null | undefined, sub: SubRecord): boolean {
   const admin = (process.env.ADMIN_EMAIL || "").toLowerCase();
   if (email && admin && email.toLowerCase() === admin) return true;
@@ -138,5 +184,11 @@ export function hasAccess(email: string | null | undefined, sub: SubRecord): boo
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
   if (email && beta.includes(email.toLowerCase())) return true;
-  return sub.status === "active" || sub.status === "trialing";
+  if (sub.status === "active" || sub.status === "trialing") {
+    if (sub.expiresAt) {
+      return new Date(sub.expiresAt).getTime() > Date.now();
+    }
+    return true;
+  }
+  return false;
 }

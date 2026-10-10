@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getStripe, getPriceId, getAppUrl } from "@/lib/stripe";
+import { getStripe, getPriceId, getAppUrl, PriceTier } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
 
-/** Create a Stripe Checkout session (subscription mode, TEST keys = no real charges). */
-export async function POST() {
+const TIERS: PriceTier[] = ["daily", "weekly", "monthly"];
+
+/**
+ * Create a Stripe Checkout session.
+ * - daily/weekly: one-time payment (24h / 7d access via webhook expiry).
+ * - monthly: recurring subscription.
+ */
+export async function POST(req: Request) {
   const session = await auth();
   const email = session?.user?.email;
   if (!email) {
@@ -18,15 +24,24 @@ export async function POST() {
     return NextResponse.json({ error: "Owner account already has full access" }, { status: 400 });
   }
 
+  let tier: PriceTier = "monthly";
+  try {
+    const body = await req.json();
+    if (body && TIERS.includes(body.tier)) tier = body.tier;
+  } catch {
+    // no body — default to monthly
+  }
+
   try {
     const stripe = getStripe();
+    const isRecurring = tier === "monthly";
     const checkout = await stripe.checkout.sessions.create({
-      mode: "subscription",
+      mode: isRecurring ? "subscription" : "payment",
       customer_email: email,
-      line_items: [{ price: getPriceId(), quantity: 1 }],
+      line_items: [{ price: getPriceId(tier), quantity: 1 }],
       success_url: `${getAppUrl()}/picks?subscribed=1`,
       cancel_url: `${getAppUrl()}/pricing`,
-      metadata: { email },
+      metadata: { email, tier },
     });
     return NextResponse.json({ url: checkout.url });
   } catch (e) {
