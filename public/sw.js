@@ -1,5 +1,6 @@
-/* MoyLine AI service worker — offline-capable PWA shell */
-const CACHE = "moyline-v1";
+/* MoyLine AI service worker — offline-capable PWA shell.
+   Network-first for everything: fresh content when online, cached fallback when offline. */
+const CACHE = "moyline-v2";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -16,32 +17,15 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
-  const url = new URL(request.url);
 
-  // API calls: network first, fall back to cache
-  if (url.pathname.startsWith("/api/")) {
-    event.respondWith(
-      fetch(request)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((cache) => cache.put(request, copy));
-          return res;
-        })
-        .catch(() => caches.match(request))
-    );
-    return;
-  }
-
-  // Pages/assets: cache first, then network
+  // Network first; fall back to cache only when offline
   event.respondWith(
-    caches.match(request).then(
-      (cached) =>
-        cached ||
-        fetch(request).then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((cache) => cache.put(request, copy));
-          return res;
-        })
-    )
+    fetch(request)
+      .then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((cache) => cache.put(request, copy));
+        return res;
+      })
+      .catch(() => caches.match(request))
   );
 });
