@@ -34,13 +34,48 @@ function extractLeague(game: string): string {
   return m ? m[1] : "Other";
 }
 
+/** Every sport the site covers — the filter lists all of them, not just today's. */
+const ALL_SPORTS = [
+  "NFL",
+  "CFB",
+  "NBA",
+  "NHL",
+  "MLB",
+  "MLS",
+  "EPL",
+  "La Liga",
+  "Bundesliga",
+  "Serie A",
+  "Ligue 1",
+  "Brasileirão",
+  "UCL",
+];
+
+/** Normalize a feed league label to the canonical sport name. */
+function normalizeSport(league: string): string {
+  const l = league.trim().toUpperCase();
+  const aliases: Record<string, string> = {
+    NCAAF: "CFB",
+    NCAAB: "CBB",
+    "LA LIGA": "La Liga",
+    BUNDESLIGA: "Bundesliga",
+    "SERIE A": "Serie A",
+    "LIGUE 1": "Ligue 1",
+    "BRASILEIRAO": "Brasileirão",
+    "CHAMPIONS LEAGUE": "UCL",
+  };
+  if (aliases[l]) return aliases[l];
+  const hit = ALL_SPORTS.find((s) => s.toUpperCase() === l);
+  return hit || league;
+}
+
 /* ---------- teaser math (Wong) ---------- */
 
 type TeasedLeg = FeedPick & { teasedLine: string; points: number };
 
-function teaserPointsFor(league: string): number {
-  const l = league.toUpperCase();
-  if (l.includes("CFB") || l.includes("CBB") || l.includes("NCAAB")) return 6.5;
+function teaserPointsFor(sport: string): number {
+  const l = sport.toUpperCase();
+  if (l === "CFB" || l === "CBB") return 6.5;
   return 6;
 }
 
@@ -49,8 +84,8 @@ function wongTease(pick: FeedPick): TeasedLeg | null {
   if (pick.market !== "spread" || !pick.line) return null;
   const line = parseFloat(pick.line);
   if (isNaN(line)) return null;
-  const league = extractLeague(pick.game);
-  const pts = teaserPointsFor(league);
+  const sport = normalizeSport(extractLeague(pick.game));
+  const pts = teaserPointsFor(sport);
 
   let teased: number | null = null;
   if (line <= -7.5 && line >= -8.5) {
@@ -83,15 +118,15 @@ export default function LabBuilder({
   const [legCount, setLegCount] = useState(2);
   const [sport, setSport] = useState("All");
 
-  const leagues = useMemo(() => {
-    const s = new Set([...picks, ...props].map((p) => extractLeague(p.game)));
-    return ["All", ...Array.from(s).sort()];
-  }, [picks, props]);
+  const leagues = useMemo(() => ["All", ...ALL_SPORTS], []);
+
+  const matchesSport = (p: FeedPick) =>
+    sport === "All" || normalizeSport(extractLeague(p.game)) === sport;
 
   const result = useMemo(() => {
     // Player props are always eligible for parlays — never for teasers.
     const parlayPool = [...picks, ...props]
-      .filter((p) => sport === "All" || extractLeague(p.game) === sport)
+      .filter(matchesSport)
       .sort((a, b) => rankScore(b) - rankScore(a));
 
     if (betType === "parlay") {
@@ -110,9 +145,7 @@ export default function LabBuilder({
     }
 
     // teaser — props excluded (can't tease a prop)
-    const pool = picks
-      .filter((p) => sport === "All" || extractLeague(p.game) === sport)
-      .sort((a, b) => rankScore(b) - rankScore(a));
+    const pool = picks.filter(matchesSport).sort((a, b) => rankScore(b) - rankScore(a));
     const eligible = pool
       .map(wongTease)
       .filter((x): x is TeasedLeg => x !== null);
