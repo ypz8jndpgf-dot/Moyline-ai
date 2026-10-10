@@ -142,6 +142,15 @@ export default async function PicksPage() {
                   {p.play} <span className="text-sm text-muted">{p.price}</span>
                 </p>
                 {p.reasoning && <p className="text-sm text-muted">{p.reasoning}</p>}
+                {p.writeup && p.writeup !== p.reasoning && (
+                  <details className="mt-3 group">
+                    <summary className="text-sm font-bold text-gold cursor-pointer list-none flex items-center gap-1">
+                      <span className="transition-transform group-open:rotate-90">▶</span>
+                      Why this pick
+                    </summary>
+                    <p className="text-sm text-paper/90 mt-2 leading-relaxed">{p.writeup}</p>
+                  </details>
+                )}
               </div>
             ))}
           </div>

@@ -13,6 +13,7 @@ type FeedPick = {
   star?: boolean;
   reasoning?: string;
   starts?: string;
+  writeup?: string;
 };
 
 type PicksFeed = {
