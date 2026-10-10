@@ -29,36 +29,39 @@ export const viewport: Viewport = {
 async function Nav() {
   const session = await auth();
   const email = session?.user?.email || null;
+  const accountLink = email ? (
+    <Link
+      href="/my-tails"
+      className="px-2 sm:px-3 py-1.5 rounded text-gold whitespace-nowrap shrink-0"
+      title={email}
+    >
+      {email.split("@")[0]}
+    </Link>
+  ) : (
+    <Link
+      href="/signin"
+      className="px-2.5 sm:px-3 py-1.5 rounded border border-gold/60 text-gold whitespace-nowrap shrink-0 hover:bg-gold/10"
+    >
+      Sign in
+    </Link>
+  );
   return (
     <header className="border-b border-line/70 bg-ink/90 backdrop-blur sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-        <Link href="/" className="font-display text-xl sm:text-2xl shrink-0">
+      <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between flex-wrap gap-y-2">
+        <Link href="/" className="font-display text-lg sm:text-2xl shrink-0 order-1">
           <span className="gold-text">MOYLINE</span>{" "}
           <span className="text-paper">AI</span>
         </Link>
-        <nav className="flex items-center gap-0.5 sm:gap-2 text-xs sm:text-sm font-bold">
-          <Link href="/" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold">Lines</Link>
-          <Link href="/picks" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold">Picks 🔒</Link>
-          <Link href="/lab" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold">Lab 🔒</Link>
-          <Link href="/track-record" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold">Record</Link>
-          <Link href="/my-tails" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold">Tails</Link>
-          {email ? (
-            <Link
-              href="/my-tails"
-              className="px-2 sm:px-3 py-1.5 rounded text-gold whitespace-nowrap"
-              title={email}
-            >
-              {email.split("@")[0]}
-            </Link>
-          ) : (
-            <Link
-              href="/signin"
-              className="px-2.5 sm:px-3 py-1.5 rounded border border-gold/60 text-gold whitespace-nowrap hover:bg-gold/10"
-            >
-              Sign in
-            </Link>
-          )}
-          <Link href="/pricing" className="px-2.5 sm:px-3 py-1.5 rounded btn-gold whitespace-nowrap">Go Pro</Link>
+        <div className="flex items-center gap-2 shrink-0 order-2 sm:order-3 text-xs sm:text-sm font-bold">
+          {accountLink}
+          <Link href="/pricing" className="px-2.5 sm:px-3 py-1.5 rounded btn-gold whitespace-nowrap shrink-0">Go Pro</Link>
+        </div>
+        <nav className="flex items-center gap-0.5 sm:gap-2 text-xs sm:text-sm font-bold overflow-x-auto whitespace-nowrap order-3 sm:order-2 w-full sm:w-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <Link href="/" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Lines</Link>
+          <Link href="/picks" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Picks 🔒</Link>
+          <Link href="/lab" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Lab 🔒</Link>
+          <Link href="/track-record" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Record</Link>
+          <Link href="/my-tails" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Tails</Link>
         </nav>
       </div>
     </header>
