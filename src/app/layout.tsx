@@ -38,6 +38,7 @@ function Nav() {
           <Link href="/picks" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold">Picks 🔒</Link>
           <Link href="/lab" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold">Lab 🔒</Link>
           <Link href="/track-record" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold">Record</Link>
+          <Link href="/my-tails" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold">Tails</Link>
           <Link href="/pricing" className="px-2.5 sm:px-3 py-1.5 rounded btn-gold whitespace-nowrap">Go Pro</Link>
         </nav>
       </div>
@@ -59,7 +60,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span>
                 <span className="gold-text font-display">MOYLINE AI</span> — live lines, steam alerts, pro picks.
               </span>
-              <span>Analysis for entertainment purposes — not financial advice.</span>
+              <span>Analysis for entertainment purposes — not financial advice. <a href="mailto:support@moylineai.com" className="underline hover:text-gold">support@moylineai.com</a></span>
             </div>
           </footer>
         </div>

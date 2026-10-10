@@ -1,11 +1,28 @@
 import { NextResponse } from "next/server";
-import { refreshOdds, getQuotaRemaining } from "@/lib/odds";
+import { Redis } from "@upstash/redis";
+import { refreshOdds, getQuotaRemaining, getOdds, getOpenings } from "@/lib/odds";
+import { buildBoard } from "@/lib/board";
+import { getPicksFeed } from "@/lib/picks";
+import { findBoardGame, steamForGame } from "@/lib/card-utils";
+import { getMemberEmails, sendEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
+const STEAM_PREFIX = "moyline:steam:alerted:";
+
+function cleanEnv(v: string | undefined): string {
+  let s = (v || "").trim();
+  const eq = s.indexOf("=");
+  if (eq > 0 && /^[A-Z][A-Z0-9_]{2,}$/.test(s.slice(0, eq))) s = s.slice(eq + 1).trim();
+  return s.replace(/^[\"']+|[\"']+$/g, "");
+}
+
 /**
- * Scheduled refresh endpoint (Vercel Cron hits this a few times daily).
- * Protected by CRON_SECRET when set (Vercel sends it as a Bearer token).
+ * Scheduled refresh endpoint (Vercel Cron hits this 4x daily).
+ * Protected by CRON_SECRET when set (Vercel sends it as a Bearer <redacted>
+ *
+ * After refreshing odds, checks for NEW steam moves on card games and
+ * emails members a digest (each distinct move alerts once per 24h).
  */
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
@@ -17,12 +34,22 @@ export async function GET(req: Request) {
   }
   try {
     const result = await refreshOdds(true);
+
+    // Steam alerts on card games (best-effort; never fails the refresh).
+    let steamAlerts = 0;
+    try {
+      steamAlerts = await alertCardSteam();
+    } catch (e) {
+      console.error("[refresh] steam alert failed:", e instanceof Error ? e.message : e);
+    }
+
     return NextResponse.json({
       ok: true,
       fetchedAt: result.fetchedAt,
       sportsRefreshed: result.sportsRefreshed,
       gameCount: result.events.length,
       quotaRemaining: getQuotaRemaining(),
+      steamAlerts,
       error: result.error || null,
     });
   } catch (e) {
@@ -31,4 +58,54 @@ export async function GET(req: Request) {
       { status: 500 }
     );
   }
+}
+
+async function alertCardSteam(): Promise<number> {
+  const url = cleanEnv(process.env.UPSTASH_REDIS_REST_URL);
+  const token = cleanEnv(process.env.UPSTASH_REDIS_REST_TOKEN);
+  if (!url || !token) return 0;
+
+  const feed = await getPicksFeed();
+  if (!feed || feed.picks.length === 0) return 0;
+
+  const [oddsResult, openings] = await Promise.all([getOdds(), getOpenings()]);
+  const { games, movers } = buildBoard(oddsResult.events, openings);
+
+  const redis = new Redis({ url, token });
+  const fresh: { game: string; label: string; detail: string }[] = [];
+
+  for (const pick of feed.picks) {
+    const bg = findBoardGame(pick, games);
+    if (!bg) continue;
+    for (const m of steamForGame(bg, movers)) {
+      const key = STEAM_PREFIX + Buffer.from(`${m.game}|${m.label}`).toString("base64url").slice(0, 80);
+      const seen = await redis.get(key);
+      if (!seen) {
+        await redis.set(key, "1", { ex: 24 * 3600 });
+        fresh.push({ game: m.game, label: m.label, detail: m.detail });
+      }
+    }
+  }
+
+  if (fresh.length === 0) return 0;
+
+  const members = await getMemberEmails();
+  if (members.length === 0) return 0;
+
+  const html = `
+    <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1a1a1a;">
+      <p style="font-size: 13px; color: #666;">MoyLine AI · Steam alert</p>
+      <h1 style="font-size: 24px; margin: 8px 0;">🔥 Line moving on your card</h1>
+      <ul style="line-height: 1.8;">
+        ${fresh.map((f) => `<li><strong>${f.game}</strong> — ${f.label} <span style="color:#666">(${f.detail})</span></li>`).join("")}
+      </ul>
+      <p style="margin-top: 20px;"><a href="https://moyline-ai.vercel.app/picks" style="background: #f5c518; color: #0a0a0a; font-weight: 800; padding: 12px 24px; border-radius: 10px; text-decoration: none;">View card</a></p>
+      <p style="font-size: 11px; color: #888; margin-top: 20px;">Analysis for entertainment purposes — not financial advice.</p>
+    </div>`;
+
+  let sent = 0;
+  for (const to of members) {
+    if (await sendEmail(to, `🔥 Steam alert: ${fresh.length} line move${fresh.length > 1 ? "s" : ""} on your card`, html)) sent++;
+  }
+  return sent;
 }

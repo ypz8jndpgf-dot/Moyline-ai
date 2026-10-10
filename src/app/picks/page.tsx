@@ -2,6 +2,11 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { getSubscription, hasAccess } from "@/lib/store";
 import { getPicksFeed, PicksFeed, FeedPick } from "@/lib/picks";
+import { getOdds, getOpenings } from "@/lib/odds";
+import { buildBoard, MoverVM } from "@/lib/board";
+import { findBoardGame, bestPriceForPick, steamForGame, BestPrice } from "@/lib/card-utils";
+import { readTails } from "@/lib/tails";
+import TailButton from "./TailButton";
 
 export const dynamic = "force-dynamic";
 
@@ -70,7 +75,19 @@ function StatusBadge({ status }: { status: Status }) {
   return null;
 }
 
-function PickCard({ p, index, status }: { p: FeedPick; index: number; status: Status }) {
+function PickCard({
+  p,
+  index,
+  status,
+  best,
+  initiallyTailed,
+}: {
+  p: FeedPick;
+  index: number;
+  status: Status;
+  best: BestPrice;
+  initiallyTailed: boolean;
+}) {
   return (
     <div className="card card-glow p-5">
       <div className="flex items-center justify-between mb-2">
@@ -84,9 +101,16 @@ function PickCard({ p, index, status }: { p: FeedPick; index: number; status: St
       </div>
       <h3 className="font-display text-xl mb-1">{p.game}</h3>
       {p.starts && <p className="text-xs text-muted mb-1">🕐 {p.starts}</p>}
-      <p className="text-lg font-bold text-goldsoft mb-2">
+      <p className="text-lg font-bold text-goldsoft mb-1">
         {p.play} <span className="text-sm text-muted">{p.price}</span>
       </p>
+      {best && (
+        <p className="text-xs mb-2">
+          <span className="inline-block bg-gold/15 text-gold font-bold px-2 py-0.5 rounded">
+            Best price: {best.book} {best.display}
+          </span>
+        </p>
+      )}
       {p.reasoning && <p className="text-sm text-muted">{p.reasoning}</p>}
       {p.writeup && p.writeup !== p.reasoning && (
         <details className="mt-3 group">
@@ -110,13 +134,16 @@ function PickCard({ p, index, status }: { p: FeedPick; index: number; status: St
           </div>
         </details>
       )}
+      <div className="mt-3">
+        <TailButton game={p.game} play={p.play} price={p.price} initiallyTailed={initiallyTailed} />
+      </div>
     </div>
   );
 }
 
 /**
- * Paywall preview: shows what today's card contains without revealing
- * any actual pick. Game matchups are public; plays, prices and reasoning
+ * Paywall preview: one free pick of the day is fully unlocked; the rest
+ * stay locked. Game matchups are public; locked plays, prices and reasoning
  * are never rendered for non-members (not even blurred — they're omitted).
  */
 function PaywallPreview({
@@ -131,6 +158,8 @@ function PaywallPreview({
   subline: string;
 }) {
   const picks = feed?.picks || [];
+  const freePick = picks.find((p) => p.star) || picks[0] || null;
+  const locked = picks.filter((p) => p !== freePick);
   return (
     <div className="max-w-2xl mx-auto">
       <div className="text-center py-10">
@@ -149,13 +178,35 @@ function PaywallPreview({
         </Link>
       </div>
 
-      {picks.length > 0 && (
+      {freePick && (
+        <div className="mb-6">
+          <h2 className="font-display text-2xl mb-4 text-center">
+            Free pick of the day <span className="text-sm">🎁</span>
+          </h2>
+          <div className="card card-glow p-5">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold uppercase tracking-widest text-gold">
+                Free {freePick.star && "★"}
+              </span>
+              <span className="text-xs text-muted">Conf {freePick.confidence}/5</span>
+            </div>
+            <h3 className="font-display text-xl mb-1">{freePick.game}</h3>
+            {freePick.starts && <p className="text-xs text-muted mb-1">🕐 {freePick.starts}</p>}
+            <p className="text-lg font-bold text-goldsoft mb-2">
+              {freePick.play} <span className="text-sm text-muted">{freePick.price}</span>
+            </p>
+            {freePick.reasoning && <p className="text-sm text-muted">{freePick.reasoning}</p>}
+          </div>
+        </div>
+      )}
+
+      {locked.length > 0 && (
         <>
           <h2 className="font-display text-2xl mb-4 text-center">
-            Today&apos;s card <span className="text-sm text-muted font-sans">({picks.length} plays)</span>
+            Today&apos;s card <span className="text-sm text-muted font-sans">({locked.length} more locked)</span>
           </h2>
           <div className="grid gap-4 md:grid-cols-2 relative">
-            {picks.map((p, i) => (
+            {locked.map((p, i) => (
               <div key={i} className="card p-5 relative overflow-hidden">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold uppercase tracking-widest text-gold">
@@ -218,6 +269,34 @@ export default async function PicksPage() {
     .join(" · ");
   const nowMins = nowETMinutes();
 
+  // Odds board for best-price badges + steam detection (cached read, no API burn).
+  let boardGames: Awaited<ReturnType<typeof buildBoard>>["games"] = [];
+  let boardMovers: MoverVM[] = [];
+  try {
+    const [oddsResult, openings] = await Promise.all([getOdds(), getOpenings()]);
+    const board = buildBoard(oddsResult.events, openings);
+    boardGames = board.games;
+    boardMovers = board.movers;
+  } catch {
+    /* odds unavailable — card renders without badges */
+  }
+
+  const bestByPick = new Map<string, BestPrice>();
+  const steamByPick = new Map<string, MoverVM[]>();
+  for (const p of feed?.picks || []) {
+    const key = `${p.game}|${p.play}`;
+    const bg = findBoardGame(p, boardGames);
+    if (bg) {
+      bestByPick.set(key, bestPriceForPick(p, bg));
+      const steam = steamForGame(bg, boardMovers);
+      if (steam.length > 0) steamByPick.set(key, steam);
+    }
+  }
+
+  // Member's tailed picks (for initial button state).
+  const tails = email ? await readTails(email) : [];
+  const tailedSet = new Set(tails.map((t) => `${t.game}|${t.play}`));
+
   // Group picks by time window, sorted by start time within each window.
   const groups = new Map<Window, { p: FeedPick; status: Status; mins: number | null }[]>();
   for (const p of feed?.picks || []) {
@@ -239,7 +318,10 @@ export default async function PicksPage() {
       </h1>
       <p className="text-muted text-sm mb-6">
         Pro members only · {email}
-        {editions && <> · {editions} edition{editions.includes("·") ? "s" : ""}</>}
+        {editions && <> · {editions} edition{editions.includes("·") ? "s" : ""}</>} ·{" "}
+        <Link href="/my-tails" className="underline hover:text-gold">
+          My tails ({tails.length})
+        </Link>
       </p>
 
       {!feed || feed.picks.length === 0 ? (
@@ -249,6 +331,28 @@ export default async function PicksPage() {
         </div>
       ) : (
         <>
+          {steamByPick.size > 0 && (
+            <div className="card p-5 mb-8 border-gold/40">
+              <h2 className="font-display text-xl mb-3">
+                🔥 Steam on your card
+              </h2>
+              <ul className="text-sm space-y-2">
+                {[...steamByPick.entries()].map(([key, movers]) => (
+                  <li key={key}>
+                    <span className="font-bold">{key.split("|")[0]}</span>
+                    <span className="text-muted"> — </span>
+                    {movers.map((m, j) => (
+                      <span key={j} className="text-paper">
+                        {m.label} <span className="text-muted">({m.detail})</span>
+                        {j < movers.length - 1 && "; "}
+                      </span>
+                    ))}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {WINDOW_ORDER.filter((w) => (groups.get(w) || []).length > 0).map((w) => (
             <div key={w} className="mb-8">
               <h2 className="font-display text-2xl mb-4">
@@ -256,9 +360,19 @@ export default async function PicksPage() {
                 <span className="text-sm text-muted font-sans"> ({groups.get(w)!.length})</span>
               </h2>
               <div className="grid gap-4 md:grid-cols-2">
-                {groups.get(w)!.map(({ p, status }) => (
-                  <PickCard key={`${p.game}|${p.play}`} p={p} index={cardIndex++} status={status} />
-                ))}
+                {groups.get(w)!.map(({ p, status }) => {
+                  const key = `${p.game}|${p.play}`;
+                  return (
+                    <PickCard
+                      key={key}
+                      p={p}
+                      index={cardIndex++}
+                      status={status}
+                      best={bestByPick.get(key) || null}
+                      initiallyTailed={tailedSet.has(key)}
+                    />
+                  );
+                })}
               </div>
             </div>
           ))}
