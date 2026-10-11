@@ -161,7 +161,6 @@ export async function POST(req: Request) {
     const { merged: mergedPicks, added: addedPicks } = mergePicks(existing?.picks || [], body.picks);
     const { merged: mergedProps } = mergePicks(existing?.props || [], body.props || []);
     const { merged: mergedBackpage, added: addedBackpage } = mergePicks(existing?.backpage || [], (body as PicksFeed).backpage || []);
-    console.log(`[debug] backpage merge: existing=${(existing?.backpage || []).length}, incoming=${((body as PicksFeed).backpage || []).length}, added=${addedBackpage.length}`);
     const merged: PicksFeed = {
       date: body.date,
       slot: body.slot,
