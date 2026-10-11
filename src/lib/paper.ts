@@ -63,25 +63,30 @@ async function saveBets(bets: PaperBet[]): Promise<void> {
   await redis().set(BETS_KEY, bets);
 }
 
-/** Place paper bets for newly added card picks. Skips picks without parseable odds. */
+/** Place paper bets for newly added card picks. Skips picks without parseable odds.
+ *
+ * Atomic via a single Lua script: appending the bets and reserving their stakes
+ * from the bankroll happen together or not at all. This closes the 2026-10-11 7am
+ * race, where a partial failure between the bets write and the bankroll
+ * reservation left the bets OPEN with no stake reserved while the route reported
+ * paper_bets_placed:0. Dedupe against existing bets happens inside the script, so
+ * concurrent pushes can no longer double-place the same pick either.
+ * Returns the bets that were actually added. */
 export async function placePaperBets(
   picks: { game: string; play: string; price: string }[],
   date: string
 ): Promise<PaperBet[]> {
   const r = redis();
-  const existing = (await r.get<PaperBet[]>(BETS_KEY)) || [];
-  const existingKeys = new Set(
-    existing.map((b) => mergeKey({ game: b.game, play: b.play }))
-  );
   const now = new Date().toISOString();
-  const fresh: PaperBet[] = [];
+  const seen = new Set<string>();
+  const candidates: PaperBet[] = [];
   for (const p of picks) {
     const key = mergeKey({ game: p.game, play: p.play });
-    if (existingKeys.has(key)) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
     const odds = parseOdds(p.price || "");
     if (odds == null) continue;
-    existingKeys.add(key);
-    fresh.push({
+    candidates.push({
       id: `${date}-${key}`.slice(0, 120),
       date,
       game: p.game,
@@ -94,12 +99,40 @@ export async function placePaperBets(
       placed_at: now,
     });
   }
-  if (fresh.length > 0) {
-    await r.set(BETS_KEY, [...existing, ...fresh]);
-    // Reserve stakes from the bankroll up front.
-    await r.incrby(BANKROLL_KEY, -PAPER_STAKE * fresh.length);
+  if (candidates.length === 0) return [];
+
+  const script = `
+    local raw = redis.call("GET", KEYS[1])
+    local bets = {}
+    if raw then bets = cjson.decode(raw) end
+    local have = {}
+    for _, b in ipairs(bets) do have[b.id] = true end
+    local added = {}
+    for _, c in ipairs(cjson.decode(ARGV[1])) do
+      if not have[c.id] then
+        bets[#bets + 1] = c
+        added[#added + 1] = c
+        have[c.id] = true
+      end
+    end
+    if #added > 0 then
+      redis.call("SET", KEYS[1], cjson.encode(bets))
+      -- INCRBYFLOAT, not INCRBY: the bankroll routinely carries cents after
+      -- settlements (e.g. 994.05), and INCRBY errors on non-integer values.
+      redis.call("INCRBYFLOAT", KEYS[2], 0 - (tonumber(ARGV[2]) * #added))
+    end
+    return cjson.encode(added)
+  `;
+  const out = (await r.eval(script, [BETS_KEY, BANKROLL_KEY], [
+    JSON.stringify(candidates),
+    String(PAPER_STAKE),
+  ])) as string;
+  try {
+    const placed = JSON.parse(out) as PaperBet[];
+    return Array.isArray(placed) ? placed : [];
+  } catch {
+    return [];
   }
-  return fresh;
 }
 
 /**

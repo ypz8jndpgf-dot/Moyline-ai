@@ -1,6 +1,12 @@
 import { getBankroll, getBets, PAPER_START, type PaperBet } from "@/lib/paper";
+import { auth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
+
+function isAdmin(email: string | null | undefined): boolean {
+  const admin = (process.env.ADMIN_EMAIL || "").toLowerCase();
+  return !!email && !!admin && email.toLowerCase() === admin;
+}
 
 function fmt(n: number): string {
   const sign = n > 0 ? "+" : n < 0 ? "−" : "";
@@ -42,6 +48,15 @@ function BetRow({ b }: { b: PaperBet }) {
 }
 
 export default async function PaperPage() {
+  const session = await auth();
+  if (!isAdmin(session?.user?.email)) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-16 text-center">
+        <h1 className="font-display text-3xl mb-2">Restricted</h1>
+        <p className="text-muted text-sm">This page is private.</p>
+      </div>
+    );
+  }
   const [bankroll, bets] = await Promise.all([getBankroll(), getBets()]);
   const pnl = Math.round((bankroll - PAPER_START) * 100) / 100;
   const open = bets.filter((b) => b.status === "open");

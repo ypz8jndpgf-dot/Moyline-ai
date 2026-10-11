@@ -151,7 +151,7 @@ function PickCard({
       )}
       {best && (
         <p className="text-xs mb-2">
-          <span className="inline-block bg-gold/15 text-gold font-bold px-2 py-0.5 rounded">
+          <span className="inline-block bg-white/10 text-paper/80 px-2 py-0.5 rounded">
             Best price: {best.book} {best.display}
           </span>
         </p>
@@ -366,12 +366,15 @@ export default async function PicksPage() {
       <h1 className="font-display text-4xl mb-1">
         TODAY&apos;S <span className="gold-text">CARD</span>
       </h1>
-      <p className="text-muted text-sm mb-6">
+      <p className="text-muted text-sm mb-1">
         Pro members only · {email}
         {editions && <> · {editions} edition{editions.includes("·") ? "s" : ""}</>} ·{" "}
         <Link href="/my-tails" className="underline hover:text-gold">
           My tails ({tails.length})
         </Link>
+      </p>
+      <p className="text-xs text-muted mb-6">
+        Best-price tags compare the four books on that pick — they&apos;re not extra picks.
       </p>
 
       {!feed || feed.picks.length === 0 ? (
