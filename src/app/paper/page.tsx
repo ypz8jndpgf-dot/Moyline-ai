@@ -31,7 +31,7 @@ function BetRow({ b }: { b: PaperBet }) {
           {statusLabel}
         </span>
         <span className="text-xs text-muted">
-          {b.date} · ${b.stake.toFixed(0)}
+          {(b.source || "card") === "backpage" ? "Backpage · " : ""}{b.date} · ${b.stake.toFixed(0)}
         </span>
       </div>
       <h3 className="font-display text-lg">{b.game}</h3>
@@ -59,14 +59,25 @@ export default async function PaperPage() {
   }
   const [bankroll, bets] = await Promise.all([getBankroll(), getBets()]);
   const pnl = Math.round((bankroll - PAPER_START) * 100) / 100;
+  const srcOf = (b: PaperBet) => b.source || "card"; // legacy bets predate the field
   const open = bets.filter((b) => b.status === "open");
   const settled = bets
     .filter((b) => b.status !== "open")
     .sort((a, b) => (b.settled_at || "").localeCompare(a.settled_at || ""))
     .slice(0, 30);
-  const wins = bets.filter((b) => b.status === "win").length;
-  const losses = bets.filter((b) => b.status === "loss").length;
-  const pushes = bets.filter((b) => b.status === "push").length;
+  const rec = (src: string) => {
+    const s = bets.filter((b) => srcOf(b) === src);
+    return {
+      w: s.filter((b) => b.status === "win").length,
+      l: s.filter((b) => b.status === "loss").length,
+      p: s.filter((b) => b.status === "push").length,
+    };
+  };
+  const cardRec = rec("card");
+  const bpRec = rec("backpage");
+  const wins = cardRec.w + bpRec.w;
+  const losses = cardRec.l + bpRec.l;
+  const pushes = cardRec.p + bpRec.p;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
@@ -93,6 +104,9 @@ export default async function PaperPage() {
           <p className="text-xs uppercase tracking-widest text-muted mb-1">Record</p>
           <p className="font-display text-2xl sm:text-3xl">
             {wins}-{losses}-{pushes}
+          </p>
+          <p className="text-xs text-muted mt-1">
+            Card {cardRec.w}-{cardRec.l}-{cardRec.p} · Backpage {bpRec.w}-{bpRec.l}-{bpRec.p}
           </p>
         </div>
       </div>

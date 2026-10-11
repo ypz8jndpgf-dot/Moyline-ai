@@ -36,6 +36,8 @@ export type PicksFeed = {
   picks: FeedPick[];
   /** Notable player props from the brief — eligible legs for the Lab's parlay builder. */
   props?: FeedPick[];
+  /** Backpage: conf-3 leans. Separate paywalled tab, admin-only paper trading + grading. */
+  backpage?: FeedPick[];
   teaser: {
     legs: string[];
     points: number;

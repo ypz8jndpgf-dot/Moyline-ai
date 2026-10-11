@@ -40,6 +40,8 @@ type PicksFeed = {
   picks: FeedPick[];
   /** Notable player props — eligible parlay legs for the Lab builder. */
   props?: FeedPick[];
+  /** Backpage: conf-3 leans. Paywalled tab, paper-traded + graded privately for admin. */
+  backpage?: FeedPick[];
   teaser: Ticket | null;
   parlay: Ticket | null;
 };
@@ -158,6 +160,7 @@ export async function POST(req: Request) {
 
     const { merged: mergedPicks, added: addedPicks } = mergePicks(existing?.picks || [], body.picks);
     const { merged: mergedProps } = mergePicks(existing?.props || [], body.props || []);
+    const { merged: mergedBackpage, added: addedBackpage } = mergePicks(existing?.backpage || [], (body as PicksFeed).backpage || []);
     const merged: PicksFeed = {
       date: body.date,
       slot: body.slot,
@@ -167,6 +170,7 @@ export async function POST(req: Request) {
       updated_at: new Date().toISOString(),
       picks: mergedPicks,
       props: mergedProps,
+      backpage: mergedBackpage,
       // Latest non-null ticket wins; null never erases an earlier edition's ticket.
       teaser: body.teaser || existing?.teaser || null,
       parlay: body.parlay || existing?.parlay || null,
@@ -175,14 +179,23 @@ export async function POST(req: Request) {
     await redis.set(FEED_KEY, JSON.stringify(merged));
 
     // Paper trading: auto-place $10 virtual bets on brand-new card picks.
+    // Backpage picks are paper-traded too, tagged source="backpage" (admin-only view).
     let paperPlaced = 0;
+    let backpagePlaced = 0;
     try {
       const { placePaperBets } = await import("@/lib/paper");
       const placed = await placePaperBets(
         addedPicks.map((p) => ({ game: p.game, play: p.play, price: p.price })),
-        body.date
+        body.date,
+        "card"
       );
       paperPlaced = placed.length;
+      const bpPlaced = await placePaperBets(
+        addedBackpage.map((p) => ({ game: p.game, play: p.play, price: p.price })),
+        body.date,
+        "backpage"
+      );
+      backpagePlaced = bpPlaced.length;
     } catch (e) {
       console.error("[paper] place failed:", e instanceof Error ? e.message : e);
     }
@@ -190,10 +203,12 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       picks: merged.picks.length,
+      backpage: mergedBackpage.length,
       slot: merged.slot,
       editions: merged.editions,
       merged_into_existing: !!existing,
       paper_bets_placed: paperPlaced,
+      backpage_bets_placed: backpagePlaced,
     });
   } catch (e) {
     return NextResponse.json(

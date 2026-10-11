@@ -7,6 +7,8 @@ export const PAPER_STAKE = 10;
 
 export type PaperStatus = "open" | "win" | "loss" | "push";
 
+export type PaperSource = "card" | "backpage";
+
 export interface PaperBet {
   id: string;
   date: string; // card date (YYYY-MM-DD)
@@ -19,6 +21,7 @@ export interface PaperBet {
   pnl: number | null; // settled profit/loss, null while open
   placed_at: string;
   settled_at?: string;
+  source: PaperSource; // "card" = main card, "backpage" = admin-only backpage tab
 }
 
 function redis() {
@@ -74,7 +77,8 @@ async function saveBets(bets: PaperBet[]): Promise<void> {
  * Returns the bets that were actually added. */
 export async function placePaperBets(
   picks: { game: string; play: string; price: string }[],
-  date: string
+  date: string,
+  source: PaperSource = "card"
 ): Promise<PaperBet[]> {
   const r = redis();
   const now = new Date().toISOString();
@@ -87,7 +91,7 @@ export async function placePaperBets(
     const odds = parseOdds(p.price || "");
     if (odds == null) continue;
     candidates.push({
-      id: `${date}-${key}`.slice(0, 120),
+      id: `${date}-${source}-${key}`.slice(0, 120),
       date,
       game: p.game,
       play: p.play,
@@ -97,6 +101,7 @@ export async function placePaperBets(
       status: "open",
       pnl: null,
       placed_at: now,
+      source,
     });
   }
   if (candidates.length === 0) return [];
