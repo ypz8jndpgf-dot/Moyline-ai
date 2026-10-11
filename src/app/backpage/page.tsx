@@ -38,7 +38,7 @@ export default async function Backpage() {
     return (
       <div className="max-w-7xl mx-auto px-4 py-16 text-center">
         <h1 className="font-display text-4xl mb-2">
-          BACK<span className="gold-text">PAGE</span> 🔒
+          UNDER<span className="gold-text">CARD</span> 🔒
         </h1>
         <p className="text-muted text-sm mb-6 max-w-md mx-auto">
           {session?.user
@@ -61,7 +61,7 @@ export default async function Backpage() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
       <h1 className="font-display text-3xl sm:text-4xl mb-1">
-        BACK<span className="gold-text">PAGE</span>
+        UNDER<span className="gold-text">CARD</span>
       </h1>
       <p className="text-sm text-muted mb-1">
         Pro members only{email ? ` · ${email}` : ""}
