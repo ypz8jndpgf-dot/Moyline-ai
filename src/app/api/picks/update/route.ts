@@ -68,13 +68,18 @@ function isValidFeed(b: unknown): b is PicksFeed {
 const pickKey = (p: FeedPick) => mergeKey(p);
 
 /** Merge incoming picks into existing: same game+market+side replaces, new ones append. */
-function mergePicks(existing: FeedPick[], incoming: FeedPick[]): FeedPick[] {
+function mergePicks(
+  existing: FeedPick[],
+  incoming: FeedPick[]
+): { merged: FeedPick[]; added: FeedPick[] } {
   const byKey = new Map<string, FeedPick>();
   for (const p of existing) byKey.set(pickKey(p), p);
   const now = new Date().toISOString();
+  const added: FeedPick[] = [];
   for (const p of incoming) {
     const key = pickKey(p);
     const prev = byKey.get(key);
+    if (!prev) added.push(p);
     byKey.set(key, {
       ...p,
       // First appearance keeps its birth timestamp; re-published plays keep
@@ -91,7 +96,7 @@ function mergePicks(existing: FeedPick[], incoming: FeedPick[]): FeedPick[] {
       if (p.star && !incomingStars.has(pickKey(p))) p.star = false;
     }
   }
-  return merged;
+  return { merged, added };
 }
 
 /**
@@ -151,6 +156,8 @@ export async function POST(req: Request) {
       existing = null;
     }
 
+    const { merged: mergedPicks, added: addedPicks } = mergePicks(existing?.picks || [], body.picks);
+    const { merged: mergedProps } = mergePicks(existing?.props || [], body.props || []);
     const merged: PicksFeed = {
       date: body.date,
       slot: body.slot,
@@ -158,20 +165,35 @@ export async function POST(req: Request) {
         new Set([...(existing?.editions || []), ...(existing?.slot ? [existing.slot] : []), body.slot])
       ),
       updated_at: new Date().toISOString(),
-      picks: mergePicks(existing?.picks || [], body.picks),
-      props: mergePicks(existing?.props || [], body.props || []),
+      picks: mergedPicks,
+      props: mergedProps,
       // Latest non-null ticket wins; null never erases an earlier edition's ticket.
       teaser: body.teaser || existing?.teaser || null,
       parlay: body.parlay || existing?.parlay || null,
     };
 
     await redis.set(FEED_KEY, JSON.stringify(merged));
+
+    // Paper trading: auto-place $10 virtual bets on brand-new card picks.
+    let paperPlaced = 0;
+    try {
+      const { placePaperBets } = await import("@/lib/paper");
+      const placed = await placePaperBets(
+        addedPicks.map((p) => ({ game: p.game, play: p.play, price: p.price })),
+        body.date
+      );
+      paperPlaced = placed.length;
+    } catch (e) {
+      console.error("[paper] place failed:", e instanceof Error ? e.message : e);
+    }
+
     return NextResponse.json({
       ok: true,
       picks: merged.picks.length,
       slot: merged.slot,
       editions: merged.editions,
       merged_into_existing: !!existing,
+      paper_bets_placed: paperPlaced,
     });
   } catch (e) {
     return NextResponse.json(

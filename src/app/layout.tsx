@@ -62,6 +62,7 @@ async function Nav() {
           <Link href="/lab" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Lab 🔒</Link>
           <Link href="/track-record" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Record</Link>
           <Link href="/my-tails" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Tails</Link>
+          <Link href="/paper" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Paper</Link>
         </nav>
       </div>
     </header>
