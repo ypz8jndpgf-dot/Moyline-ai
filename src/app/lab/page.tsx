@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { getSubscription, hasAccess } from "@/lib/store";
 import { getPicksFeed } from "@/lib/picks";
 import LabBuilder from "./LabBuilder";
+import LabPromo from "./LabPromo";
 
 export const dynamic = "force-dynamic";
 
@@ -16,30 +17,24 @@ export default async function LabPage() {
 
   if (!allowed) {
     return (
-      <div className="max-w-2xl mx-auto">
-        <div className="text-center py-10">
-          <h1 className="font-display text-4xl mb-4">
+      <div className="max-w-3xl mx-auto px-4">
+        <div className="text-center pt-8 pb-4">
+          <h1 className="font-display text-4xl mb-2">
             PARLAY <span className="gold-text">LAB</span> 🔒
           </h1>
-          <p className="text-muted mb-2">
+          <p className="text-muted text-sm mb-1">
             {session?.user
               ? `Signed in as ${email} — no active subscription.`
-              : "Build your own tickets from the day's best edges."}
+              : "You set the shape — the Lab finds the edges."}
           </p>
-          <p className="text-sm text-muted mb-6 max-w-lg mx-auto">
-            Pick a bet type, team count, and sport — the Lab assembles the
-            highest-edge combination from today&apos;s card, including player
-            props. Teasers follow strict Wong rules; parlays get true combined
-            odds.
-            {legCount > 0 && (
-              <> Right now there are {legCount} eligible legs on the board.</>
-            )}
-          </p>
+        </div>
+        <LabPromo legCount={legCount} />
+        <div className="text-center py-6">
           <Link
             href={session?.user ? "/pricing" : "/signin"}
-            className="btn-gold px-8 py-3 inline-block"
+            className="btn-gold px-8 py-3 inline-block font-bold"
           >
-            {session?.user ? "Unlock with Pro" : "Sign in"}
+            {session?.user ? "Unlock with Pro" : "Sign in to unlock"}
           </Link>
         </div>
       </div>
