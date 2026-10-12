@@ -158,9 +158,9 @@ export async function POST(req: Request) {
       existing = null;
     }
 
-    const { merged: mergedPicks, added: addedPicks } = mergePicks(existing?.picks || [], body.picks);
+    const { merged: mergedPicks } = mergePicks(existing?.picks || [], body.picks);
     const { merged: mergedProps } = mergePicks(existing?.props || [], body.props || []);
-    const { merged: mergedBackpage, added: addedBackpage } = mergePicks(existing?.backpage || [], (body as PicksFeed).backpage || []);
+    const { merged: mergedBackpage } = mergePicks(existing?.backpage || [], (body as PicksFeed).backpage || []);
     const merged: PicksFeed = {
       date: body.date,
       slot: body.slot,
@@ -178,20 +178,27 @@ export async function POST(req: Request) {
 
     await redis.set(FEED_KEY, JSON.stringify(merged));
 
-    // Paper trading: auto-place $10 virtual bets on brand-new card picks.
+    // Paper trading: auto-place $10 virtual bets on card + backpage picks.
     // Backpage picks are paper-traded too, tagged source="backpage" (admin-only view).
+    // Idempotent by design: placement is offered on EVERY push for the full
+    // merged list (not just the newly-added delta), and the Lua script in
+    // placePaperBets dedupes against existing bet ids. This self-heals the
+    // 2026-10-11 backpage sequencing bug, where the first 6pm push stored the
+    // backpage picks in the feed before the placement code was live — the
+    // follow-up push then saw zero "added" picks and reported
+    // backpage_bets_placed:0 even though the picks were live and unbet.
     let paperPlaced = 0;
     let backpagePlaced = 0;
     try {
       const { placePaperBets } = await import("@/lib/paper");
       const placed = await placePaperBets(
-        addedPicks.map((p) => ({ game: p.game, play: p.play, price: p.price })),
+        mergedPicks.map((p) => ({ game: p.game, play: p.play, price: p.price })),
         body.date,
         "card"
       );
       paperPlaced = placed.length;
       const bpPlaced = await placePaperBets(
-        addedBackpage.map((p) => ({ game: p.game, play: p.play, price: p.price })),
+        mergedBackpage.map((p) => ({ game: p.game, play: p.play, price: p.price })),
         body.date,
         "backpage"
       );

@@ -40,11 +40,17 @@ export function profitFor(odds: number, stake: number): number {
   return (stake * 100) / Math.abs(odds);
 }
 
-/** Extract american odds from a price string like "-110 (FanDuel)" or "+470". */
+/** Extract american odds from a price string like "-110 (FanDuel)" or "+470".
+ *
+ * Takes the last signed number, not the first number-like token: prop/total
+ * price strings can carry digits in the line itself ("o119.5 rush+rec yds
+ * (-115)", "Under 48.5 (-110)"), where a naive first match would return the
+ * line number (119, 48) instead of the odds. */
 export function parseOdds(price: string): number | null {
-  const m = (price || "").match(/([+-]?\d{2,})/);
-  if (!m) return null;
-  const n = parseInt(m[1], 10);
+  const matches = (price || "").match(/[+-]?\d{2,}/g);
+  if (!matches || matches.length === 0) return null;
+  const signed = matches.filter((m) => /^[+-]/.test(m));
+  const n = parseInt(signed.length > 0 ? signed[signed.length - 1] : matches[matches.length - 1], 10);
   return isNaN(n) ? null : n;
 }
 

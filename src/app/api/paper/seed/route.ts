@@ -14,7 +14,8 @@ function cleanEnv(v: string | undefined): string {
 const FEED_KEY = "moyline:picks:today";
 
 /**
- * One-time seed: places paper bets for every pick currently on today's card.
+ * One-time seed: places paper bets for every pick currently on today's card,
+ * including backpage leans (tagged source="backpage", admin-only view).
  * Protected by PICKS_UPDATE_SECRET. Safe to call repeatedly (dedupes).
  */
 export async function POST(req: Request) {
@@ -44,15 +45,22 @@ export async function POST(req: Request) {
     const feed = (typeof raw === "string" ? JSON.parse(raw) : raw) as {
       date: string;
       picks: { game: string; play: string; price: string }[];
+      backpage?: { game: string; play: string; price: string }[];
     };
     const placed = await placePaperBets(
       (feed.picks || []).map((p) => ({ game: p.game, play: p.play, price: p.price })),
       feed.date
     );
+    const bpPlaced = await placePaperBets(
+      (feed.backpage || []).map((p) => ({ game: p.game, play: p.play, price: p.price })),
+      feed.date,
+      "backpage"
+    );
     const bankroll = await getBankroll();
     return NextResponse.json({
       ok: true,
       placed: placed.length,
+      backpage_placed: bpPlaced.length,
       bankroll: Math.round(bankroll * 100) / 100,
     });
   } catch (e) {
