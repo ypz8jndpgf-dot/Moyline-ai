@@ -31,18 +31,6 @@ function parseStart(starts?: string): number | null {
   return h * 60 + min;
 }
 
-type Window = "Morning" | "Afternoon" | "Evening" | "Night" | "More plays";
-
-function windowFor(mins: number | null): Window {
-  if (mins === null) return "More plays";
-  if (mins < 12 * 60) return "Morning";
-  if (mins < 18 * 60) return "Afternoon";
-  if (mins < 22 * 60) return "Evening";
-  return "Night";
-}
-
-const WINDOW_ORDER: Window[] = ["Morning", "Afternoon", "Evening", "Night", "More plays"];
-
 type Status = "upcoming" | "live" | "final";
 
 /** Live window: started within the last 3.5h. After that, final (result pending grading). */
@@ -347,19 +335,13 @@ export default async function PicksPage() {
   const tails = email ? await readTails(email) : [];
   const tailedSet = new Set(tails.map((t) => `${t.game}|${t.play}`));
 
-  // Group picks by time window, sorted by start time within each window.
-  const groups = new Map<Window, { p: FeedPick; status: Status; mins: number | null }[]>();
-  for (const p of feed?.picks || []) {
-    const mins = parseStart(p.starts);
-    const w = windowFor(mins);
-    const arr = groups.get(w) || [];
-    arr.push({ p, status: statusFor(mins, nowMins), mins });
-    groups.set(w, arr);
-  }
-  for (const arr of groups.values()) {
-    arr.sort((a, b) => (a.mins ?? 9999) - (b.mins ?? 9999));
-  }
-  let cardIndex = 0;
+  // All picks in one flat list, sorted by start time (no time-window grouping).
+  const sortedPicks = (feed?.picks || [])
+    .map((p) => {
+      const mins = parseStart(p.starts);
+      return { p, status: statusFor(mins, nowMins), mins };
+    })
+    .sort((a, b) => (a.mins ?? 9999) - (b.mins ?? 9999));
 
   return (
     <div>
@@ -406,30 +388,22 @@ export default async function PicksPage() {
             </div>
           )}
 
-          {WINDOW_ORDER.filter((w) => (groups.get(w) || []).length > 0).map((w) => (
-            <div key={w} className="mb-8">
-              <h2 className="font-display text-2xl mb-4">
-                {w === "More plays" ? "More plays" : `${w} window`}
-                <span className="text-sm text-muted font-sans"> ({groups.get(w)!.length})</span>
-              </h2>
-              <div className="grid gap-4 md:grid-cols-2">
-                {groups.get(w)!.map(({ p, status }) => {
-                  const key = `${p.game}|${p.play}`;
-                  return (
-                    <PickCard
-                      key={key}
-                      p={p}
-                      index={cardIndex++}
-                      status={status}
-                      best={bestByPick.get(key) || null}
-                      initiallyTailed={tailedSet.has(key)}
-                      cardDate={cardDate}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+          <div className="grid gap-4 md:grid-cols-2 mb-8">
+            {sortedPicks.map(({ p, status }, i) => {
+              const key = `${p.game}|${p.play}`;
+              return (
+                <PickCard
+                  key={key}
+                  p={p}
+                  index={i}
+                  status={status}
+                  best={bestByPick.get(key) || null}
+                  initiallyTailed={tailedSet.has(key)}
+                  cardDate={cardDate}
+                />
+              );
+            })}
+          </div>
 
           <div className="grid gap-4 md:grid-cols-2 mt-4">
             <div className="card p-5">
