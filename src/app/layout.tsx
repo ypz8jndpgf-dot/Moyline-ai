@@ -6,7 +6,7 @@ import Providers from "@/components/Providers";
 import { auth } from "@/lib/auth";
 
 /** Set true to show the Go Pro / pricing CTA in the header. Hidden for now (2026-10-13). */
-const SHOW_GO_PRO = false;
+const SHOW_GO_PRO = true;
 
 export const metadata: Metadata = {
   title: "MoyLine AI — Live Sports Betting Lines",
