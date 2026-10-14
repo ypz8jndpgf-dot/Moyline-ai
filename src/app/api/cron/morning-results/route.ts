@@ -69,8 +69,13 @@ export async function GET(req: Request) {
     </div>`;
 
   let sent = 0;
+  let sent = 0;
+  const { unsubUrl } = await import("@/lib/unsub");
   for (const to of members) {
-    if (await sendEmail(to, `MoyLine AI: ${headline}`, html)) sent++;
+    const perHtml =
+      html +
+      `<p style="font-size: 11px; color: #888; margin-top: 16px;"><a href="${unsubUrl(to)}" style="color: #888;">Unsubscribe from these emails</a></p>`;
+    if (await sendEmail(to, `MoyLine AI: ${headline}`, perHtml)) sent++;
   }
   return NextResponse.json({ ok: true, sent, date: yesterday, headline });
 }

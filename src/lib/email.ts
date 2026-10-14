@@ -15,7 +15,7 @@ function redisClient(): Redis | null {
   return new Redis({ url, token });
 }
 
-/** All emails with current access: active subs + beta allowlist + admin. */
+/** All emails with current access: active subs + beta allowlist + admin, minus unsubscribes. */
 export async function getMemberEmails(): Promise<string[]> {
   const out = new Set<string>();
   const redis = redisClient();
@@ -58,6 +58,18 @@ export async function getMemberEmails(): Promise<string[]> {
 
   const admin = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
   if (admin.includes("@")) out.add(admin);
+
+  // Honor one-click unsubscribes.
+  if (redis) {
+    try {
+      const { isUnsubscribed } = await import("./unsub");
+      for (const e of [...out]) {
+        if (await isUnsubscribed(e)) out.delete(e);
+      }
+    } catch {
+      /* unsub lib unavailable — send anyway */
+    }
+  }
 
   return [...out];
 }
