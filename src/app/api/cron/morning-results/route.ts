@@ -64,7 +64,7 @@ export async function GET(req: Request) {
           ? `<ul style="line-height: 1.7;">${highlights.map((h) => `<li>${h}</li>`).join("")}</ul>`
           : `<p style="color: #666;">Full breakdown in today's 7am brief.</p>`
       }
-      <p style="margin-top: 24px;"><a href="https://moyline-ai.vercel.app/picks" style="background: #f5c518; color: #0a0a0a; font-weight: 800; padding: 12px 24px; border-radius: 10px; text-decoration: none;">Today's card</a></p>
+      <p style="margin-top: 24px;"><a href="https://moylineai.com/picks" style="background: #f5c518; color: #0a0a0a; font-weight: 800; padding: 12px 24px; border-radius: 10px; text-decoration: none;">Today's card</a></p>
       <p style="font-size: 11px; color: #888; margin-top: 24px;">Analysis for entertainment purposes — not financial advice.</p>
     </div>`;
 

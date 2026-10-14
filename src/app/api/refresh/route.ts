@@ -99,7 +99,7 @@ async function alertCardSteam(): Promise<number> {
       <ul style="line-height: 1.8;">
         ${fresh.map((f) => `<li><strong>${f.game}</strong> — ${f.label} <span style="color:#666">(${f.detail})</span></li>`).join("")}
       </ul>
-      <p style="margin-top: 20px;"><a href="https://moyline-ai.vercel.app/picks" style="background: #f5c518; color: #0a0a0a; font-weight: 800; padding: 12px 24px; border-radius: 10px; text-decoration: none;">View card</a></p>
+      <p style="margin-top: 20px;"><a href="https://moylineai.com/picks" style="background: #f5c518; color: #0a0a0a; font-weight: 800; padding: 12px 24px; border-radius: 10px; text-decoration: none;">View card</a></p>
       <p style="font-size: 11px; color: #888; margin-top: 20px;">Analysis for entertainment purposes — not financial advice.</p>
     </div>`;
 
