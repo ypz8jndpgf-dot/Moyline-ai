@@ -5,6 +5,9 @@ import PwaRegister from "@/components/PwaRegister";
 import Providers from "@/components/Providers";
 import { auth } from "@/lib/auth";
 
+/** Set true to show the Go Pro / pricing CTA in the header. Hidden for now (2026-10-13). */
+const SHOW_GO_PRO = false;
+
 export const metadata: Metadata = {
   title: "MoyLine AI — Live Sports Betting Lines",
   description: "Live odds aggregation across every major sportsbook. Opening vs current lines, steam alerts, and pro picks.",
@@ -56,7 +59,9 @@ async function Nav() {
         </Link>
         <div className="flex items-center gap-2 shrink-0 order-2 sm:order-3 text-xs sm:text-sm font-bold">
           {accountLink}
-          <Link href="/pricing" className="px-2.5 sm:px-3 py-1.5 rounded btn-gold whitespace-nowrap shrink-0">Go Pro</Link>
+          {SHOW_GO_PRO && (
+            <Link href="/pricing" className="px-2.5 sm:px-3 py-1.5 rounded btn-gold whitespace-nowrap shrink-0">Go Pro</Link>
+          )}
         </div>
         <nav className="flex items-center gap-0.5 sm:gap-2 text-xs sm:text-sm font-bold overflow-x-auto whitespace-nowrap order-3 sm:order-2 w-full sm:w-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <Link href="/" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Lines</Link>
