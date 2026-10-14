@@ -69,7 +69,6 @@ export async function GET(req: Request) {
     </div>`;
 
   let sent = 0;
-  let sent = 0;
   const { unsubUrl } = await import("@/lib/unsub");
   for (const to of members) {
     const perHtml =
