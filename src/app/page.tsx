@@ -12,6 +12,10 @@ export default async function Home() {
   return (
     <div>
       <div className="mb-8 text-center sm:text-left">
+        <div className="inline-flex items-center gap-2 mb-3 px-3 py-1.5 rounded-full border border-gold/40 bg-gold/10 text-gold text-[11px] font-bold uppercase tracking-[0.2em]">
+          <span>✦</span>
+          Algo rebuilt Oct 15 — tighter gates, totals-first
+        </div>
         <p className="text-xs font-bold uppercase tracking-[0.3em] text-gold mb-2">
           <span className="live-dot inline-block w-2 h-2 rounded-full bg-down mr-2" />
           Live odds board
