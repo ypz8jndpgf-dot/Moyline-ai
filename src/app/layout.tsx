@@ -73,7 +73,7 @@ async function Nav() {
           <Link href="/lab" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Lab 🔒</Link>
           <Link href="/builder" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Builder 🔒</Link>
           <Link href="/track-record" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Record</Link>
-          <Link href="/archive" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Archive</Link>
+          {/* <Link href="/archive" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Archive</Link> — hidden until track record is ready for prime time */}
           <Link href="/my-tails" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Tails</Link>
           <Link href="/backpage" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Undercard 🔒</Link>
           {isAdmin && (

@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getArchive, sportFromGame, type ArchivePick } from "@/lib/picks";
 import ArchiveClient from "./archive-client";
 
 export const dynamic = "force-dynamic";
+
+// Hidden until the track record is ready for prime time — remove this to go live.
+export const HIDDEN = true;
 
 export const metadata: Metadata = {
   title: "Free Sports Picks Archive — MoyLine AI",
@@ -56,6 +60,7 @@ function formatDate(iso: string): string {
 }
 
 export default async function ArchivePage() {
+  if (HIDDEN) notFound();
   const picks = await getArchive();
   const groups = groupByDate(picks);
 
