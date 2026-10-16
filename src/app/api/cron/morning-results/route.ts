@@ -55,10 +55,12 @@ export async function GET(req: Request) {
 
   const { wins, losses, pushes, highlights } = results;
   const headline = `Last night: ${wins}-${losses}${pushes > 0 ? `-${pushes}` : ""}`;
+  const showRebuildBanner = Date.now() < new Date("2026-10-19T00:00:00-04:00").getTime();
   const html = `
     <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1a1a1a;">
       <p style="font-size: 13px; color: #666;">MoyLine AI · Morning results · ${yesterday}</p>
       <h1 style="font-size: 28px; margin: 8px 0;">${headline}</h1>
+      ${showRebuildBanner ? `<p style="font-size: 13px; background: #fff8e1; border: 1px solid #e8b90a; border-radius: 8px; padding: 10px 14px; color: #5c4a00; margin: 12px 0 4px;">✦ <b>Algo rebuilt Oct 15</b> — tighter gates on spreads, dogs and CFB sides; totals now rank first. See today's 7am brief for the full grid.</p>` : ""}
       ${
         highlights.length > 0
           ? `<ul style="line-height: 1.7;">${highlights.map((h) => `<li>${h}</li>`).join("")}</ul>`
