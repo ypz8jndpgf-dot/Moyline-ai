@@ -2,6 +2,19 @@ import { Redis } from "@upstash/redis";
 
 const FEED_KEY = "moyline:picks:today";
 
+/** Redis list holding the rolling free-picks archive (oldest at head, newest at tail). */
+export const ARCHIVE_KEY = "moyline:archive";
+
+export type ArchivePick = {
+  date: string; // YYYY-MM-DD (ET) — the graded day
+  game: string; // e.g. "Memphis @ Tulane (CFB)"
+  play: string; // e.g. "Under 55.5"
+  price: string; // e.g. "-108 (DraftKings)"
+  result: "win" | "loss" | "push";
+  star?: boolean;
+  sport?: string; // e.g. "CFB", "NHL" — falls back to league label in game parens
+};
+
 export type FeedPick = {
   game: string;
   play: string;
@@ -72,10 +85,42 @@ function cleanEnv(v: string | undefined): string {
 }
 
 /**
- * Reads today's picks feed from Upstash Redis. Returns null when the feed
- * is missing, stale (not from today ET), or unreadable — callers should
- * render an honest "card being prepared" state instead of stale picks.
+ * Reads the rolling free-picks archive from Redis (newest first).
+ * Public data — no auth required. Returns empty array when unavailable.
  */
+export async function getArchive(): Promise<ArchivePick[]> {
+  try {
+    const url = cleanEnv(process.env.UPSTASH_REDIS_REST_URL);
+    const token = cleanEnv(process.env.UPSTASH_REDIS_REST_TOKEN);
+    if (!url || !token) return [];
+
+    const redis = new Redis({ url, token });
+    const raw = await redis.lrange<string>(ARCHIVE_KEY, 0, -1);
+    if (!raw || raw.length === 0) return [];
+
+    const picks: ArchivePick[] = [];
+    for (const item of raw) {
+      try {
+        const p = (typeof item === "string" ? JSON.parse(item) : item) as ArchivePick;
+        if (p && typeof p.game === "string" && (p.result === "win" || p.result === "loss" || p.result === "push")) {
+          picks.push(p);
+        }
+      } catch {
+        // Skip malformed entries.
+      }
+    }
+    // Redis list is oldest-first (rpush appends); reverse for newest-first display.
+    return picks.reverse();
+  } catch {
+    return [];
+  }
+}
+
+/** Extracts the league label from a game string like "Memphis @ Tulane (CFB)". */
+export function sportFromGame(game: string): string {
+  const m = game.match(/\(([^)]+)\)\s*$/);
+  return m ? m[1].toUpperCase() : "OTHER";
+}
 export async function getPicksFeed(): Promise<PicksFeed | null> {
   try {
     const url = cleanEnv(process.env.UPSTASH_REDIS_REST_URL);

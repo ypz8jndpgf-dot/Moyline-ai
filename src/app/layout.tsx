@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import "./globals.css";
 import PwaRegister from "@/components/PwaRegister";
+import PushBell from "@/components/PushBell";
 import Providers from "@/components/Providers";
 import { auth } from "@/lib/auth";
 
@@ -35,13 +36,16 @@ async function Nav() {
   const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase();
   const isAdmin = !!email && !!adminEmail && email.toLowerCase() === adminEmail;
   const accountLink = email ? (
-    <Link
-      href="/my-tails"
-      className="px-2 sm:px-3 py-1.5 rounded text-gold whitespace-nowrap shrink-0"
-      title={email}
-    >
-      {email.split("@")[0]}
-    </Link>
+    <>
+      <PushBell />
+      <Link
+        href="/my-tails"
+        className="px-2 sm:px-3 py-1.5 rounded text-gold whitespace-nowrap shrink-0"
+        title={email}
+      >
+        {email.split("@")[0]}
+      </Link>
+    </>
   ) : (
     <Link
       href="/signin"
@@ -69,6 +73,7 @@ async function Nav() {
           <Link href="/lab" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Lab 🔒</Link>
           <Link href="/builder" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Builder 🔒</Link>
           <Link href="/track-record" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Record</Link>
+          <Link href="/archive" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Archive</Link>
           <Link href="/my-tails" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Tails</Link>
           <Link href="/backpage" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Undercard 🔒</Link>
           {isAdmin && (

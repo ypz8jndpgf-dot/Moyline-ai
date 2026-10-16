@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Redis } from "@upstash/redis";
+import { ARCHIVE_KEY, type ArchivePick } from "@/lib/picks";
 
 export const dynamic = "force-dynamic";
 
@@ -12,8 +13,25 @@ export type DayResults = {
   pushes: number;
   /** Short plain-language recap lines, e.g. "★ Nevada -9.5 cashed 28-14". */
   highlights: string[];
+  /** Optional per-pick detail for the public free-picks archive. Backward compatible. */
+  picks?: ArchivePick[];
   updated_at: string;
 };
+
+/** Cap: ~90 days at ~5-6 graded picks/day. */
+const ARCHIVE_CAP = 500;
+
+function isValidArchivePick(p: unknown): p is ArchivePick {
+  if (!p || typeof p !== "object") return false;
+  const f = p as Record<string, unknown>;
+  return (
+    typeof f.date === "string" &&
+    typeof f.game === "string" &&
+    typeof f.play === "string" &&
+    typeof f.price === "string" &&
+    (f.result === "win" || f.result === "loss" || f.result === "push")
+  );
+}
 
 function cleanEnv(v: string | undefined): string {
   let s = (v || "").trim();
@@ -68,6 +86,20 @@ export async function POST(req: Request) {
     const redis = new Redis({ url, token });
     const record: DayResults = { ...body, updated_at: new Date().toISOString() };
     await redis.set(RESULTS_PREFIX + body.date, JSON.stringify(record), { ex: 7 * 24 * 3600 });
+
+    // Free-picks archive: append per-pick entries to the rolling list (additive only).
+    const rawPicks = (body as Record<string, unknown>).picks;
+    if (Array.isArray(rawPicks)) {
+      const valid = rawPicks.filter(isValidArchivePick);
+      if (valid.length > 0) {
+        const pipeline = redis.pipeline();
+        for (const p of valid) pipeline.rpush(ARCHIVE_KEY, JSON.stringify(p));
+        // Cap the list so it holds roughly the last 90 days.
+        pipeline.ltrim(ARCHIVE_KEY, -ARCHIVE_CAP, -1);
+        await pipeline.exec();
+      }
+    }
+
     return NextResponse.json({ ok: true, date: body.date });
   } catch (e) {
     return NextResponse.json(

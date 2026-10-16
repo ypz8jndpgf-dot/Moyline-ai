@@ -2,6 +2,7 @@ import { getOdds, getOpenings, getQuotaRemaining } from "@/lib/odds";
 import { buildBoard } from "@/lib/board";
 import OddsBoard from "@/components/OddsBoard";
 import FeaturedPlays from "@/components/FeaturedPlays";
+import RecentResults from "@/components/RecentResults";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,8 @@ export default async function Home() {
       </div>
 
       <FeaturedPlays />
+
+      <RecentResults />
 
       <OddsBoard
         games={games}
