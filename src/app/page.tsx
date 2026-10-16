@@ -39,7 +39,7 @@ export default async function Home() {
 
       <FeaturedPlays />
 
-      {/* <RecentResults /> — hidden until track record is ready for prime time */}
+      <RecentResults />
 
       <OddsBoard
         games={games}
