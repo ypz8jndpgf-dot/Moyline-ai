@@ -51,6 +51,15 @@ export type PicksFeed = {
     confidence: number;
     reasoning?: string;
   } | null;
+  /** Weekend NFL Lookahead teaser (Thu/Fri NFL-season briefs). Multi-day ticket; settles Sunday night. */
+  lookahead?: {
+    legs: string[];
+    points: number;
+    confidence: number;
+    reasoning?: string;
+    /** Sunday date the games play, YYYY-MM-DD. */
+    target_date: string;
+  } | null;
 };
 
 function cleanEnv(v: string | undefined): string {

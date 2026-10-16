@@ -462,6 +462,30 @@ export default async function PicksPage() {
               )}
             </div>
           </div>
+
+          {feed.lookahead && (
+            <div className="card p-5 mt-4 border-gold/30">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold uppercase tracking-widest text-gold">
+                  Weekend NFL Lookahead
+                </span>
+                <span className="text-xs text-muted">
+                  Settles {feed.lookahead.target_date} · Conf {feed.lookahead.confidence}/5
+                </span>
+              </div>
+              <p className="text-lg font-bold text-goldsoft mb-2">
+                {feed.lookahead.points}-pt Wong teaser
+              </p>
+              <ul className="text-sm text-paper mb-2 list-disc list-inside">
+                {feed.lookahead.legs.map((leg, j) => (
+                  <li key={j}>{leg}</li>
+                ))}
+              </ul>
+              {feed.lookahead.reasoning && (
+                <p className="text-sm text-muted">{feed.lookahead.reasoning}</p>
+              )}
+            </div>
+          )}
         </>
       )}
       <p className="text-xs text-muted mt-8">Analysis for entertainment purposes — not financial advice.</p>

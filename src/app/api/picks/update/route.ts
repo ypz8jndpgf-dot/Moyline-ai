@@ -32,6 +32,14 @@ type Ticket = {
   reasoning?: string;
 };
 
+type Lookahead = {
+  legs: string[];
+  points: number;
+  confidence: number;
+  reasoning?: string;
+  target_date: string;
+};
+
 type PicksFeed = {
   date: string; // YYYY-MM-DD (ET)
   slot: string; // latest contributing slot, e.g. "6pm"
@@ -44,6 +52,8 @@ type PicksFeed = {
   backpage?: FeedPick[];
   teaser: Ticket | null;
   parlay: Ticket | null;
+  /** Weekend NFL Lookahead teaser (Thu/Fri NFL-season briefs). Multi-day ticket. */
+  lookahead?: Lookahead | null;
 };
 
 function cleanEnv(v: string | undefined): string {
@@ -63,7 +73,8 @@ function isValidFeed(b: unknown): b is PicksFeed {
     typeof f.slot === "string" &&
     Array.isArray(f.picks) &&
     (f.teaser === null || typeof f.teaser === "object") &&
-    (f.parlay === null || typeof f.parlay === "object")
+    (f.parlay === null || typeof f.parlay === "object") &&
+    (f.lookahead === undefined || f.lookahead === null || typeof f.lookahead === "object")
   );
 }
 
@@ -174,6 +185,8 @@ export async function POST(req: Request) {
       // Latest non-null ticket wins; null never erases an earlier edition's ticket.
       teaser: body.teaser || existing?.teaser || null,
       parlay: body.parlay || existing?.parlay || null,
+      // Weekend NFL Lookahead: latest non-null wins; null never erases an earlier one.
+      lookahead: (body as PicksFeed).lookahead || existing?.lookahead || null,
     };
 
     await redis.set(FEED_KEY, JSON.stringify(merged));
