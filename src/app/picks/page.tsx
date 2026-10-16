@@ -463,27 +463,52 @@ export default async function PicksPage() {
             </div>
           </div>
 
-          {feed.lookahead && (
+          {feed.lookaheads?.teaser && (
             <div className="card p-5 mt-4 border-gold/30">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold uppercase tracking-widest text-gold">
                   Weekend NFL Lookahead
                 </span>
                 <span className="text-xs text-muted">
-                  Settles {feed.lookahead.target_date} · Conf {feed.lookahead.confidence}/5
+                  Settles {feed.lookaheads.teaser.target_date} · Conf {feed.lookaheads.teaser.confidence}/5
                 </span>
               </div>
               <p className="text-lg font-bold text-goldsoft mb-2">
-                {feed.lookahead.points}-pt Wong teaser
+                {feed.lookaheads.teaser.points}-pt Wong teaser
               </p>
               <ul className="text-sm text-paper mb-2 list-disc list-inside">
-                {feed.lookahead.legs.map((leg, j) => (
+                {feed.lookaheads.teaser.legs.map((leg, j) => (
                   <li key={j}>{leg}</li>
                 ))}
               </ul>
-              {feed.lookahead.reasoning && (
-                <p className="text-sm text-muted">{feed.lookahead.reasoning}</p>
+              {feed.lookaheads.teaser.reasoning && (
+                <p className="text-sm text-muted">{feed.lookaheads.teaser.reasoning}</p>
               )}
+            </div>
+          )}
+
+          {feed.lookaheads?.spotlight && (
+            <div className="card p-5 mt-4 border-gold/30">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold uppercase tracking-widest text-gold">
+                  Weekend NCAAB Lookahead
+                </span>
+                <span className="text-xs text-muted">
+                  Settles {feed.lookaheads.spotlight.target_date}
+                </span>
+              </div>
+              <div className="space-y-3">
+                {feed.lookaheads.spotlight.picks.map((pick, j) => (
+                  <div key={j} className="border-l-2 border-gold/40 pl-3">
+                    <p className="text-sm font-bold text-paper">{pick.game}</p>
+                    <p className="text-sm text-goldsoft">{pick.play} <span className="text-muted">{pick.price}</span></p>
+                    <p className="text-xs text-muted">Conf {pick.confidence}/5{typeof pick.edge_cents === "number" ? ` · ~${pick.edge_cents}¢ edge` : ""}</p>
+                    {pick.reasoning && (
+                      <p className="text-xs text-muted mt-1">{pick.reasoning}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </>

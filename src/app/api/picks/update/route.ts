@@ -32,13 +32,31 @@ type Ticket = {
   reasoning?: string;
 };
 
-type Lookahead = {
+type TeaserLookahead = {
+  type: "teaser";
   legs: string[];
   points: number;
   confidence: number;
   reasoning?: string;
   target_date: string;
 };
+
+type SpotlightLookahead = {
+  type: "spotlight";
+  picks: {
+    game: string;
+    play: string;
+    price: string;
+    confidence: number;
+    reasoning?: string;
+    edge_cents?: number;
+    market?: string;
+    line?: string;
+  }[];
+  target_date: string;
+};
+
+type Lookahead = TeaserLookahead | SpotlightLookahead;
 
 type PicksFeed = {
   date: string; // YYYY-MM-DD (ET)
@@ -52,7 +70,12 @@ type PicksFeed = {
   backpage?: FeedPick[];
   teaser: Ticket | null;
   parlay: Ticket | null;
-  /** Weekend NFL Lookahead teaser (Thu/Fri NFL-season briefs). Multi-day ticket. */
+  /** Weekend lookaheads (Thu/Fri in-season briefs). Keyed by type so NFL and NCAAB coexist. */
+  lookaheads?: {
+    teaser?: TeaserLookahead | null;
+    spotlight?: SpotlightLookahead | null;
+  };
+  /** @deprecated — single lookahead field; replaced by `lookaheads` map. Kept for backward compat. */
   lookahead?: Lookahead | null;
 };
 
@@ -185,8 +208,28 @@ export async function POST(req: Request) {
       // Latest non-null ticket wins; null never erases an earlier edition's ticket.
       teaser: body.teaser || existing?.teaser || null,
       parlay: body.parlay || existing?.parlay || null,
-      // Weekend NFL Lookahead: latest non-null wins; null never erases an earlier one.
-      lookahead: (body as PicksFeed).lookahead || existing?.lookahead || null,
+      // Weekend lookaheads: keyed by type so NFL teaser and NCAAB spotlight coexist.
+      // Incoming single `lookahead` (from brief workers) routes to its type key; null never erases.
+      // Backward compat: old single `lookahead` without a type field is treated as a teaser.
+      lookaheads: (() => {
+        const prev = existing?.lookaheads || {};
+        // Migrate legacy single lookahead if present
+        const legacy = (existing as PicksFeed)?.lookahead;
+        if (legacy && !prev.teaser && !prev.spotlight) {
+          const legacyType = (legacy as Lookahead).type || "teaser";
+          if (legacyType === "teaser") prev.teaser = legacy as TeaserLookahead;
+          else prev.spotlight = legacy as SpotlightLookahead;
+        }
+        const incoming = (body as PicksFeed).lookahead as Lookahead | null | undefined;
+        if (incoming) {
+          const t = incoming.type || "teaser";
+          if (t === "teaser") prev.teaser = incoming as TeaserLookahead;
+          else prev.spotlight = incoming as SpotlightLookahead;
+        }
+        return prev;
+      })(),
+      // @deprecated single field — kept null; readers use `lookaheads`.
+      lookahead: null,
     };
 
     await redis.set(FEED_KEY, JSON.stringify(merged));

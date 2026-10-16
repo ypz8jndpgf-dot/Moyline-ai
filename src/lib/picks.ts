@@ -64,15 +64,33 @@ export type PicksFeed = {
     confidence: number;
     reasoning?: string;
   } | null;
-  /** Weekend NFL Lookahead teaser (Thu/Fri NFL-season briefs). Multi-day ticket; settles Sunday night. */
-  lookahead?: {
-    legs: string[];
-    points: number;
-    confidence: number;
-    reasoning?: string;
-    /** Sunday date the games play, YYYY-MM-DD. */
-    target_date: string;
-  } | null;
+  /** Weekend lookaheads (Thu/Fri in-season briefs). Keyed by type so NFL and NCAAB coexist. */
+  lookaheads?: {
+    teaser?: {
+      type: "teaser";
+      legs: string[];
+      points: number;
+      confidence: number;
+      reasoning?: string;
+      target_date: string;
+    } | null;
+    spotlight?: {
+      type: "spotlight";
+      picks: {
+        game: string;
+        play: string;
+        price: string;
+        confidence: number;
+        reasoning?: string;
+        edge_cents?: number;
+        market?: string;
+        line?: string;
+      }[];
+      target_date: string;
+    } | null;
+  };
+  /** @deprecated — replaced by `lookaheads` map. */
+  lookahead?: unknown;
 };
 
 function cleanEnv(v: string | undefined): string {
