@@ -78,6 +78,66 @@ export default async function Home() {
         </p>
       </div>
 
+      <div className="mt-6 rounded border border-gold/40 bg-gradient-to-b from-gold/10 to-transparent p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-gold text-lg">✦</span>
+          <span className="text-xs font-bold uppercase tracking-[0.2em] text-gold">
+            Best historical trends
+          </span>
+        </div>
+        <h2 className="font-display text-2xl sm:text-3xl mb-2">
+          Where the <span className="gold-text">edge lives.</span>
+        </h2>
+        <p className="text-sm text-muted mb-5 max-w-3xl">
+          359 graded bets, every one published. These are the segments that keep winning:
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="rounded border border-gold/30 bg-black/40 px-3 py-4 text-center">
+            <p className="text-3xl font-bold gold-text">74%</p>
+            <p className="text-xs font-bold text-paper mt-1">Sharpened ★</p>
+            <p className="text-[11px] text-muted mt-0.5">14-5-1 · NHL/NFL ML & spread</p>
+          </div>
+          <div className="rounded border border-gold/30 bg-black/40 px-3 py-4 text-center">
+            <p className="text-3xl font-bold gold-text">72%</p>
+            <p className="text-xs font-bold text-paper mt-1">Soccer conf-3</p>
+            <p className="text-[11px] text-muted mt-0.5">13-5 · never starred</p>
+          </div>
+          <div className="rounded border border-gold/30 bg-black/40 px-3 py-4 text-center">
+            <p className="text-3xl font-bold gold-text">66%</p>
+            <p className="text-xs font-bold text-paper mt-1">NHL moneylines</p>
+            <p className="text-[11px] text-muted mt-0.5">27-18 overall · best sport</p>
+          </div>
+          <div className="rounded border border-gold/30 bg-black/40 px-3 py-4 text-center">
+            <p className="text-3xl font-bold gold-text">64%</p>
+            <p className="text-xs font-bold text-paper mt-1">NFL conf-3</p>
+            <p className="text-[11px] text-muted mt-0.5">14-8 · the workhorse tier</p>
+          </div>
+          <div className="rounded border border-gold/30 bg-black/40 px-3 py-4 text-center">
+            <p className="text-3xl font-bold gold-text">61%</p>
+            <p className="text-xs font-bold text-paper mt-1">CFB unders</p>
+            <p className="text-[11px] text-muted mt-0.5">11-7 · tempo + defense</p>
+          </div>
+          <div className="rounded border border-gold/30 bg-black/40 px-3 py-4 text-center">
+            <p className="text-3xl font-bold gold-text">58%</p>
+            <p className="text-xs font-bold text-paper mt-1">Overs overall</p>
+            <p className="text-[11px] text-muted mt-0.5">14-10 · not just unders</p>
+          </div>
+          <div className="rounded border border-gold/30 bg-black/40 px-3 py-4 text-center">
+            <p className="text-3xl font-bold gold-text">57%</p>
+            <p className="text-xs font-bold text-paper mt-1">Soccer overall</p>
+            <p className="text-[11px] text-muted mt-0.5">30-23-1 · consistent edge</p>
+          </div>
+          <div className="rounded border border-gold/30 bg-black/40 px-3 py-4 text-center">
+            <p className="text-3xl font-bold gold-text">54%</p>
+            <p className="text-xs font-bold text-paper mt-1">Moneylines</p>
+            <p className="text-[11px] text-muted mt-0.5">61-52-1 · best pick type</p>
+          </div>
+        </div>
+        <p className="text-[11px] text-muted mt-4 italic">
+          Full pick-by-pick record on the Record tab. No cherry-picking — losers included.
+        </p>
+      </div>
+
       <RecentResults />
 
       <OddsBoard
