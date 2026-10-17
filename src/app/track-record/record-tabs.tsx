@@ -68,7 +68,6 @@ function WinBar({ t }: { t: ReturnType<typeof tally> }) {
 
 function Featured({ picks }: { picks: TrackPick[] }) {
   const stars = tally(picks.filter((x) => x.star));
-  const conf4 = tally(picks.filter((x) => x.conf === "4"));
   const bySport = new Map<string, TrackPick[]>();
   for (const x of picks) {
     const s = x.sport || "Other";
@@ -82,7 +81,6 @@ function Featured({ picks }: { picks: TrackPick[] }) {
   }
   const cards: { label: string; t: ReturnType<typeof tally> }[] = [];
   if (stars.decided > 0) cards.push({ label: "★ Featured plays", t: stars });
-  if (conf4.decided > 0) cards.push({ label: "Conf-4 top plays", t: conf4 });
   if (best) cards.push({ label: `Best sport · ${best.name}`, t: best.t });
   if (cards.length === 0) return null;
   return (
@@ -100,7 +98,7 @@ function Featured({ picks }: { picks: TrackPick[] }) {
         ))}
       </div>
       <p className="text-xs text-muted mb-8 max-w-2xl">
-        Defined subsets of the verified record — biggest-edge ★ plays, confidence-4 top plays, best sport (min. 8 decided). Every pick is listed below; nothing is hidden.
+        Defined subsets of the verified record — sharpened ★ plays and best sport (min. 8 decided). Every pick is listed below; nothing is hidden.
       </p>
     </div>
   );
@@ -144,15 +142,15 @@ function PickTable({ picks }: { picks: TrackPick[] }) {
 }
 
 const REGIME_RULES = [
-  ["Max 3 plays", "One or two when that's all that qualifies — never filled for appearance"],
+  ["Recalibrated Oct 16", "359 bets analyzed — confidence tiers fixed, stars sharpened"],
   ["Quantified edge", "Every play states its edge as a number. No number, no grid spot"],
-  ["Earned confidence", "4+ only with best price confirmed and no rotation uncertainty"],
-  ["Daily self-tuning", "The algorithm re-grades itself daily at 4am ET"],
+  ["Workhorse tier", "Conf-3 is the primary tier (54%); conf-4 is star-quality only"],
+  ["Sharpened stars", "★ only for NHL/NFL ML & spread — 74% hit rate"],
 ];
 
 export default function RecordTabs({ rec }: { rec: TrackRecord }) {
   const [tab, setTab] = useState<Tab>("all");
-  const optStart = rec.optimizedStartDate ?? "2026-10-08";
+  const optStart = rec.optimizedStartDate ?? "2026-10-16";
   const allPicks = rec.picks.filter((x) => x.result !== "Pending");
   const optPicks = rec.picks.filter((x) => x.date >= optStart);
   const shown = tab === "all" ? allPicks : optPicks;
@@ -190,8 +188,8 @@ export default function RecordTabs({ rec }: { rec: TrackRecord }) {
       {tab === "opt" && (
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-xs font-bold uppercase tracking-[0.3em] text-gold">New regime</span>
-            <span className="text-[11px] text-muted">since {optStart}</span>
+            <span className="text-xs font-bold uppercase tracking-[0.3em] text-gold">Recalibrated regime</span>
+            <span className="text-[11px] text-muted">since {optStart} · 359 bets analyzed</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {REGIME_RULES.map(([title, desc]) => (
