@@ -155,19 +155,31 @@ export default function TicketBuilder({
   picks,
   props,
   backpage,
+  boardLegs = [],
 }: {
   picks: FeedPick[];
   props: FeedPick[];
   backpage: FeedPick[];
+  boardLegs?: FeedPick[];
 }) {
   const [ticket, setTicket] = useState<Leg[]>([]);
   const [sportFilter, setSportFilter] = useState<string>("All");
   const [search, setSearch] = useState("");
 
   const pool: Leg[] = useMemo(() => {
-    const all = [...picks, ...props, ...backpage];
+    // Card picks first (rated), then board games (unrated — AI flags them).
+    // Dedupe: skip board legs that match a card pick's game+play.
+    const cardKeys = new Set(
+      [...picks, ...props, ...backpage].map((p) => `${p.game}|${p.play}`)
+    );
+    const all = [
+      ...picks,
+      ...props,
+      ...backpage,
+      ...boardLegs.filter((b) => !cardKeys.has(`${b.game}|${b.play}`)),
+    ];
     return all.map((p, i) => ({ ...p, uid: `pool-${i}` }));
-  }, [picks, props, backpage]);
+  }, [picks, props, backpage, boardLegs]);
 
   const filtered = useMemo(() => {
     return pool.filter((p) => {
@@ -195,9 +207,10 @@ export default function TicketBuilder({
   const removeLeg = (uid: string) => setTicket(ticket.filter((t) => t.uid !== uid));
 
   const sportsInPool = useMemo(() => {
-    const s = new Set(pool.map((p) => extractLeague(p.game)));
-    return ["All", ...ALL_SPORTS.filter((sp) => s.has(sp))];
-  }, [pool]);
+    // Show ALL sports in the filter — not just ones with card picks today.
+    // Sports with no legs yet show an empty state when selected.
+    return ["All", ...ALL_SPORTS];
+  }, []);
 
   return (
     <div className="grid md:grid-cols-2 gap-4">
