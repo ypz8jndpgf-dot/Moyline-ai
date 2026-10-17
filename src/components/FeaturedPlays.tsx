@@ -5,13 +5,18 @@ export default async function FeaturedPlays() {
   const stars = rec.picks
     .filter((p) => p.star && p.result !== "Pending")
     .sort((a, b) => (a.date < b.date ? 1 : -1));
+  // Include pending stars (today's picks not yet graded) at the top so the
+  // section never looks stale — users see the current ★ immediately.
+  const pendingStars = rec.picks
+    .filter((p) => p.star && p.result === "Pending")
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
   const w = stars.filter((p) => p.result === "Win").length;
   const l = stars.filter((p) => p.result === "Loss").length;
   const p = stars.filter((p) => p.result === "Push").length;
   const pct = w + l > 0 ? ((w / (w + l)) * 100).toFixed(1) : null;
-  const recent = stars.slice(0, 5);
+  const recent = [...pendingStars, ...stars].slice(0, 5);
 
-  if (stars.length === 0) return null;
+  if (stars.length === 0 && pendingStars.length === 0) return null;
 
   return (
     <section className="mb-10">
@@ -45,7 +50,9 @@ export default async function FeaturedPlays() {
                       ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
                       : pick.result === "Loss"
                         ? "bg-red-500/15 text-red-400 border-red-500/30"
-                        : "bg-zinc-500/15 text-zinc-400 border-zinc-500/30"
+                        : pick.result === "Pending"
+                          ? "bg-amber-500/15 text-gold border-amber-500/30 animate-pulse"
+                          : "bg-zinc-500/15 text-zinc-400 border-zinc-500/30"
                   }`}
                 >
                   {pick.result}
