@@ -13,16 +13,18 @@ export const dynamic = "force-dynamic";
 function boardGamesToLegs(games: GameVM[]) {
   const legs: { game: string; play: string; price: string; confidence: number; market: "spread" | "total" | "ml"; line?: string }[] = [];
   for (const g of games) {
-    const label = `${g.away} @ ${g.home} (${g.sportLabel})`;
-    // Find best cell per market across books
-    const best = (get: (b: any) => any) => {
-      let b: any = null;
-      for (const book of g.books) {
-        const c = get(book);
-        if (c && (!b || c.best)) b = c;
-      }
-      return b || get(g.books[0]);
-    };
+    try {
+      if (!g.books || g.books.length === 0) continue;
+      const label = `${g.away} @ ${g.home} (${g.sportLabel})`;
+      // Find best cell per market across books
+      const best = (get: (b: any) => any) => {
+        let b: any = null;
+        for (const book of g.books) {
+          const c = get(book);
+          if (c && (!b || c.best)) b = c;
+        }
+        return b;
+      };
     const push = (play: string, cell: any, market: "spread" | "total" | "ml", line?: string) => {
       if (!cell) return;
       legs.push({
@@ -46,6 +48,10 @@ function boardGamesToLegs(games: GameVM[]) {
     if (uU) push(`Under ${uU.display.split(" ")[0]}`, uU, "total", uU.display.split(" ")[0]);
     if (mA) push(`${g.away} ML`, mA, "ml");
     if (mH) push(`${g.home} ML`, mH, "ml");
+    } catch {
+      // Skip games that fail to convert — never break the page.
+      continue;
+    }
   }
   return legs;
 }
@@ -56,9 +62,16 @@ export default async function BuilderPage() {
   const sub = await getSubscription(email || "");
   const allowed = hasAccess(email, sub);
   const feed = await getPicksFeed();
-  const [oddsResult, openings] = await Promise.all([getOdds(), (await import("@/lib/odds")).getOpenings()]);
-  const { games: boardGames } = buildBoard(oddsResult.events, openings);
-  const boardLegs = boardGamesToLegs(boardGames);
+  // Board legs are best-effort — if the board fetch fails, the Builder still
+  // works with card picks alone. Never let this 500 the page.
+  let boardLegs: { game: string; play: string; price: string; confidence: number; market: "spread" | "total" | "ml"; line?: string }[] = [];
+  try {
+    const [oddsResult, openings] = await Promise.all([getOdds(), (await import("@/lib/odds")).getOpenings()]);
+    const { games: boardGames } = buildBoard(oddsResult.events, openings);
+    boardLegs = boardGamesToLegs(boardGames);
+  } catch (e) {
+    console.error("[builder] board legs failed:", e instanceof Error ? e.message : e);
+  }
   const legCount =
     (feed?.picks.length || 0) + (feed?.props?.length || 0) + (feed?.backpage?.length || 0);
 
