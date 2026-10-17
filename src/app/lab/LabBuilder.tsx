@@ -166,7 +166,7 @@ export default function LabBuilder({
   }, [picks, props, betType, legCount, sport]);
 
   const pill = (active: boolean) =>
-    `px-3 py-1.5 rounded-full text-sm font-bold border transition ${
+    `px-4 py-2.5 sm:px-3 sm:py-1.5 rounded-full text-sm font-bold border transition min-h-[44px] sm:min-h-0 inline-flex items-center justify-center ${
       active
         ? "bg-gold text-ink border-gold"
         : "border-line text-muted hover:text-paper hover:border-gold/50"

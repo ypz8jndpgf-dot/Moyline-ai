@@ -212,12 +212,12 @@ export default function TicketBuilder({
             className="flex-1 px-3 py-2 rounded bg-white/5 border border-white/10 text-sm"
           />
         </div>
-        <div className="flex flex-wrap gap-1.5 mb-3">
+        <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-3">
           {sportsInPool.map((s) => (
             <button
               key={s}
               onClick={() => setSportFilter(s)}
-              className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+              className={`px-3 py-2 sm:px-2.5 sm:py-1 rounded-full text-xs font-bold min-h-[36px] sm:min-h-0 inline-flex items-center ${
                 sportFilter === s ? "bg-gold text-black" : "bg-white/5 text-muted hover:text-white"
               }`}
             >
