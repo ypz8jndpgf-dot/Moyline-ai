@@ -7,6 +7,7 @@ import { buildBoard, MoverVM } from "@/lib/board";
 import { findBoardGame, bestPriceForPick, steamForGame, BestPrice } from "@/lib/card-utils";
 import { readTails } from "@/lib/tails";
 import TailButton from "./TailButton";
+import MarketingPaywall from "@/components/MarketingPaywall";
 
 export const dynamic = "force-dynamic";
 
@@ -288,7 +289,7 @@ export default async function PicksPage() {
 
   if (!allowed) {
     return (
-      <PaywallPreview
+      <MarketingPaywall
         feed={feed}
         ctaHref={session?.user ? "/pricing" : "/signin"}
         ctaLabel={session?.user ? "Unlock with Pro" : "Sign in"}
