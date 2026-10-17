@@ -34,6 +34,19 @@ const DEFAULT_SPORTS = [
 
 const BOOKS = ["draftkings", "fanduel", "betmgm", "caesars"];
 
+// Conservative mode: when quota drops below 5000 remaining (15K used),
+// slash burn rate to protect the rest of the month.
+const CONSERVATIVE_SPORTS = [
+  "americanfootball_nfl",
+  "americanfootball_ncaaf",
+  "icehockey_nhl",
+  "basketball_nba",
+];
+const CONSERVATIVE_BOOKS = ["draftkings", "fanduel"];
+const CONSERVATIVE_MARKETS = "h2h,spreads";
+const QUOTA_CONSERVATIVE_THRESHOLD = 5000;
+const QUOTA_HARD_STOP = 50;
+
 function getConfig() {
   // Sanitize the key: Vercel dashboard pastes sometimes include whitespace or quotes.
   const rawKey = process.env.ODDS_API_KEY || "";
@@ -99,23 +112,24 @@ export interface RefreshResult {
   sportsRefreshed: string[];
   quotaRemaining: number | null;
   error?: string;
+  conservativeMode?: boolean;
 }
 
 async function fetchSport(
   sport: string,
-  apiKey: string
+  apiKey: string,
+  opts?: { books?: string[]; markets?: string; daysFrom?: string }
 ): Promise<{ events: OddsEvent[]; remaining: number | null }> {
   const url =
     `${API_BASE}/sports/${sport}/odds/?` +
     new URLSearchParams({
       apiKey,
       regions: "us",
-      markets: "h2h,spreads,totals",
+      markets: opts?.markets || "h2h,spreads,totals",
       oddsFormat: "american",
-      bookmakers: BOOKS.join(","),
+      bookmakers: (opts?.books || BOOKS).join(","),
       dateFormat: "iso",
-      // Always pull 3 days out so the board is never empty late at night.
-      daysFrom: "3",
+      daysFrom: opts?.daysFrom || "1",
     });
   const res = await fetch(url, { cache: "no-store" });
   const remainingHeader = res.headers.get("x-requests-remaining");
@@ -152,7 +166,7 @@ export async function refreshOdds(force = false): Promise<RefreshResult> {
     };
   }
 
-  if (quotaRemaining !== null && quotaRemaining < 50) {
+  if (quotaRemaining !== null && quotaRemaining < QUOTA_HARD_STOP) {
     const cached = memCache?.events || (await readJson<OddsEvent[]>(CACHE_FILE, []));
     return {
       events: cached,
@@ -164,13 +178,20 @@ export async function refreshOdds(force = false): Promise<RefreshResult> {
     };
   }
 
+  // Conservative mode: burn rate protection when 15K+ credits used.
+  const conservative = quotaRemaining !== null && quotaRemaining < QUOTA_CONSERVATIVE_THRESHOLD;
+  const activeSports = conservative ? CONSERVATIVE_SPORTS : sports;
+  const fetchOpts = conservative
+    ? { books: CONSERVATIVE_BOOKS, markets: CONSERVATIVE_MARKETS, daysFrom: "1" }
+    : { daysFrom: "1" };
+
   const allEvents: OddsEvent[] = [];
   const refreshed: string[] = [];
   let lastError: string | undefined;
 
-  for (const sport of sports) {
+  for (const sport of activeSports) {
     try {
-      const { events, remaining } = await fetchSport(sport, apiKey);
+      const { events, remaining } = await fetchSport(sport, apiKey, fetchOpts);
       if (remaining !== null) quotaRemaining = remaining;
       allEvents.push(...events);
       refreshed.push(sport);
@@ -193,6 +214,7 @@ export async function refreshOdds(force = false): Promise<RefreshResult> {
     sportsRefreshed: refreshed,
     quotaRemaining,
     error: lastError,
+    conservativeMode: conservative,
   };
 }
 
