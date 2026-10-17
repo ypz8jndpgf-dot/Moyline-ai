@@ -336,13 +336,19 @@ export default async function PicksPage() {
   const tails = email ? await readTails(email) : [];
   const tailedSet = new Set(tails.map((t) => `${t.game}|${t.play}`));
 
-  // All picks in one flat list, sorted by start time (no time-window grouping).
+  // All picks in one flat list, sorted by confidence then edge (highest first).
   const sortedPicks = (feed?.picks || [])
     .map((p) => {
       const mins = parseStart(p.starts);
       return { p, status: statusFor(mins, nowMins), mins };
     })
-    .sort((a, b) => (a.mins ?? 9999) - (b.mins ?? 9999));
+    .sort((a, b) => {
+      const confDiff = (b.p.confidence || 0) - (a.p.confidence || 0);
+      if (confDiff !== 0) return confDiff;
+      const edgeDiff = (b.p.edge_cents || 0) - (a.p.edge_cents || 0);
+      if (edgeDiff !== 0) return edgeDiff;
+      return (a.mins ?? 9999) - (b.mins ?? 9999);
+    });
 
   return (
     <div>
