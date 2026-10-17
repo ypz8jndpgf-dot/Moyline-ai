@@ -258,8 +258,8 @@ export async function POST(req: Request) {
                   Authorization: `Bearer ${cronSecret}`,
                 },
                 body: JSON.stringify({
-                  title: "⭐⭐⭐⭐⭐ 5-STAR PLAY",
-                  body: `${p.game} — ${p.play} (${p.price || "best price"})`,
+                  title: "🚨🚨🚨 5-ALARM FIRE: 5-STAR PLAY 🚨🚨🚨",
+                  body: `${p.game} — ${p.play}. Our first EVER 5-star. Get in now.`,
                   url: "/picks",
                 }),
               }).catch(() => {});
@@ -267,22 +267,29 @@ export async function POST(req: Request) {
           } catch {}
           // Email blast
           const html = `
-            <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; background: #0a0a0a; color: #f5f5f5;">
-              <div style="text-align: center; padding: 32px 0;">
-                <div style="font-size: 48px;">⭐⭐⭐⭐⭐</div>
-                <h1 style="color: #f5c518; font-size: 32px; margin: 16px 0;">5-STAR PLAY</h1>
-                <p style="font-size: 16px; color: #ccc;">Our first-ever 5-star rated play. The highest confidence we've ever published.</p>
+            <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 0; background: #0a0a0a; color: #f5f5f5;">
+              <div style="background: #cc0000; padding: 16px; text-align: center;">
+                <div style="font-size: 24px; font-weight: 900; color: #fff; letter-spacing: 2px;">🚨 5-ALARM FIRE 🚨</div>
               </div>
-              <div style="background: #1a1a1a; border: 2px solid #f5c518; border-radius: 12px; padding: 24px; margin: 24px 0;">
-                <div style="font-size: 20px; font-weight: 800; color: #f5c518;">${p.game}</div>
-                <div style="font-size: 28px; font-weight: 800; margin: 12px 0;">${p.play}</div>
-                <div style="font-size: 14px; color: #999;">${p.price || "Shop for best price"} · ${p.reasoning || ""}</div>
+              <div style="text-align: center; padding: 40px 24px 24px;">
+                <div style="font-size: 56px;">⭐⭐⭐⭐⭐</div>
+                <h1 style="color: #f5c518; font-size: 36px; margin: 16px 0; font-weight: 900;">5-STAR PLAY</h1>
+                <p style="font-size: 18px; color: #ccc; max-width: 400px; margin: 0 auto;">Our first-ever 5-star rated play. The highest confidence we've ever published. This almost never happens.</p>
               </div>
-              <p style="text-align: center;"><a href="https://moylineai.com/picks" style="background: #f5c518; color: #0a0a0a; font-weight: 800; padding: 16px 32px; border-radius: 10px; text-decoration: none; font-size: 18px;">View the card</a></p>
-              <p style="font-size: 11px; color: #666; margin-top: 24px; text-align: center;">Analysis for entertainment purposes — not financial advice.</p>
+              <div style="background: #1a1a1a; border: 3px solid #f5c518; border-radius: 12px; padding: 28px; margin: 24px;">
+                <div style="font-size: 14px; color: #f5c518; font-weight: 700; letter-spacing: 1px; margin-bottom: 8px;">THE PLAY</div>
+                <div style="font-size: 22px; font-weight: 800; color: #fff;">${p.game}</div>
+                <div style="font-size: 32px; font-weight: 900; margin: 12px 0; color: #f5c518;">${p.play}</div>
+                <div style="font-size: 14px; color: #999;">${p.price || "Shop for best price"}</div>
+                ${p.reasoning ? `<div style="font-size: 14px; color: #ccc; margin-top: 12px; line-height: 1.6;">${p.reasoning}</div>` : ""}
+              </div>
+              <div style="text-align: center; padding: 0 24px 40px;">
+                <a href="https://moylineai.com/picks" style="display: inline-block; background: #f5c518; color: #0a0a0a; font-weight: 900; padding: 18px 48px; border-radius: 10px; text-decoration: none; font-size: 20px;">VIEW THE CARD →</a>
+                <p style="font-size: 11px; color: #666; margin-top: 24px;">Analysis for entertainment purposes — not financial advice.</p>
+              </div>
             </div>`;
           for (const to of members) {
-            await sendEmail(to, `⭐⭐⭐⭐⭐ 5-STAR PLAY: ${p.game} — ${p.play}`, html).catch(() => {});
+            await sendEmail(to, `🚨 5-ALARM FIRE: 5-STAR PLAY — ${p.play}`, html).catch(() => {});
           }
         }
       }
