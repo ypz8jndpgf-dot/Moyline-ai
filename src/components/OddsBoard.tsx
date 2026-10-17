@@ -197,7 +197,8 @@ export default function OddsBoard({
 
       {filtered.length === 0 ? (
         <div className="card p-8 text-center text-muted">
-          No games with posted lines right now. Check back closer to game time.
+          <p className="mb-1">Lines are refreshing.</p>
+          <p className="text-sm">The board updates throughout the day as books post numbers — check back soon.</p>
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">

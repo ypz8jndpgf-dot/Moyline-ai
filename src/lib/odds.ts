@@ -114,6 +114,8 @@ async function fetchSport(
       oddsFormat: "american",
       bookmakers: BOOKS.join(","),
       dateFormat: "iso",
+      // Always pull 3 days out so the board is never empty late at night.
+      daysFrom: "3",
     });
   const res = await fetch(url, { cache: "no-store" });
   const remainingHeader = res.headers.get("x-requests-remaining");
