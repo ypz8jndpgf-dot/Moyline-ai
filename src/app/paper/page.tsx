@@ -127,7 +127,7 @@ export default async function PaperPage() {
       <h2 className="font-display text-2xl mb-4">Recent results</h2>
       {settled.length === 0 ? (
         <p className="text-muted text-sm">
-          Nothing settled yet — results grade overnight and the bankroll updates each morning.
+          Nothing settled yet — results grade overnight and the bankroll updates daily.
         </p>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">

@@ -54,7 +54,7 @@ export default async function BuilderPage() {
       {!feed || legCount === 0 ? (
         <div className="card p-8 text-center">
           <p className="text-lg mb-2">Today&apos;s leg pool is being prepared.</p>
-          <p className="text-sm text-muted">Check back shortly — it posts with the morning brief.</p>
+          <p className="text-sm text-muted">Check back shortly — it posts with the 7am brief.</p>
         </div>
       ) : (
         <TicketBuilder

@@ -11,11 +11,11 @@ import TailButton from "./TailButton";
 export const dynamic = "force-dynamic";
 
 const SLOT_LABEL: Record<string, string> = {
-  "7am": "Morning",
-  "11am": "Midday",
-  "6pm": "Evening",
+  "7am": "7am",
+  "11am": "11am",
+  "6pm": "6pm",
   sat2pm: "Saturday",
-  cfbdeepdive: "Evening Deep Dive",
+  cfbdeepdive: "Deep Dive",
 };
 
 /** Parse "7:00pm ET" / "2:45pm ET" -> minutes after midnight ET. Null if unparseable. */
@@ -362,7 +362,7 @@ export default async function PicksPage() {
       {!feed || feed.picks.length === 0 ? (
         <div className="card p-8 text-center">
           <p className="text-lg mb-2">Today&apos;s card is being prepared.</p>
-          <p className="text-sm text-muted">Check back shortly — picks post with the morning brief.</p>
+          <p className="text-sm text-muted">Check back shortly — picks post with the 7am brief.</p>
         </div>
       ) : (
         <>

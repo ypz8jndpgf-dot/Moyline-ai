@@ -121,7 +121,7 @@ export default async function ArchivePage() {
         <div className="card p-8 text-center">
           <p className="text-muted mb-2">
             The archive is still filling up — graded picks land here daily after
-            the morning results run.
+            the daily results run.
           </p>
           <p className="text-sm text-muted">
             Check back tomorrow, or see today&apos;s card.
@@ -131,7 +131,7 @@ export default async function ArchivePage() {
 
       <div className="card gold-border p-6 mt-10 text-center">
         <h2 className="font-display text-2xl mb-2">
-          Want the <span className="gold-text">full card</span> every morning?
+          Want the <span className="gold-text">full card</span> daily?
         </h2>
         <p className="text-muted text-sm mb-4 max-w-xl mx-auto">
           The archive shows our free picks. Pro members get the complete grid —

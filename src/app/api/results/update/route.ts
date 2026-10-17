@@ -55,7 +55,7 @@ function isValid(b: unknown): b is Omit<DayResults, "updated_at"> {
 /**
  * Receives the graded day's results from the 6:30am results grader
  * (off-Vercel worker). Authenticated with PICKS_UPDATE_SECRET.
- * The morning-results cron reads this to email members.
+ * The daily-results cron reads this to email members.
  */
 export async function POST(req: Request) {
   const secret = cleanEnv(process.env.PICKS_UPDATE_SECRET);

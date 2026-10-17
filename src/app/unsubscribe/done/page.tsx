@@ -7,7 +7,7 @@ export default function UnsubscribeDonePage() {
         <span className="gold-text">No hard feelings 🤝</span>
       </h1>
       <p className="text-paper/90 mb-4">
-        You&apos;re off the list — no more daily briefs or morning result emails
+        You&apos;re off the list — no more daily briefs or daily result emails
         headed your way.
       </p>
       <p className="text-muted text-sm mb-6">

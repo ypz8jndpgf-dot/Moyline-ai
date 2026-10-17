@@ -17,7 +17,7 @@ export default function UnsubscribePage({
         <>
           <p className="text-muted text-sm mb-6">
             Use the unsubscribe link at the bottom of any MoyLine AI email to opt out of
-            daily briefs and morning result emails in one click.
+            daily briefs and daily result emails in one click.
           </p>
           <a href="/" className="btn-gold px-8 py-3 inline-block">
             Back to MoyLine AI

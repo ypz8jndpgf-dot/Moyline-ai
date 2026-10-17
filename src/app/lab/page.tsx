@@ -48,12 +48,12 @@ export default async function LabPage() {
       </h1>
       <p className="text-muted text-sm mb-6">
         Build your own ticket from today&apos;s edges — props always eligible
-        for parlays. 🕐 Pool refreshes with the morning card.
+        for parlays. 🕐 Pool refreshes with the 7am card.
       </p>
       {!feed || legCount === 0 ? (
         <div className="card p-8 text-center">
           <p className="text-lg mb-2">Today&apos;s edge pool is being prepared.</p>
-          <p className="text-sm text-muted">Check back shortly — it posts with the morning brief.</p>
+          <p className="text-sm text-muted">Check back shortly — it posts with the 7am brief.</p>
         </div>
       ) : (
         <LabBuilder picks={feed.picks} props={feed.props || []} />

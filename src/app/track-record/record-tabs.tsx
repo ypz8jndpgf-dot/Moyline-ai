@@ -147,7 +147,7 @@ const REGIME_RULES = [
   ["Max 3 plays", "One or two when that's all that qualifies — never filled for appearance"],
   ["Quantified edge", "Every play states its edge as a number. No number, no grid spot"],
   ["Earned confidence", "4+ only with best price confirmed and no rotation uncertainty"],
-  ["Daily self-tuning", "The algorithm re-grades itself every morning at 4am ET"],
+  ["Daily self-tuning", "The algorithm re-grades itself daily at 4am ET"],
 ];
 
 export default function RecordTabs({ rec }: { rec: TrackRecord }) {
