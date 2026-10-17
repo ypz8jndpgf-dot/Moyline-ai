@@ -234,6 +234,62 @@ export async function POST(req: Request) {
 
     await redis.set(FEED_KEY, JSON.stringify(merged));
 
+    // 5-STAR ALARM: if any incoming pick has confidence 5 (never awarded before),
+    // blast a massive announcement — web push + email to ALL members.
+    // Deduped per pick so re-pushes don't re-fire.
+    try {
+      const fiveStarPicks = body.picks.filter((p: FeedPick) => p.confidence === 5);
+      for (const p of fiveStarPicks) {
+        const alarmKey = `moyline:5star:${body.date}:${pickKey(p)}`;
+        const alreadyAlarmed = await redis.get(alarmKey);
+        if (!alreadyAlarmed) {
+          await redis.set(alarmKey, new Date().toISOString(), { ex: 86400 * 7 });
+          const { getMemberEmails, sendEmail } = await import("@/lib/email");
+          const members = await getMemberEmails();
+          // Web push blast
+          try {
+            const base = cleanEnv(process.env.NEXTAUTH_URL) || "https://www.moylineai.com";
+            const cronSecret = cleanEnv(process.env.CRON_SECRET);
+            if (cronSecret) {
+              await fetch(`${base}/api/push/send`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${cronSecret}`,
+                },
+                body: JSON.stringify({
+                  title: "⭐⭐⭐⭐⭐ 5-STAR PLAY",
+                  body: `${p.game} — ${p.play} (${p.price || "best price"})`,
+                  url: "/picks",
+                }),
+              }).catch(() => {});
+            }
+          } catch {}
+          // Email blast
+          const html = `
+            <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; background: #0a0a0a; color: #f5f5f5;">
+              <div style="text-align: center; padding: 32px 0;">
+                <div style="font-size: 48px;">⭐⭐⭐⭐⭐</div>
+                <h1 style="color: #f5c518; font-size: 32px; margin: 16px 0;">5-STAR PLAY</h1>
+                <p style="font-size: 16px; color: #ccc;">Our first-ever 5-star rated play. The highest confidence we've ever published.</p>
+              </div>
+              <div style="background: #1a1a1a; border: 2px solid #f5c518; border-radius: 12px; padding: 24px; margin: 24px 0;">
+                <div style="font-size: 20px; font-weight: 800; color: #f5c518;">${p.game}</div>
+                <div style="font-size: 28px; font-weight: 800; margin: 12px 0;">${p.play}</div>
+                <div style="font-size: 14px; color: #999;">${p.price || "Shop for best price"} · ${p.reasoning || ""}</div>
+              </div>
+              <p style="text-align: center;"><a href="https://moylineai.com/picks" style="background: #f5c518; color: #0a0a0a; font-weight: 800; padding: 16px 32px; border-radius: 10px; text-decoration: none; font-size: 18px;">View the card</a></p>
+              <p style="font-size: 11px; color: #666; margin-top: 24px; text-align: center;">Analysis for entertainment purposes — not financial advice.</p>
+            </div>`;
+          for (const to of members) {
+            await sendEmail(to, `⭐⭐⭐⭐⭐ 5-STAR PLAY: ${p.game} — ${p.play}`, html).catch(() => {});
+          }
+        }
+      }
+    } catch (e) {
+      console.error("[5star] alarm failed:", e instanceof Error ? e.message : e);
+    }
+
     // Paper trading: auto-place $10 virtual bets on card + backpage picks.
     // Backpage picks are paper-traded too, tagged source="backpage" (admin-only view).
     // Idempotent by design: placement is offered on EVERY push for the full
