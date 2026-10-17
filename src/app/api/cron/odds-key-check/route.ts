@@ -96,13 +96,16 @@ export async function GET() {
   }
 
   // Quota monitoring: alert at usage thresholds so we never hit zero blind.
-  // Conservative mode (in odds.ts) auto-throttles at 15K used; these alerts
+  // Percentage-based to adapt to any plan tier.
+  // Conservative mode (in odds.ts) auto-throttles at 75%; these alerts
   // keep the admin informed before that happens.
   if (quotaUsed !== null && quotaRemaining !== null) {
+    const total = quotaUsed + quotaRemaining;
+    const pctUsed = total > 0 ? quotaUsed / total : 0;
     const thresholds = [
-      { used: 15000, label: "conservative mode engaged", key: "moyline:quota-alert-15k" },
-      { used: 18000, label: "80%+ of quota used", key: "moyline:quota-alert-18k" },
-      { used: 19500, label: "CRITICAL: nearly out of credits", key: "moyline:quota-alert-195k" },
+      { pct: 0.75, label: "conservative mode engaged (75% used)", key: "moyline:quota-alert-75" },
+      { pct: 0.90, label: "90% of quota used", key: "moyline:quota-alert-90" },
+      { pct: 0.97, label: "CRITICAL: nearly out of credits", key: "moyline:quota-alert-97" },
     ];
     try {
       const redisUrl = cleanEnv(process.env.UPSTASH_REDIS_REST_URL);
@@ -111,7 +114,7 @@ export async function GET() {
         const redis = new Redis({ url: redisUrl, token: redisToken });
         const base = cleanEnv(process.env.NEXTAUTH_URL) || "https://www.moylineai.com";
         for (const t of thresholds) {
-          if (quotaUsed >= t.used) {
+          if (pctUsed >= t.pct) {
             const alreadyAlerted = await redis.get(t.key);
             if (!alreadyAlerted) {
               await redis.set(t.key, new Date().toISOString(), { ex: 86400 * 32 });

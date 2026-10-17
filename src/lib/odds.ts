@@ -44,8 +44,11 @@ const CONSERVATIVE_SPORTS = [
 ];
 const CONSERVATIVE_BOOKS = ["draftkings", "fanduel"];
 const CONSERVATIVE_MARKETS = "h2h,spreads";
-const QUOTA_CONSERVATIVE_THRESHOLD = 5000;
-const QUOTA_HARD_STOP = 50;
+// Conservative mode: when 75% of quota is used, slash burn rate.
+// Hard stop at 99% — serve cache, make zero API calls.
+// Percentage-based so it adapts to any plan tier (20K, 100K, etc.)
+const QUOTA_CONSERVATIVE_PCT = 0.75;
+const QUOTA_HARD_STOP_PCT = 0.99;
 
 function getConfig() {
   // Sanitize the key: Vercel dashboard pastes sometimes include whitespace or quotes.
@@ -71,9 +74,33 @@ interface CacheEntry {
 
 let memCache: CacheEntry | null = null;
 let quotaRemaining: number | null = null;
+let quotaUsed: number | null = null;
 
 export function getQuotaRemaining() {
   return quotaRemaining;
+}
+
+export function getQuotaUsed() {
+  return quotaUsed;
+}
+
+function quotaTotal(): number | null {
+  if (quotaRemaining !== null && quotaUsed !== null) {
+    return quotaRemaining + quotaUsed;
+  }
+  return null;
+}
+
+function isConservative(): boolean {
+  const total = quotaTotal();
+  if (total === null || quotaUsed === null) return false;
+  return quotaUsed / total >= QUOTA_CONSERVATIVE_PCT;
+}
+
+function isHardStop(): boolean {
+  const total = quotaTotal();
+  if (total === null || quotaUsed === null) return false;
+  return quotaUsed / total >= QUOTA_HARD_STOP_PCT;
 }
 
 // ---------------------------------------------------------------------------
@@ -133,7 +160,9 @@ async function fetchSport(
     });
   const res = await fetch(url, { cache: "no-store" });
   const remainingHeader = res.headers.get("x-requests-remaining");
+  const usedHeader = res.headers.get("x-requests-used");
   const remaining = remainingHeader ? Number(remainingHeader) : null;
+  if (usedHeader) quotaUsed = Number(usedHeader);
   if (!res.ok) {
     throw new Error(`Odds API ${res.status} for ${sport}`);
   }
@@ -166,7 +195,7 @@ export async function refreshOdds(force = false): Promise<RefreshResult> {
     };
   }
 
-  if (quotaRemaining !== null && quotaRemaining < QUOTA_HARD_STOP) {
+  if (isHardStop()) {
     const cached = memCache?.events || (await readJson<OddsEvent[]>(CACHE_FILE, []));
     return {
       events: cached,
@@ -174,12 +203,12 @@ export async function refreshOdds(force = false): Promise<RefreshResult> {
       fromCache: true,
       sportsRefreshed: [],
       quotaRemaining,
-      error: `Quota guard: only ${quotaRemaining} requests remaining — serving cache.`,
+      error: `Quota guard: ${quotaUsed} used — serving cache.`,
     };
   }
 
-  // Conservative mode: burn rate protection when 15K+ credits used.
-  const conservative = quotaRemaining !== null && quotaRemaining < QUOTA_CONSERVATIVE_THRESHOLD;
+  // Conservative mode: burn rate protection at 75% quota used.
+  const conservative = isConservative();
   const activeSports = conservative ? CONSERVATIVE_SPORTS : sports;
   const fetchOpts = conservative
     ? { books: CONSERVATIVE_BOOKS, markets: CONSERVATIVE_MARKETS, daysFrom: "1" }
