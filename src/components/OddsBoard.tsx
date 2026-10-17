@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { GameVM, MoverVM, CellVM, BookVM } from "@/lib/board";
 import { SPORT_LABELS } from "@/lib/odds-shared";
+import LineAlertButton from "./LineAlertButton";
 
 function DeltaBadge({ cell }: { cell: CellVM }) {
   if (!cell.moved) return null;
@@ -81,6 +82,13 @@ function GameCard({ game }: { game: GameVM }) {
             </span>
           )}
         </div>
+        <LineAlertButton
+          game={`${game.away} @ ${game.home}`}
+          gameLabel={`${game.away} @ ${game.home}`}
+          market="spread"
+          side={game.away}
+          currentLine={null}
+        />
       </div>
       <h3 className="font-display text-lg mb-3">
         {game.away} <span className="text-muted">@</span> {game.home}

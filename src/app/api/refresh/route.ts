@@ -43,6 +43,22 @@ export async function GET(req: Request) {
       console.error("[refresh] steam alert failed:", e instanceof Error ? e.message : e);
     }
 
+    // Target-line alerts (best-effort; never fails the refresh).
+    let lineAlerts = 0;
+    try {
+      const base = (process.env.NEXTAUTH_URL || "https://www.moylineai.com").trim();
+      const res = await fetch(`${base}/api/cron/check-alerts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        lineAlerts = data.triggered || 0;
+      }
+    } catch (e) {
+      console.error("[refresh] line alert check failed:", e instanceof Error ? e.message : e);
+    }
+
     return NextResponse.json({
       ok: true,
       fetchedAt: result.fetchedAt,
@@ -50,6 +66,7 @@ export async function GET(req: Request) {
       gameCount: result.events.length,
       quotaRemaining: getQuotaRemaining(),
       steamAlerts,
+      lineAlerts,
       error: result.error || null,
     });
   } catch (e) {
