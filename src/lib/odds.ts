@@ -35,8 +35,11 @@ const DEFAULT_SPORTS = [
 const BOOKS = ["draftkings", "fanduel", "betmgm", "caesars"];
 
 function getConfig() {
+  // Sanitize the key: Vercel dashboard pastes sometimes include whitespace or quotes.
+  const rawKey = process.env.ODDS_API_KEY || "";
+  const apiKey = rawKey.trim().replace(/^["']+|["']+$/g, "").replace(/\s+/g, "");
   return {
-    apiKey: process.env.ODDS_API_KEY || "",
+    apiKey,
     sports: (process.env.ODDS_SPORTS || DEFAULT_SPORTS.join(","))
       .split(",")
       .map((s) => s.trim())
