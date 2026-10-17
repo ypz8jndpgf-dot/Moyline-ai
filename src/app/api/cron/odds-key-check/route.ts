@@ -33,9 +33,15 @@ export async function GET() {
     });
 
   let status: number;
+  let quotaUsed: number | null = null;
+  let quotaRemaining: number | null = null;
   try {
     const res = await fetch(url, { cache: "no-store" });
     status = res.status;
+    const usedHeader = res.headers.get("x-requests-used");
+    const remainingHeader = res.headers.get("x-requests-remaining");
+    if (usedHeader) quotaUsed = Number(usedHeader);
+    if (remainingHeader) quotaRemaining = Number(remainingHeader);
   } catch (e) {
     return NextResponse.json({ ok: false, error: "network failure", detail: String(e) }, { status: 502 });
   }
@@ -89,5 +95,49 @@ export async function GET() {
     // Best-effort.
   }
 
-  return NextResponse.json({ ok: true, status });
+  // Quota monitoring: alert at usage thresholds so we never hit zero blind.
+  // Conservative mode (in odds.ts) auto-throttles at 15K used; these alerts
+  // keep the admin informed before that happens.
+  if (quotaUsed !== null && quotaRemaining !== null) {
+    const thresholds = [
+      { used: 15000, label: "conservative mode engaged", key: "moyline:quota-alert-15k" },
+      { used: 18000, label: "80%+ of quota used", key: "moyline:quota-alert-18k" },
+      { used: 19500, label: "CRITICAL: nearly out of credits", key: "moyline:quota-alert-195k" },
+    ];
+    try {
+      const redisUrl = cleanEnv(process.env.UPSTASH_REDIS_REST_URL);
+      const redisToken = cleanEnv(process.env.UPSTASH_REDIS_REST_TOKEN);
+      if (redisUrl && redisToken && cronSecret) {
+        const redis = new Redis({ url: redisUrl, token: redisToken });
+        const base = cleanEnv(process.env.NEXTAUTH_URL) || "https://www.moylineai.com";
+        for (const t of thresholds) {
+          if (quotaUsed >= t.used) {
+            const alreadyAlerted = await redis.get(t.key);
+            if (!alreadyAlerted) {
+              await redis.set(t.key, new Date().toISOString(), { ex: 86400 * 32 });
+              await fetch(`${base}/api/push/send`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${cronSecret}`,
+                },
+                body: JSON.stringify({
+                  title: `📊 Odds quota: ${t.label}`,
+                  body: `${quotaUsed.toLocaleString()} credits used, ${quotaRemaining.toLocaleString()} remaining.`,
+                  url: "/",
+                }),
+              }).catch(() => {});
+            }
+          } else {
+            // Below threshold — clear the flag so re-crossing re-alerts.
+            await redis.del(t.key);
+          }
+        }
+      }
+    } catch {
+      // Alert delivery is best-effort.
+    }
+  }
+
+  return NextResponse.json({ ok: true, status, quotaUsed, quotaRemaining });
 }
