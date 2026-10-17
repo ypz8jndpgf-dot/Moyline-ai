@@ -57,17 +57,22 @@ export async function GET(req: Request) {
   const headline = `Last night: ${wins}-${losses}${pushes > 0 ? `-${pushes}` : ""}`;
   const showRebuildBanner = Date.now() < new Date("2026-10-19T00:00:00-04:00").getTime();
   const html = `
-    <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1a1a1a;">
-      <p style="font-size: 13px; color: #666;">MoyLine AI · Daily results · ${yesterday}</p>
-      <h1 style="font-size: 28px; margin: 8px 0;">${headline}</h1>
-      ${showRebuildBanner ? `<p style="font-size: 13px; background: #fff8e1; border: 1px solid #e8b90a; border-radius: 8px; padding: 10px 14px; color: #5c4a00; margin: 12px 0 4px;">✦ <b>Algo rebuilt Oct 15</b> — tighter gates on spreads, dogs and CFB sides; totals now rank first. See today's 7am brief for the full grid.</p>` : ""}
-      ${
-        highlights.length > 0
-          ? `<ul style="line-height: 1.7;">${highlights.map((h) => `<li>${h}</li>`).join("")}</ul>`
-          : `<p style="color: #666;">Full breakdown in today's 7am brief.</p>`
-      }
-      <p style="margin-top: 24px;"><a href="https://moylineai.com/picks" style="background: #f5c518; color: #0a0a0a; font-weight: 800; padding: 12px 24px; border-radius: 10px; text-decoration: none;">Today's card</a></p>
-      <p style="font-size: 11px; color: #888; margin-top: 24px;">Analysis for entertainment purposes — not financial advice.</p>
+    <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0a0a0a; color: #e8e8e8; padding: 0;">
+      <div style="background-color: #0a0a0a; border-bottom: 3px solid #f5c518; padding: 28px 24px 20px; text-align: center;">
+        <p style="font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: #f5c518; margin: 0 0 8px; font-weight: 700;">MoyLine AI · Daily results</p>
+        <p style="font-size: 13px; color: #888; margin: 0;">${yesterday}</p>
+      </div>
+      <div style="padding: 28px 24px;">
+        <h1 style="font-size: 36px; margin: 0 0 16px; color: #ffffff; font-weight: 800;">${headline}</h1>
+        ${showRebuildBanner ? `<p style="font-size: 13px; background: rgba(245,197,24,0.1); border: 1px solid #f5c518; border-radius: 8px; padding: 12px 16px; color: #f5c518; margin: 0 0 16px; line-height: 1.5;">✦ <b>Algo rebuilt Oct 15</b> — tighter gates on spreads, dogs and CFB sides; totals now rank first. See today's 7am brief for the full grid.</p>` : ""}
+        ${
+          highlights.length > 0
+            ? `<ul style="line-height: 1.8; color: #d0d0d0; padding-left: 20px; margin: 0 0 8px;">${highlights.map((h) => `<li style="margin-bottom: 8px;">${h}</li>`).join("")}</ul>`
+            : `<p style="color: #888;">Full breakdown in today's 7am brief.</p>`
+        }
+        <p style="margin: 28px 0 8px; text-align: center;"><a href="https://moylineai.com/picks" style="background: #f5c518; color: #0a0a0a; font-weight: 800; padding: 14px 32px; border-radius: 999px; text-decoration: none; display: inline-block; font-size: 16px;">Today's card</a></p>
+        <p style="font-size: 11px; color: #666; margin: 24px 0 0; text-align: center;">Analysis for entertainment purposes — not financial advice.</p>
+      </div>
     </div>`;
 
   let sent = 0;
