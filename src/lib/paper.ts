@@ -134,12 +134,14 @@ export async function placePaperBets(
     end
     return cjson.encode(added)
   `;
-  const out = (await r.eval(script, [BETS_KEY, BANKROLL_KEY], [
+  const out = await r.eval(script, [BETS_KEY, BANKROLL_KEY], [
     JSON.stringify(candidates),
     String(PAPER_STAKE),
-  ])) as string;
+  ]);
+  // Upstash Redis client auto-deserializes JSON responses — `out` is already
+  // an object, not a string. Handle both to be safe.
   try {
-    const placed = JSON.parse(out) as PaperBet[];
+    const placed = (typeof out === "string" ? JSON.parse(out) : out) as PaperBet[];
     return Array.isArray(placed) ? placed : [];
   } catch {
     return [];
