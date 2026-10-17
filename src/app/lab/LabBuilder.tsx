@@ -130,14 +130,29 @@ export default function LabBuilder({
       .sort((a, b) => rankScore(b) - rankScore(a));
 
     if (betType === "parlay") {
-      const legs = parlayPool.slice(0, legCount);
+      // Always build the best possible ticket — even if below the ideal bar.
+      // Take up to legCount, but never fewer than 2 (a 1-leg "parlay" is just a bet).
+      const legs = parlayPool.slice(0, Math.max(2, legCount));
       if (legs.length < 2) {
-        return { error: "Not enough qualifying legs on today's card for a parlay." };
+        return { error: "No plays on today's card to build from — check back after the next brief." };
       }
       const odds = parlayOdds(legs);
+      // Ticket confidence: floor of average leg confidence, capped 1-5.
+      const avgConf = legs.reduce((s, l) => s + l.confidence, 0) / legs.length;
+      const ticketConf = Math.max(1, Math.min(5, Math.floor(avgConf)));
+      // Warning when below the bar: fewer legs than requested, or weak average confidence.
+      const warnings: string[] = [];
+      if (legs.length < legCount) {
+        warnings.push(`Only ${legs.length} qualifying ${sport === "All" ? "" : sport + " "}legs available — showing the best ${legs.length}.`);
+      }
+      if (avgConf < 3.5) {
+        warnings.push("Below our usual parlay bar — these legs are thinner than we'd like.");
+      }
       return {
         legs,
         combined: odds,
+        ticketConf,
+        warnings,
         note: odds
           ? `Combined ${odds} via standard parlay math. Shop the best price per leg.`
           : "Combined odds unavailable — a leg price couldn't be parsed.",
@@ -157,10 +172,18 @@ export default function LabBuilder({
     }
     const legs = eligible.slice(0, Math.max(2, Math.min(legCount, eligible.length)));
     const pts = legs[0].points;
+    const avgConf = legs.reduce((s, l) => s + l.confidence, 0) / legs.length;
+    const ticketConf = Math.max(1, Math.min(5, Math.floor(avgConf)));
+    const warnings: string[] = [];
+    if (legs.length < legCount) {
+      warnings.push(`Only ${legs.length} Wong-eligible legs available — showing the best ${legs.length}.`);
+    }
     return {
       legs,
       combined: null,
       teaserPoints: pts,
+      ticketConf,
+      warnings,
       note: `Standard ${pts}-pt ${legs.length}-team teaser pays around -110 — shop for the best number.`,
     };
   }, [picks, props, betType, legCount, sport]);
@@ -221,10 +244,24 @@ export default function LabBuilder({
             <span className="text-xs font-bold uppercase tracking-widest text-gold">
               Best {betType === "parlay" ? "parlay" : `${result.teaserPoints}-pt teaser`}
             </span>
-            {result.combined && (
-              <span className="font-display text-2xl text-goldsoft">{result.combined}</span>
-            )}
+            <div className="flex items-center gap-3">
+              {result.ticketConf && (
+                <span className="text-sm font-bold text-muted">
+                  Confidence <span className="text-gold">{result.ticketConf}/5</span>
+                </span>
+              )}
+              {result.combined && (
+                <span className="font-display text-2xl text-goldsoft">{result.combined}</span>
+              )}
+            </div>
           </div>
+          {result.warnings && result.warnings.length > 0 && (
+            <div className="mb-4 p-3 rounded-lg bg-gold/10 border border-gold/30">
+              {result.warnings.map((w, i) => (
+                <p key={i} className="text-xs text-goldsoft">⚠️ {w}</p>
+              ))}
+            </div>
+          )}
           <ul className="space-y-3 mb-4">
             {result.legs!.map((leg, i) => (
               <li key={i} className="border-b border-line/50 pb-3 last:border-0 last:pb-0">
