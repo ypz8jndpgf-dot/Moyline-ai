@@ -1,15 +1,74 @@
 import { getTrackRecord } from "@/lib/store";
+import { getPicksFeed } from "@/lib/picks";
 
 export default async function FeaturedPlays() {
   const rec = await getTrackRecord();
+  // Sharpened ★ criteria (Oct 16 recalibration): NHL/NFL moneyline or spread only.
+  // This correlates with the 74% marketed on the splash page.
+  const isSharpenedStar = (p: any) => {
+    if (!p.star) return false;
+    const sport = (p.sport || "").toUpperCase();
+    const isNHL = sport.includes("NHL");
+    const isNFL = sport.includes("NFL");
+    if (!isNHL && !isNFL) return false;
+    const play = (p.play || "").toLowerCase();
+    const line = (p.line || "").toLowerCase();
+    const combined = play + " " + line;
+    // Exclude totals and props
+    if (/\bover\b|\bunder\b|\btotal\b/.test(combined)) return false;
+    if (/prop/.test(combined)) return false;
+    return true;
+  };
+  
   const stars = rec.picks
-    .filter((p) => p.star && p.result !== "Pending")
+    .filter((p) => isSharpenedStar(p) && p.result !== "Pending")
     .sort((a, b) => (a.date < b.date ? 1 : -1));
-  // Include pending stars (today's picks not yet graded) at the top so the
-  // section never looks stale — users see the current ★ immediately.
+  // Include pending stars from the track record AND today's live picks feed
+  // (the feed has today's ★ before the morning grader runs).
   const pendingStars = rec.picks
-    .filter((p) => p.star && p.result === "Pending")
+    .filter((p) => isSharpenedStar(p) && p.result === "Pending")
     .sort((a, b) => (a.date < b.date ? 1 : -1));
+  
+  // Also check today's feed for starred picks not yet in the track record.
+  try {
+    const feed = await getPicksFeed();
+    if (feed?.picks) {
+      const todayET = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+      for (const p of feed.picks) {
+        if (p.star) {
+          // Apply sharpened criteria to feed picks too
+          const sportMatch = p.game.match(/\(([^)]+)\)/);
+          const feedSport = sportMatch ? sportMatch[1].toUpperCase() : "";
+          const isNHL = feedSport.includes("NHL");
+          const isNFL = feedSport.includes("NFL");
+          if (!isNHL && !isNFL) continue;
+          const playLower = (p.play || "").toLowerCase();
+          if (/\bover\b|\bunder\b|\btotal\b|prop/.test(playLower)) continue;
+          
+          // Avoid duplicates with track record pending stars
+          const exists = pendingStars.some((s) => s.game === p.game && s.date === todayET);
+          if (!exists) {
+            pendingStars.push({
+              id: `feed-${p.game}-${todayET}`,
+              date: todayET,
+              game: p.game,
+              play: p.play,
+              line: p.price || "",
+              book: "",
+              sport: "",
+              result: "Pending",
+              star: true,
+              conf: p.confidence?.toString() || "",
+            } as any);
+          }
+        }
+      }
+    }
+  } catch {
+    // Feed unavailable — use track record only.
+  }
+  
+  pendingStars.sort((a, b) => (a.date < b.date ? 1 : -1));
   const w = stars.filter((p) => p.result === "Win").length;
   const l = stars.filter((p) => p.result === "Loss").length;
   const p = stars.filter((p) => p.result === "Push").length;
