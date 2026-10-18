@@ -1,16 +1,23 @@
 /**
- * Tiny JSON-file store for the track record and subscriptions.
+ * Tiny JSON store for the track record and subscriptions.
  *
- * NOTE for production: serverless filesystems (Vercel) are ephemeral —
- * writes won't persist across instances. For durable production storage,
- * swap these functions for Vercel KV / Postgres / etc. The function
- * signatures are deliberately narrow so the swap is mechanical.
- * Reads of committed seed data (track record) work fine everywhere.
+ * Track record: Redis-backed (Upstash) for durability across serverless
+ * instances, with the committed data/track-record.json as seed/fallback.
+ * Subscriptions and other small JSON files remain filesystem-based.
  */
 import { promises as fs } from "fs";
 import path from "path";
+import { Redis } from "@upstash/redis";
 
 const DATA_DIR = path.join(process.cwd(), "data");
+const TRACK_REDIS_KEY = "moyline:track-record";
+
+function getRedis(): Redis | null {
+  const url = (process.env.UPSTASH_REDIS_REST_URL || "").trim();
+  const token = (process.env.UPSTASH_REDIS_REST_TOKEN || "").trim();
+  if (!url || !token) return null;
+  return new Redis({ url, token });
+}
 
 async function readJson<T>(name: string, fallback: T): Promise<T> {
   try {
@@ -61,12 +68,50 @@ export interface TrackRecord {
 const TRACK_FILE = "track-record.json";
 
 export async function getTrackRecord(): Promise<TrackRecord> {
-  return readJson<TrackRecord>(TRACK_FILE, {
+  const fallback: TrackRecord = {
     startDate: "2026-10-01",
     note: "",
     picks: [],
     totals: { w: 0, l: 0, p: 0 },
-  });
+  };
+  // Redis first (durable), filesystem seed second, empty fallback last.
+  try {
+    const redis = getRedis();
+    if (redis) {
+      const raw = await redis.get<string>(TRACK_REDIS_KEY);
+      if (raw) {
+        const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+        if (parsed && Array.isArray(parsed.picks)) return parsed as TrackRecord;
+      }
+    }
+  } catch {
+    // fall through to filesystem
+  }
+  const seeded = await readJson<TrackRecord>(TRACK_FILE, fallback);
+  // Backfill Redis from seed so future reads are fast and consistent.
+  try {
+    const redis = getRedis();
+    if (redis && seeded.picks.length > 0) {
+      await redis.set(TRACK_REDIS_KEY, JSON.stringify(seeded));
+    }
+  } catch {
+    // non-fatal
+  }
+  return seeded;
+}
+
+async function writeTrackRecord(rec: TrackRecord): Promise<boolean> {
+  // Write to Redis (durable); filesystem write is best-effort for local dev.
+  try {
+    const redis = getRedis();
+    if (redis) {
+      await redis.set(TRACK_REDIS_KEY, JSON.stringify(rec));
+      return true;
+    }
+  } catch {
+    // fall through
+  }
+  return writeJson(TRACK_FILE, rec);
 }
 
 function pickKey(p: Pick<TrackPick, "game" | "play" | "line" | "book">) {
@@ -100,7 +145,7 @@ export async function appendTrackPicks(
     else if (p.result === "Loss") rec.totals.l++;
     else rec.totals.p++;
   }
-  await writeJson(TRACK_FILE, rec);
+  await writeTrackRecord(rec);
   return { added, skipped, totals: rec.totals };
 }
 

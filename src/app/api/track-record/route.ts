@@ -12,14 +12,22 @@ export async function GET() {
 
 /**
  * Admin-only: append graded picks (dedupe: identical game+play+line+book
- * counted once). Auth via signed-in ADMIN_EMAIL.
+ * counted once). Auth via signed-in ADMIN_EMAIL, or via PICKS_UPDATE_SECRET
+ * bearer token (for the off-Vercel grader).
  */
 export async function POST(req: Request) {
-  const session = await auth();
-  const email = session?.user?.email?.toLowerCase() || "";
-  const admin = (process.env.ADMIN_EMAIL || "").toLowerCase();
-  if (!admin || email !== admin) {
-    return NextResponse.json({ error: "Admin only" }, { status: 403 });
+  // Bearer token path (grader)
+  const secret = (process.env.PICKS_UPDATE_SECRET || "").trim();
+  const authHeader = req.headers.get("authorization");
+  const bearerOk = secret && authHeader === `Bearer ${secret}`;
+
+  if (!bearerOk) {
+    const session = await auth();
+    const email = session?.user?.email?.toLowerCase() || "";
+    const admin = (process.env.ADMIN_EMAIL || "").toLowerCase();
+    if (!admin || email !== admin) {
+      return NextResponse.json({ error: "Admin only" }, { status: 403 });
+    }
   }
   try {
     const body = await req.json();
