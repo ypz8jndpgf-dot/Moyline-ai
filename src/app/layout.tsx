@@ -77,6 +77,7 @@ async function Nav() {
           <Link href="/my-tails" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Tails</Link>
           <Link href="/alerts" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Alerts</Link>
           <Link href="/backpage" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Undercard 🔒</Link>
+          <Link href="/ask" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Ask MoyAI ✨</Link>
           {isAdmin && (
             <Link href="/paper" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Paper</Link>
           )}
