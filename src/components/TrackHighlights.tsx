@@ -33,7 +33,7 @@ export default async function TrackHighlights() {
       }
     }
   }
-  if (bestSport && bestPct >= 55) {
+  if (bestSport && bestPct >= 50) {
     highlights.push({
       pct: `${bestPct.toFixed(0)}%`,
       label: `${bestSport} picks`,
@@ -41,11 +41,11 @@ export default async function TrackHighlights() {
     });
   }
 
-  // Unders
+  // Unders (min 10 picks, min 50% win rate)
   const unders = picks.filter((p) => p.play.toLowerCase().includes("under"));
   const uw = unders.filter((p) => p.result === "Win").length;
   const ul = unders.filter((p) => p.result === "Loss").length;
-  if (uw + ul >= 10 && uw / (uw + ul) >= 0.55) {
+  if (uw + ul >= 10 && uw / (uw + ul) >= 0.5) {
     highlights.push({
       pct: `${((uw / (uw + ul)) * 100).toFixed(0)}%`,
       label: "Unders",
@@ -53,13 +53,13 @@ export default async function TrackHighlights() {
     });
   }
 
-  // Recent form (last 20)
+  // Recent form (last 20, min 50% win rate)
   const recent = [...picks]
     .sort((a, b) => (a.date < b.date ? 1 : -1))
     .slice(0, 20);
   const rw = recent.filter((p) => p.result === "Win").length;
   const rl = recent.filter((p) => p.result === "Loss").length;
-  if (rw + rl >= 15 && rw / (rw + rl) >= 0.55) {
+  if (rw + rl >= 15 && rw / (rw + rl) >= 0.5) {
     highlights.push({
       pct: `${((rw / (rw + rl)) * 100).toFixed(0)}%`,
       label: "Last 20 picks",
@@ -67,11 +67,11 @@ export default async function TrackHighlights() {
     });
   }
 
-  // Moneylines
+  // Moneylines (min 20 picks, min 50% win rate)
   const mls = picks.filter((p) => p.play.toLowerCase().includes("ml"));
   const mw = mls.filter((p) => p.result === "Win").length;
   const ml = mls.filter((p) => p.result === "Loss").length;
-  if (mw + ml >= 20 && mw / (mw + ml) >= 0.54) {
+  if (mw + ml >= 20 && mw / (mw + ml) >= 0.5) {
     highlights.push({
       pct: `${((mw / (mw + ml)) * 100).toFixed(0)}%`,
       label: "Moneylines",

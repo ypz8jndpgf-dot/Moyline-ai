@@ -29,23 +29,23 @@ export default async function TrackTicker() {
   for (const [sport, { w: sw, l: sl }] of bySport) {
     if (sw + sl >= 8) {
       const sp = ((sw / (sw + sl)) * 100).toFixed(0);
-      if (parseFloat(sp) >= 58) items.push(`${sport.toUpperCase()} ${sw}-${sl} (${sp}%)`);
+      if (parseFloat(sp) >= 50) items.push(`${sport.toUpperCase()} ${sw}-${sl} (${sp}%)`);
     }
   }
 
-  // Unders
+  // Unders (min 10 picks, min 50% win rate)
   const unders = picks.filter((p) => p.play.toLowerCase().includes("under"));
   const uw = unders.filter((p) => p.result === "Win").length;
   const ul = unders.filter((p) => p.result === "Loss").length;
-  if (uw + ul >= 10) {
+  if (uw + ul >= 10 && uw / (uw + ul) >= 0.5) {
     items.push(`UNDERS ${uw}-${ul} (${((uw / (uw + ul)) * 100).toFixed(0)}%)`);
   }
 
-  // Recent form
+  // Recent form (min 8 graded, min 50% win rate)
   const recent = [...picks].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 10);
   const rw = recent.filter((p) => p.result === "Win").length;
   const rl = recent.filter((p) => p.result === "Loss").length;
-  if (rw + rl >= 8) {
+  if (rw + rl >= 8 && rw / (rw + rl) >= 0.5) {
     items.push(`LAST 10: ${rw}-${rl}`);
   }
 
