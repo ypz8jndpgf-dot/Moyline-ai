@@ -251,6 +251,22 @@ export async function getOdds(): Promise<RefreshResult> {
   return refreshOdds(false);
 }
 
+/**
+ * Cache-only read: returns whatever's in memory/disk cache without ever
+ * hitting the API. For playground features (Builder, Lab) that don't need
+ * fresh lines — saves credits and works even when the API is down.
+ */
+export async function getOddsCached(): Promise<RefreshResult> {
+  const events = memCache?.events || (await readJson<OddsEvent[]>(CACHE_FILE, []));
+  return {
+    events,
+    fetchedAt: memCache?.fetchedAt || 0,
+    fromCache: true,
+    sportsRefreshed: [],
+    quotaRemaining,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Opening-line snapshots: first-seen lines per event become the "open"
 // ---------------------------------------------------------------------------
