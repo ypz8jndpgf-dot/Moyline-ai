@@ -17,6 +17,7 @@ type Analysis = {
   factors: string[];
   edge: string;
   caveat: string;
+  onCard?: { play: string; confidence: number };
 };
 
 type Msg = {
@@ -24,6 +25,7 @@ type Msg = {
   text?: string;
   analyses?: Analysis[];
   error?: string;
+  gameId?: string;
 };
 
 const SUGGESTIONS = [
@@ -81,6 +83,11 @@ function AnalysisCard({ a }: { a: Analysis }) {
         <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-gold">
           {g.sport.replace(/_/g, " ")} · {gameTime(g.commence)}
         </p>
+        {a.onCard && (
+          <span className="px-2 py-0.5 rounded-full bg-gold text-black text-[10px] font-bold uppercase tracking-wider">
+            ★ On today's card
+          </span>
+        )}
       </div>
       <h3 className="font-display text-xl mb-3">
         {g.away} <span className="text-muted text-sm">at</span> {g.home}
@@ -148,6 +155,7 @@ export default function AskPage() {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [lastGameId, setLastGameId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -161,16 +169,25 @@ export default function AskPage() {
     setInput("");
     setLoading(true);
     try {
+      // If the question is short/generic and we have context, treat as follow-up
+      const isFollowUp = lastGameId && q.split(/\s+/).length <= 4 &&
+        !/[a-z]{4,}/i.test(q.replace(/what|about|the|total|spread|line|odds|moneyline|over|under/gi, ""));
       const res = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q }),
+        body: JSON.stringify({
+          question: isFollowUp ? "" : q,
+          contextGameId: isFollowUp ? lastGameId : undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
         setMsgs((m) => [...m, { role: "moy", error: data.error || "Something went wrong." }]);
       } else {
         setMsgs((m) => [...m, { role: "moy", analyses: data.analyses }]);
+        if (data.analyses?.[0]?.game?.id) {
+          setLastGameId(data.analyses[0].game.id);
+        }
       }
     } catch {
       setMsgs((m) => [...m, { role: "moy", error: "Couldn't reach the brain — try again." }]);
