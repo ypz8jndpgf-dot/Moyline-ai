@@ -2,8 +2,58 @@ import { getTrackRecord } from "@/lib/store";
 
 /**
  * Scrolling ticker tape of live track-record highlights.
+ * Fully dynamic: any segment clearing 50% with enough picks shows up automatically.
  * Pure CSS animation, no JS needed.
  */
+
+type Segment = { label: string; w: number; l: number };
+
+function collectSegments(
+  picks: { sport: string; play: string; result: string; date: string }[]
+): Segment[] {
+  const segments: Segment[] = [];
+  const tally = (list: typeof picks): [number, number] => [
+    list.filter((p) => p.result === "Win").length,
+    list.filter((p) => p.result === "Loss").length,
+  ];
+
+  // By sport (min 8 graded)
+  const bySport = new Map<string, typeof picks>();
+  for (const p of picks) {
+    const arr = bySport.get(p.sport) || [];
+    arr.push(p);
+    bySport.set(p.sport, arr);
+  }
+  for (const [sport, list] of bySport) {
+    const [w, l] = tally(list);
+    if (w + l >= 8 && w / (w + l) >= 0.5)
+      segments.push({ label: sport.toUpperCase(), w, l });
+  }
+
+  // By play type (min 8 graded)
+  const types: [string, (play: string) => boolean][] = [
+    ["UNDERS", (pl) => pl.toLowerCase().includes("under")],
+    ["OVERS", (pl) => pl.toLowerCase().includes("over")],
+    ["MONEYLINES", (pl) => pl.toLowerCase().includes("ml")],
+    ["SPREADS", (pl) => /[+-]\d+\.5|[+-][1-9]\d?\b/.test(pl) && !pl.toLowerCase().includes("o/u")],
+  ];
+  for (const [label, match] of types) {
+    const list = picks.filter((p) => match(p.play));
+    const [w, l] = tally(list);
+    if (w + l >= 8 && w / (w + l) >= 0.5) segments.push({ label, w, l });
+  }
+
+  // Recent form: last 10 graded
+  const recent = [...picks].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 10);
+  const [rw, rl] = tally(recent);
+  if (rw + rl >= 8 && rw / (rw + rl) >= 0.5)
+    segments.push({ label: "LAST 10", w: rw, l: rl });
+
+  // Sort by win% desc so the hottest shows first
+  segments.sort((a, b) => b.w / (b.w + b.l) - a.w / (a.w + a.l));
+  return segments;
+}
+
 export default async function TrackTicker() {
   const rec = await getTrackRecord();
   const picks = rec.picks.filter((p) => p.result !== "Pending");
@@ -12,46 +62,19 @@ export default async function TrackTicker() {
 
   const items: string[] = [];
 
-  // Overall record
+  // Overall record always leads
   const w = rec.totals.w;
   const l = rec.totals.l;
   const pct = w + l > 0 ? ((w / (w + l)) * 100).toFixed(1) : "0";
   items.push(`★ ALL-TIME ${w}-${l} (${pct}%)`);
 
-  // Best sport (min 8 picks)
-  const bySport = new Map<string, { w: number; l: number }>();
-  for (const p of picks) {
-    const s = bySport.get(p.sport) || { w: 0, l: 0 };
-    if (p.result === "Win") s.w++;
-    else if (p.result === "Loss") s.l++;
-    bySport.set(p.sport, s);
-  }
-  for (const [sport, { w: sw, l: sl }] of bySport) {
-    if (sw + sl >= 8) {
-      const sp = ((sw / (sw + sl)) * 100).toFixed(0);
-      if (parseFloat(sp) >= 50) items.push(`${sport.toUpperCase()} ${sw}-${sl} (${sp}%)`);
-    }
-  }
-
-  // Unders (min 10 picks, min 50% win rate)
-  const unders = picks.filter((p) => p.play.toLowerCase().includes("under"));
-  const uw = unders.filter((p) => p.result === "Win").length;
-  const ul = unders.filter((p) => p.result === "Loss").length;
-  if (uw + ul >= 10 && uw / (uw + ul) >= 0.5) {
-    items.push(`UNDERS ${uw}-${ul} (${((uw / (uw + ul)) * 100).toFixed(0)}%)`);
-  }
-
-  // Recent form (min 8 graded, min 50% win rate)
-  const recent = [...picks].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 10);
-  const rw = recent.filter((p) => p.result === "Win").length;
-  const rl = recent.filter((p) => p.result === "Loss").length;
-  if (rw + rl >= 8 && rw / (rw + rl) >= 0.5) {
-    items.push(`LAST 10: ${rw}-${rl}`);
+  for (const s of collectSegments(picks)) {
+    const sp = ((s.w / (s.w + s.l)) * 100).toFixed(0);
+    items.push(`${s.label} ${s.w}-${s.l} (${sp}%)`);
   }
 
   if (items.length < 2) return null;
 
-  // Duplicate for seamless loop
   const doubled = [...items, ...items];
 
   return (

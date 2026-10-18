@@ -1,8 +1,9 @@
 import { getTrackRecord } from "@/lib/store";
 
 /**
- * Marketing highlights strip — computed live from the track record.
- * Only shows segments with enough picks to be meaningful.
+ * Marketing highlights strip — fully dynamic from the live track record.
+ * Any segment clearing 50% with enough picks shows up automatically.
+ * Anything below 50% is hidden.
  */
 export default async function TrackHighlights() {
   const rec = await getTrackRecord();
@@ -10,76 +11,57 @@ export default async function TrackHighlights() {
 
   if (picks.length < 20) return null;
 
-  const highlights: { pct: string; label: string; detail: string }[] = [];
+  const tally = (list: typeof picks): [number, number] => [
+    list.filter((p) => p.result === "Win").length,
+    list.filter((p) => p.result === "Loss").length,
+  ];
 
-  // Best sport (min 8 picks)
-  const bySport = new Map<string, { w: number; l: number }>();
-  for (const p of picks) {
-    const s = bySport.get(p.sport) || { w: 0, l: 0 };
-    if (p.result === "Win") s.w++;
-    else if (p.result === "Loss") s.l++;
-    bySport.set(p.sport, s);
-  }
-  let bestSport = "";
-  let bestPct = 0;
-  let bestRec = "";
-  for (const [sport, { w, l }] of bySport) {
-    if (w + l >= 8) {
-      const pct = (w / (w + l)) * 100;
-      if (pct > bestPct) {
-        bestPct = pct;
-        bestSport = sport;
-        bestRec = `${w}-${l}`;
-      }
+  const cards: { pct: string; label: string; detail: string; score: number }[] = [];
+  const add = (label: string, w: number, l: number, detail: string, minPicks: number) => {
+    if (w + l >= minPicks && w / (w + l) >= 0.5) {
+      cards.push({
+        pct: `${((w / (w + l)) * 100).toFixed(0)}%`,
+        label,
+        detail: `${w}-${l} · ${detail}`,
+        score: w / (w + l),
+      });
     }
+  };
+
+  // By sport (min 8)
+  const bySport = new Map<string, typeof picks>();
+  for (const p of picks) {
+    const arr = bySport.get(p.sport) || [];
+    arr.push(p);
+    bySport.set(p.sport, arr);
   }
-  if (bestSport && bestPct >= 50) {
-    highlights.push({
-      pct: `${bestPct.toFixed(0)}%`,
-      label: `${bestSport} picks`,
-      detail: `${bestRec} · our hottest sport`,
-    });
+  for (const [sport, list] of bySport) {
+    const [w, l] = tally(list);
+    add(`${sport} picks`, w, l, "by sport", 8);
   }
 
-  // Unders (min 10 picks, min 50% win rate)
-  const unders = picks.filter((p) => p.play.toLowerCase().includes("under"));
-  const uw = unders.filter((p) => p.result === "Win").length;
-  const ul = unders.filter((p) => p.result === "Loss").length;
-  if (uw + ul >= 10 && uw / (uw + ul) >= 0.5) {
-    highlights.push({
-      pct: `${((uw / (uw + ul)) * 100).toFixed(0)}%`,
-      label: "Unders",
-      detail: `${uw}-${ul} · finding value in totals`,
-    });
+  // By play type (min 8)
+  const types: [string, string, (play: string) => boolean][] = [
+    ["Unders", "finding value in totals", (pl) => pl.toLowerCase().includes("under")],
+    ["Overs", "riding the over wave", (pl) => pl.toLowerCase().includes("over")],
+    ["Moneylines", "picking winners outright", (pl) => pl.toLowerCase().includes("ml")],
+    ["Spreads", "beating the number", (pl) => /[+-]\d+\.5|[+-][1-9]\d?\b/.test(pl)],
+  ];
+  for (const [label, detail, match] of types) {
+    const [w, l] = tally(picks.filter((p) => match(p.play)));
+    add(label, w, l, detail, 8);
   }
 
-  // Recent form (last 20, min 50% win rate)
-  const recent = [...picks]
-    .sort((a, b) => (a.date < b.date ? 1 : -1))
-    .slice(0, 20);
-  const rw = recent.filter((p) => p.result === "Win").length;
-  const rl = recent.filter((p) => p.result === "Loss").length;
-  if (rw + rl >= 15 && rw / (rw + rl) >= 0.5) {
-    highlights.push({
-      pct: `${((rw / (rw + rl)) * 100).toFixed(0)}%`,
-      label: "Last 20 picks",
-      detail: `${rw}-${rl} · riding hot`,
-    });
-  }
+  // Recent form: last 20 (min 15 graded)
+  const recent = [...picks].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 20);
+  const [rw, rl] = tally(recent);
+  add("Last 20 picks", rw, rl, "recent form", 15);
 
-  // Moneylines (min 20 picks, min 50% win rate)
-  const mls = picks.filter((p) => p.play.toLowerCase().includes("ml"));
-  const mw = mls.filter((p) => p.result === "Win").length;
-  const ml = mls.filter((p) => p.result === "Loss").length;
-  if (mw + ml >= 20 && mw / (mw + ml) >= 0.5) {
-    highlights.push({
-      pct: `${((mw / (mw + ml)) * 100).toFixed(0)}%`,
-      label: "Moneylines",
-      detail: `${mw}-${ml} · picking winners outright`,
-    });
-  }
+  if (cards.length === 0) return null;
 
-  if (highlights.length === 0) return null;
+  // Hottest first, max 4
+  cards.sort((a, b) => b.score - a.score);
+  const show = cards.slice(0, 4);
 
   return (
     <section className="mb-10">
@@ -88,7 +70,7 @@ export default async function TrackHighlights() {
           Track record highlights
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {highlights.slice(0, 4).map((h) => (
+          {show.map((h) => (
             <div
               key={h.label}
               className="rounded-lg border border-gold/30 bg-gold/5 p-4 text-center"
