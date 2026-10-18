@@ -284,7 +284,7 @@ export default async function PicksPage() {
   const session = await auth();
   const email = session?.user?.email || null;
   const sub = await getSubscription(email || "");
-  const allowed = hasAccess(email, sub);
+  const allowed = await hasAccess(email, sub);
   const feed = await getPicksFeed();
 
   if (!allowed) {

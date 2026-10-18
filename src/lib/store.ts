@@ -253,8 +253,37 @@ export async function setSubscription(email: string, rec: SubRecord): Promise<vo
   await writeJson(SUBS_FILE, all);
 }
 
-/** Owner bypass + beta allowlist + active/trialing check + unexpired pass check. */
-export function hasAccess(email: string | null | undefined, sub: SubRecord): boolean {
+/** Owner bypass + beta allowlist (Redis first, env fallback) + active/trialing check + unexpired pass check. */
+export async function hasAccess(email: string | null | undefined, sub: SubRecord): Promise<boolean> {
+  const admin = (process.env.ADMIN_EMAIL || "").toLowerCase();
+  if (email && admin && email.toLowerCase() === admin) return true;
+  // Redis beta list (managed via /api/admin/beta) takes priority; env var is the seed/fallback
+  let beta: string[] = [];
+  const redis = getRedis();
+  if (redis) {
+    try {
+      const members = await redis.smembers("moyline:beta");
+      if (members && members.length > 0) beta = members.map((s) => String(s).toLowerCase());
+    } catch { /* fall through to env */ }
+  }
+  if (beta.length === 0) {
+    beta = (process.env.BETA_EMAILS || "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+  }
+  if (email && beta.includes(email.toLowerCase())) return true;
+  if (sub.status === "active" || sub.status === "trialing") {
+    if (sub.expiresAt) {
+      return new Date(sub.expiresAt).getTime() > Date.now();
+    }
+    return true;
+  }
+  return false;
+}
+
+/** Backwards-compat sync wrapper (env var only). Prefer the async hasAccess. */
+export function hasAccessSync(email: string | null | undefined, sub: SubRecord): boolean {
   const admin = (process.env.ADMIN_EMAIL || "").toLowerCase();
   if (email && admin && email.toLowerCase() === admin) return true;
   const beta = (process.env.BETA_EMAILS || "")

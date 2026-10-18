@@ -32,7 +32,7 @@ export default async function MyTailsPage() {
   const session = await auth();
   const email = session?.user?.email || null;
   const sub = await getSubscription(email || "");
-  const allowed = hasAccess(email, sub);
+  const allowed = await hasAccess(email, sub);
 
   if (!allowed) {
     return (

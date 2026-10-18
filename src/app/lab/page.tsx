@@ -11,7 +11,7 @@ export default async function LabPage() {
   const session = await auth();
   const email = session?.user?.email || null;
   const sub = await getSubscription(email || "");
-  const allowed = hasAccess(email, sub);
+  const allowed = await hasAccess(email, sub);
   const feed = await getPicksFeed();
   const legCount = (feed?.picks.length || 0) + (feed?.props?.length || 0);
 

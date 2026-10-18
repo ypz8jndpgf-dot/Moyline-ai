@@ -60,7 +60,7 @@ export default async function BuilderPage() {
   const session = await auth();
   const email = session?.user?.email || null;
   const sub = await getSubscription(email || "");
-  const allowed = hasAccess(email, sub);
+  const allowed = await hasAccess(email, sub);
   const feed = await getPicksFeed();
   // Board legs are best-effort — if the board fetch fails, the Builder still
   // works with card picks alone. Never let this 500 the page.
