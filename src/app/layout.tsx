@@ -68,6 +68,7 @@ async function Nav() {
           )}
         </div>
         <nav className="flex items-center gap-0.5 sm:gap-2 text-xs sm:text-sm font-bold overflow-x-auto whitespace-nowrap order-3 sm:order-2 w-full sm:w-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <Link href="/ask" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Ask MoyAI ✨</Link>
           <Link href="/" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Lines</Link>
           <Link href="/picks" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Picks 🔒</Link>
           <Link href="/lab" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Lab 🔒</Link>
@@ -77,7 +78,6 @@ async function Nav() {
           <Link href="/my-tails" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Tails</Link>
           <Link href="/alerts" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Alerts</Link>
           <Link href="/backpage" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Undercard 🔒</Link>
-          <Link href="/ask" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Ask MoyAI ✨</Link>
           {isAdmin && (
             <Link href="/paper" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Paper</Link>
           )}
