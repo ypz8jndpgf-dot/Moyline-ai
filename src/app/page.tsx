@@ -58,6 +58,21 @@ export default async function Home() {
             The Record
           </Link>
         </div>
+      </div>
+
+      {/* Promo video */}
+      <div className="mb-10">
+        <div className="card overflow-hidden">
+          <video
+            className="w-full aspect-video"
+            controls
+            preload="metadata"
+          >
+            <source src="/video/moyline-ad.mp4" type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
+        </div>
+      </div>
         {oddsResult.error && !oddsResult.error.includes("401") && (
           <p className="mt-3 text-xs text-muted bg-white/5 border border-white/10 rounded px-3 py-2 inline-block">
             Lines may be delayed — showing last available data.
