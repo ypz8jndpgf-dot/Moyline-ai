@@ -118,6 +118,34 @@ function pickKey(p: Pick<TrackPick, "game" | "play" | "line" | "book">) {
   return [p.game.trim().toLowerCase(), p.play.trim().toLowerCase(), p.line.trim(), p.book.trim().toLowerCase()].join("|");
 }
 
+/** Normalize sport labels on ingest so the track record stays clean. */
+function normalizeSportInput(rawSport: string | undefined, game: string): string {
+  const raw = (rawSport || "").trim();
+  const map: Record<string, string> = {
+    "UNL": "Soccer", "UNL,": "Soccer", "CNL": "Soccer", "SOCCER": "Soccer",
+    "MLB,": "MLB", "MLB, NLCS G1": "MLB", "MLB, ALCS G1": "MLB", "MLB, ALCS G4": "MLB",
+    "NLDS": "MLB", "NFL, London": "NFL",
+  };
+  if (map[raw]) return map[raw];
+  const clean = new Set(["NHL","NFL","CFB","MLB","WNBA","MLS","EPL","Bundesliga","La Liga","Ligue 1","UCL","Soccer","NCAAB","NBA"]);
+  if (clean.has(raw)) return raw;
+  // Derive from game label: strip slot suffixes like [7am], then take parenthetical
+  const g = game.replace(/\s*\[\w+\]\s*$/, "").trim();
+  const m = g.match(/\(([^)]+)\)\s*$/);
+  if (m) {
+    const label = m[1].trim();
+    if (map[label]) return map[label];
+    if (clean.has(label)) return label;
+    return label;
+  }
+  return "Other";
+}
+
+/** Strip slot suffixes like [7am], [sat2pm] from game labels. */
+function cleanGameLabel(game: string): string {
+  return game.replace(/\s*\[\w+\]\s*$/, "").trim();
+}
+
 type Pick<T, K extends keyof T> = { [P in K]: T[P] };
 
 /**
@@ -139,7 +167,12 @@ export async function appendTrackPicks(
       continue;
     }
     seen.add(key);
-    rec.picks.push({ ...p, id: `${Date.now()}-${added}` });
+    rec.picks.push({
+      ...p,
+      game: cleanGameLabel(p.game),
+      sport: normalizeSportInput(p.sport, p.game),
+      id: `${Date.now()}-${added}`,
+    });
     added++;
     if (p.result === "Win") rec.totals.w++;
     else if (p.result === "Loss") rec.totals.l++;

@@ -1,8 +1,26 @@
 import { NextResponse } from "next/server";
-import { getTrackRecord, appendTrackPicks, type TrackPick } from "@/lib/store";
+import { getTrackRecord, appendTrackPicks, type TrackPick, type TrackRecord } from "@/lib/store";
 import { auth } from "@/lib/auth";
+import { Redis } from "@upstash/redis";
 
 export const dynamic = "force-dynamic";
+
+const TRACK_REDIS_KEY = "moyline:track-record";
+
+function checkAuth(req: Request): boolean {
+  // Bearer token path (grader)
+  const secret = (process.env.PICKS_UPDATE_SECRET || "").trim();
+  const authHeader = req.headers.get("authorization");
+  if (secret && authHeader === `Bearer ${secret}`) return true;
+  return false;
+}
+
+async function checkAdminSession(): Promise<boolean> {
+  const session = await auth();
+  const email = session?.user?.email?.toLowerCase() || "";
+  const admin = (process.env.ADMIN_EMAIL || "").toLowerCase();
+  return !!(admin && email === admin);
+}
 
 /** Public: read the all-time record. */
 export async function GET() {
@@ -16,18 +34,8 @@ export async function GET() {
  * bearer token (for the off-Vercel grader).
  */
 export async function POST(req: Request) {
-  // Bearer token path (grader)
-  const secret = (process.env.PICKS_UPDATE_SECRET || "").trim();
-  const authHeader = req.headers.get("authorization");
-  const bearerOk = secret && authHeader === `Bearer ${secret}`;
-
-  if (!bearerOk) {
-    const session = await auth();
-    const email = session?.user?.email?.toLowerCase() || "";
-    const admin = (process.env.ADMIN_EMAIL || "").toLowerCase();
-    if (!admin || email !== admin) {
-      return NextResponse.json({ error: "Admin only" }, { status: 403 });
-    }
+  if (!checkAuth(req) && !(await checkAdminSession())) {
+    return NextResponse.json({ error: "Admin only" }, { status: 403 });
   }
   try {
     const body = await req.json();
@@ -48,6 +56,39 @@ export async function POST(req: Request) {
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Append failed" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * Admin-only: fully replace the track record (for dedupe/cleanup).
+ * Body: full TrackRecord object. Auth: bearer token or admin session.
+ */
+export async function PUT(req: Request) {
+  if (!checkAuth(req) && !(await checkAdminSession())) {
+    return NextResponse.json({ error: "Admin only" }, { status: 403 });
+  }
+  try {
+    const body = (await req.json()) as TrackRecord;
+    if (!body || !Array.isArray(body.picks) || !body.totals) {
+      return NextResponse.json({ error: "Body must be a full TrackRecord" }, { status: 400 });
+    }
+    const url = (process.env.UPSTASH_REDIS_REST_URL || "").trim();
+    const token = (process.env.UPSTASH_REDIS_REST_TOKEN || "").trim();
+    if (!url || !token) {
+      return NextResponse.json({ error: "Redis not configured" }, { status: 500 });
+    }
+    const redis = new Redis({ url, token });
+    await redis.set(TRACK_REDIS_KEY, JSON.stringify(body));
+    return NextResponse.json({
+      ok: true,
+      picks: body.picks.length,
+      totals: body.totals,
+    });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Replace failed" },
       { status: 500 }
     );
   }
