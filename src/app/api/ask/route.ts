@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getOddsCached, getOpenings } from "@/lib/odds";
+import { getOdds, getOpenings } from "@/lib/odds";
 
 type Game = {
   id: string;
@@ -199,7 +199,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Ask me about a team or matchup." }, { status: 400 });
     }
 
-    const { events } = await getOddsCached();
+    const { events } = await getOdds();
     if (!events || events.length === 0) {
       return NextResponse.json({
         error: "Odds board is empty right now — try again after the next refresh.",
