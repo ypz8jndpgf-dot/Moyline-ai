@@ -4,6 +4,7 @@ import { buildBoard } from "@/lib/board";
 import OddsBoard from "@/components/OddsBoard";
 import FeaturedPlays from "@/components/FeaturedPlays";
 import RecentResults from "@/components/RecentResults";
+import TrackHighlights from "@/components/TrackHighlights";
 
 export const dynamic = "force-dynamic";
 
@@ -99,6 +100,8 @@ export default async function Home() {
       </div>
 
       <RecentResults />
+
+      <TrackHighlights />
 
       <OddsBoard
         games={games}
