@@ -5,6 +5,7 @@ import OddsBoard from "@/components/OddsBoard";
 import FeaturedPlays from "@/components/FeaturedPlays";
 import RecentResults from "@/components/RecentResults";
 import TrackHighlights from "@/components/TrackHighlights";
+import TrackTicker from "@/components/TrackTicker";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,8 @@ export default async function Home() {
   return (
     <div>
       {/* Hero */}
+      <TrackTicker />
+
       <div className="mb-8 text-center sm:text-left">
         <div className="inline-flex items-center gap-2 mb-3 px-3 py-1.5 rounded-full border border-gold/40 bg-gold/10 text-gold text-[11px] font-bold uppercase tracking-[0.2em]">
           <span>✦</span>
