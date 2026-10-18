@@ -73,12 +73,12 @@ export default async function Home() {
           </video>
         </div>
       </div>
-        {oddsResult.error && !oddsResult.error.includes("401") && (
+
+      {oddsResult.error && !oddsResult.error.includes("401") && (
           <p className="mt-3 text-xs text-muted bg-white/5 border border-white/10 rounded px-3 py-2 inline-block">
             Lines may be delayed — showing last available data.
           </p>
         )}
-      </div>
 
       <FeaturedPlays />
 
