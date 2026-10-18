@@ -213,7 +213,7 @@ export default function LabBuilder({
         <div className="mb-4">
           <p className="text-xs font-bold uppercase tracking-widest text-muted mb-2">Teams / legs</p>
           <div className="flex gap-2">
-            {[2, 3, 4, 5].map((n) => (
+            {[2, 3, 4, 5, 6, 7, 8].map((n) => (
               <button key={n} className={pill(legCount === n)} onClick={() => setLegCount(n)}>
                 {n}
               </button>
