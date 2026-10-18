@@ -64,11 +64,12 @@ export default async function BuilderPage() {
   const feed = await getPicksFeed();
   // Board legs are best-effort — if the board fetch fails, the Builder still
   // works with card picks alone. Never let this 500 the page.
-  // Uses cache-only read: never burns API credits, works even when API is down.
+  // Uses getOdds (not cache-only): falls back to API on cold instances so
+  // future games are always available. TTL prevents excess credit burn.
   let boardLegs: { game: string; play: string; price: string; confidence: number; market: "spread" | "total" | "ml"; line?: string }[] = [];
   try {
-    const { getOddsCached } = await import("@/lib/odds");
-    const [oddsResult, openings] = await Promise.all([getOddsCached(), (await import("@/lib/odds")).getOpenings()]);
+    const { getOdds } = await import("@/lib/odds");
+    const [oddsResult, openings] = await Promise.all([getOdds(), (await import("@/lib/odds")).getOpenings()]);
     const { games: boardGames } = buildBoard(oddsResult.events, openings);
     boardLegs = boardGamesToLegs(boardGames);
   } catch (e) {
