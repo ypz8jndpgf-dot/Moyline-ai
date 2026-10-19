@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { getOddsCached, getOpenings } from "@/lib/odds";
 import { getPicksFeed } from "@/lib/picks";
 
@@ -274,6 +275,10 @@ function analyze(game: Game, openings: Record<string, any>, cardPick: any | null
 }
 
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Sign in to ask MoyAI." }, { status: 401 });
+  }
   try {
     const { question, contextGameId } = await req.json();
     if (!question || typeof question !== "string" || question.trim().length < 3) {
