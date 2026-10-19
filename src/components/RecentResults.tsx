@@ -8,6 +8,9 @@ export default async function RecentResults() {
     .slice(0, 10);
 
   const { w, l, p } = rec.totals;
+  // Hide when below .500 — returns automatically when back above
+  if (w + l > 0 && w / (w + l) < 0.5) return null;
+
   const pct = w + l > 0 ? ((w / (w + l)) * 100).toFixed(1) : null;
 
   return (

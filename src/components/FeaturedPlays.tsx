@@ -45,6 +45,9 @@ export default async function FeaturedPlays() {
   const w = stars.filter((p) => p.result === "Win").length;
   const l = stars.filter((p) => p.result === "Loss").length;
   const p = stars.filter((p) => p.result === "Push").length;
+  // Hide when below .500 — returns automatically when back above
+  if (w + l > 0 && w / (w + l) < 0.5) return null;
+
   const pct = w + l > 0 ? ((w / (w + l)) * 100).toFixed(1) : null;
   const recent = [...pendingStars, ...stars].slice(0, 5);
 
