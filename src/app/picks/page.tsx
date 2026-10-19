@@ -4,7 +4,7 @@ import { getSubscription, hasAccess } from "@/lib/store";
 import { getPicksFeed, PicksFeed, FeedPick } from "@/lib/picks";
 import { getOdds, getOpenings } from "@/lib/odds";
 import { buildBoard, MoverVM } from "@/lib/board";
-import { findBoardGame, bestPriceForPick, steamForGame, BestPrice } from "@/lib/card-utils";
+import { findBoardGame, bestPriceForPick, badgeBeatsPlay, steamForGame, BestPrice } from "@/lib/card-utils";
 import { readTails } from "@/lib/tails";
 import TailButton from "./TailButton";
 import MarketingPaywall from "@/components/MarketingPaywall";
@@ -327,7 +327,10 @@ export default async function PicksPage() {
     const key = `${p.game}|${p.play}`;
     const bg = findBoardGame(p, boardGames);
     if (bg) {
-      bestByPick.set(key, bestPriceForPick(p, bg));
+      const bp = bestPriceForPick(p, bg);
+      // Only show the badge when the live price is at least as good as the
+      // locked-in play price — never contradict the card after line movement.
+      bestByPick.set(key, bp && badgeBeatsPlay(p, bp) ? bp : null);
       const steam = steamForGame(bg, boardMovers);
       if (steam.length > 0) steamByPick.set(key, steam);
     }

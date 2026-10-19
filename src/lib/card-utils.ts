@@ -76,6 +76,30 @@ export function bestPriceForPick(pick: FeedPick, game: GameVM): BestPrice {
   return fallback;
 }
 
+/** Extract an American-odds number from a price string like "-138" or "(-154)". */
+function parseAmerican(s: string | undefined): number | null {
+  if (!s) return null;
+  const m = s.match(/([+-]?\d{3,})/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+function payout(american: number): number {
+  return american > 0 ? american / 100 : 100 / Math.abs(american);
+}
+
+/**
+ * True when the live-board best price is at least as good as the price the
+ * card locked in. Hides the badge when the line moved against the play
+ * (e.g. card got -138, board now shows -154) so it never contradicts the pick.
+ */
+export function badgeBeatsPlay(pick: FeedPick, best: BestPrice): boolean {
+  if (!best) return false;
+  const playPrice = parseAmerican(pick.price);
+  const bestPrice = parseAmerican(best.display);
+  if (playPrice === null || bestPrice === null) return true; // can't compare — show it
+  return payout(bestPrice) >= payout(playPrice);
+}
+
 /** Movers (steam) involving a card game's teams. */
 export function steamForGame(game: GameVM, movers: MoverVM[]): MoverVM[] {
   const away = norm(game.away);
