@@ -6,6 +6,7 @@ import FeaturedPlays from "@/components/FeaturedPlays";
 import RecentResults from "@/components/RecentResults";
 import TrackHighlights from "@/components/TrackHighlights";
 import TrackTicker from "@/components/TrackTicker";
+import PromoVideo from "@/components/PromoVideo";
 
 export const dynamic = "force-dynamic";
 
@@ -61,44 +62,7 @@ export default async function Home() {
       </div>
 
       {/* Promo video */}
-      <div className="mb-10">
-        <div className="card overflow-hidden relative" id="promo-video-wrap">
-          <video
-            id="promo-video"
-            className="w-full aspect-video"
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="auto"
-          >
-            <source src="/video/moyline-ad.mp4" type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
-          <button
-            id="promo-unmute"
-            className="absolute bottom-4 right-4 px-4 py-2 rounded-full bg-gold text-black font-bold text-sm shadow-lg hover:bg-goldsoft transition"
-          >
-            🔊 Tap for sound
-          </button>
-          <script dangerouslySetInnerHTML={{ __html: `
-            (function() {
-              var v = document.getElementById('promo-video');
-              var btn = document.getElementById('promo-unmute');
-              if (!v || !btn) return;
-              btn.addEventListener('click', function() {
-                v.muted = false;
-                v.controls = true;
-                btn.style.display = 'none';
-                v.play();
-              });
-              v.addEventListener('volumechange', function() {
-                if (!v.muted) btn.style.display = 'none';
-              });
-            })();
-          ` }} />
-        </div>
-      </div>
+      <PromoVideo />
 
       {oddsResult.error && !oddsResult.error.includes("401") && (
           <p className="mt-3 text-xs text-muted bg-white/5 border border-white/10 rounded px-3 py-2 inline-block">
