@@ -93,12 +93,18 @@ export default async function BuilderPage() {
         </div>
         <BuilderPromo legCount={legCount} />
         <div className="text-center py-6">
-          <Link
-            href={session?.user ? "/pricing" : "/signin"}
-            className="btn-gold px-8 py-3 inline-block font-bold"
-          >
-            {session?.user ? "Unlock with Pro" : "Sign in to unlock"}
-          </Link>
+          {session?.user ? (
+            <span className="inline-block px-8 py-3 rounded-full border border-gold/40 text-gold/70 font-bold text-xs tracking-[0.25em]">
+              BETA — INVITE ONLY
+            </span>
+          ) : (
+            <Link
+              href="/signin"
+              className="btn-gold px-8 py-3 inline-block font-bold"
+            >
+              Sign in to unlock
+            </Link>
+          )}
         </div>
       </div>
     );

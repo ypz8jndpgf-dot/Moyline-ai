@@ -171,12 +171,9 @@ export default async function Home() {
           The full card, the Undercard, the Lab and Builder — plus steam alerts
           the moment a line moves on your games.
         </p>
-        <Link
-          href="/pricing"
-          className="inline-block px-6 py-3 rounded btn-gold font-bold"
-        >
-          Go Pro
-        </Link>
+        <span className="inline-block px-6 py-3 rounded-full border border-gold/40 text-gold/70 font-bold text-xs tracking-[0.25em]">
+          BETA — INVITE ONLY
+        </span>
       </div>
     </div>
   );

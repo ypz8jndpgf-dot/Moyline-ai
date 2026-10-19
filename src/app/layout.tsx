@@ -6,8 +6,14 @@ import PushBell from "@/components/PushBell";
 import Providers from "@/components/Providers";
 import { auth } from "@/lib/auth";
 
-/** Set true to show the Go Pro / pricing CTA in the header. Hidden for now (2026-10-13). */
-const SHOW_GO_PRO = true;
+/** Beta placeholder pill shown where the Go Pro CTA will live once Stripe is wired. */
+function BetaPill() {
+  return (
+    <span className="px-2.5 sm:px-3 py-1.5 rounded-full border border-gold/40 text-gold/70 whitespace-nowrap shrink-0 text-[10px] sm:text-xs font-bold tracking-[0.25em]">
+      BETA
+    </span>
+  );
+}
 
 export const metadata: Metadata = {
   title: "MoyLine AI — Live Sports Betting Lines",
@@ -63,9 +69,7 @@ async function Nav() {
         </Link>
         <div className="flex items-center gap-2 shrink-0 order-2 sm:order-3 text-xs sm:text-sm font-bold">
           {accountLink}
-          {SHOW_GO_PRO && (
-            <Link href="/pricing" className="px-2.5 sm:px-3 py-1.5 rounded btn-gold whitespace-nowrap shrink-0">Go Pro</Link>
-          )}
+          <BetaPill />
         </div>
         <nav className="flex items-center gap-0.5 sm:gap-2 text-xs sm:text-sm font-bold overflow-x-auto whitespace-nowrap order-3 sm:order-2 w-full sm:w-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <Link href="/ask" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Ask MoyAI ✨</Link>

@@ -291,8 +291,9 @@ export default async function PicksPage() {
     return (
       <MarketingPaywall
         feed={feed}
-        ctaHref={session?.user ? "/pricing" : "/signin"}
-        ctaLabel={session?.user ? "Unlock with Pro" : "Sign in"}
+        ctaHref="/signin"
+        ctaLabel="Sign in"
+        betaPlaceholder={!!session?.user}
         subline={
           session?.user
             ? `Signed in as ${email} — no active subscription.`

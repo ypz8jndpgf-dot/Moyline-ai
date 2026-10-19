@@ -39,9 +39,15 @@ export default async function MyTailsPage() {
       <div className="max-w-xl mx-auto text-center py-10">
         <h1 className="font-display text-4xl mb-4">MY TAILS</h1>
         <p className="text-muted mb-6">Members can tap “Tailed it” on any pick and track their own record here.</p>
-        <Link href={session?.user ? "/pricing" : "/signin"} className="btn-gold px-8 py-3 inline-block">
-          {session?.user ? "Unlock with Pro" : "Sign in"}
-        </Link>
+        {session?.user ? (
+          <span className="inline-block px-8 py-3 rounded-full border border-gold/40 text-gold/70 font-bold text-xs tracking-[0.25em]">
+            BETA — INVITE ONLY
+          </span>
+        ) : (
+          <Link href="/signin" className="btn-gold px-8 py-3 inline-block">
+            Sign in
+          </Link>
+        )}
       </div>
     );
   }

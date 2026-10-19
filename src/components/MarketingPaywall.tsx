@@ -12,11 +12,13 @@ export default async function MarketingPaywall({
   ctaHref,
   ctaLabel,
   subline,
+  betaPlaceholder,
 }: {
   feed: PicksFeed | null;
   ctaHref: string;
   ctaLabel: string;
   subline: string;
+  betaPlaceholder?: boolean;
 }) {
   const picks = feed?.picks || [];
   const freePick = picks.find((p) => p.star) || picks[0] || null;
@@ -57,10 +59,18 @@ export default async function MarketingPaywall({
           line movement — and distills it into one card of only the plays that
           clear a strict quantified edge bar. No filler. No forced plays.
         </p>
-        <Link href={ctaHref} className="btn-gold px-10 py-4 inline-block text-lg font-bold rounded-full">
-          {ctaLabel}
-        </Link>
-        <p className="text-xs text-muted mt-3">Day, week, and monthly passes available</p>
+        {betaPlaceholder ? (
+          <span className="inline-block px-10 py-4 rounded-full border border-gold/40 text-gold/70 font-bold text-sm tracking-[0.25em]">
+            BETA — INVITE ONLY
+          </span>
+        ) : (
+          <>
+            <Link href={ctaHref} className="btn-gold px-10 py-4 inline-block text-lg font-bold rounded-full">
+              {ctaLabel}
+            </Link>
+            <p className="text-xs text-muted mt-3">Day, week, and monthly passes available</p>
+          </>
+        )}
       </div>
 
       {/* Social proof */}
@@ -123,7 +133,8 @@ export default async function MarketingPaywall({
         </div>
       )}
 
-      {/* Pricing preview */}
+      {/* Pricing preview — hidden until Stripe is live */}
+      {!betaPlaceholder && (
       <div className="card p-8 mb-8 text-center">
         <h2 className="font-display text-3xl mb-6">Simple pricing</h2>
         <div className="grid sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
@@ -144,6 +155,7 @@ export default async function MarketingPaywall({
           {ctaLabel}
         </Link>
       </div>
+      )}
 
       {/* Honesty note */}
       <p className="text-center text-xs text-muted max-w-2xl mx-auto mb-8">

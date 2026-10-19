@@ -49,11 +49,18 @@ export default async function Backpage() {
           clear the main card's bar.
         </p>
         <Link
-          href={session?.user ? "/pricing" : "/signin"}
+          href="/signin"
           className="btn-gold px-6 py-3 rounded font-bold inline-block"
         >
-          {session?.user ? "Unlock with Pro" : "Sign in"}
+          Sign in
         </Link>
+        {session?.user && (
+          <div className="mt-4">
+            <span className="inline-block px-6 py-2.5 rounded-full border border-gold/40 text-gold/70 font-bold text-xs tracking-[0.25em]">
+              BETA — INVITE ONLY
+            </span>
+          </div>
+        )}
       </div>
     );
   }
