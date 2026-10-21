@@ -4,6 +4,7 @@ import { buildBoard } from "@/lib/board";
 import OddsBoard from "@/components/OddsBoard";
 import FeaturedPlays from "@/components/FeaturedPlays";
 import RecentResults from "@/components/RecentResults";
+import GoldenRun from "@/components/GoldenRun";
 import TrackHighlights from "@/components/TrackHighlights";
 import TrackTicker from "@/components/TrackTicker";
 import PromoVideo from "@/components/PromoVideo";
@@ -71,6 +72,8 @@ export default async function Home() {
         )}
 
       <FeaturedPlays />
+
+      <GoldenRun />
 
       {/* Where the edge lives — merged recalibration + trends */}
       <div className="mt-6 rounded border border-gold/40 bg-gradient-to-b from-gold/10 to-transparent p-6">
