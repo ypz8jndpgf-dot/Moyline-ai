@@ -17,7 +17,7 @@ export default async function GoldenRun() {
   const l = picks.filter((p) => p.result === "Loss").length;
   const total = w + l;
 
-  if (total < 5 || w / total < 0.5) return null;
+  if (total < 5 || w / total < 0.55) return null;
 
   const pct = `${((w / total) * 100).toFixed(0)}%`;
 
