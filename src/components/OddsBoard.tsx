@@ -32,6 +32,7 @@ function DeltaBadge({ cell }: { cell: CellVM }) {
 
 function SideCell({ cell }: { cell: CellVM | null }) {
   if (!cell) return <div className="py-1.5 text-muted/40 text-[11px]">—</div>;
+  const showOpen = cell.moved && cell.openDisplay !== "—" && cell.openDisplay !== cell.display;
   return (
     <div
       className={`py-1.5 px-1 text-[12px] whitespace-nowrap rounded ${
@@ -40,6 +41,9 @@ function SideCell({ cell }: { cell: CellVM | null }) {
     >
       {cell.display}
       <DeltaBadge cell={cell} />
+      {showOpen && (
+        <div className="text-[10px] text-muted/70 font-normal">was {cell.openDisplay}</div>
+      )}
     </div>
   );
 }
@@ -199,7 +203,7 @@ export default function OddsBoard({
       </div>
 
       <p className="text-xs text-muted mb-4">
-        Updated {updated} ET · gold cell = best price, not a pick · ▲▼ = move from open · 🔥 = steam move
+        Updated {updated} ET · gold cell = best price, not a pick · ▲▼ = move since first tracked · "was" = first tracked line · 🔥 = steam move
         {quotaNote && <span className="text-down"> · {quotaNote}</span>}
       </p>
 
