@@ -1,309 +1,283 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-
-type Analysis = {
-  game: {
-    away: string;
-    home: string;
-    sport: string;
-    commence: string;
-    spread?: { home: number; away: number };
-    total?: { line: number };
-    ml?: { home: number; away: number };
-  };
-  lean: string;
-  confidence: number;
-  factors: string[];
-  edge: string;
-  caveat: string;
-  onCard?: { play: string; confidence: number };
-};
+import { useState, useRef, useEffect, useCallback } from "react";
 
 type Msg = {
   role: "user" | "moy";
-  text?: string;
-  analyses?: Analysis[];
-  error?: string;
-  gameId?: string;
+  text: string;
+  gameIds?: string[];
+  error?: boolean;
 };
 
 const SUGGESTIONS = [
-  "Chiefs vs Chargers",
-  "Who wins Cowboys Packers?",
-  "Rams Cardinals spread",
-  "Any value in tonight's NHL?",
+  "What games are on tonight?",
+  "What's on today's card?",
+  "How's the record looking?",
 ];
 
-function fmtOdds(n: number): string {
-  return n > 0 ? `+${n}` : `${n}`;
-}
+const GREETING: Msg = {
+  role: "moy",
+  text: "Hey — I'm MoyAI. Ask me about any game on the board, tonight's slate, today's card, or how the record's looking. I read the live lines and give it to you straight. What's on your mind?",
+};
 
-function gameTime(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
-
-function ConfidenceMeter({ level }: { level: number }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-[11px] font-bold uppercase tracking-widest text-muted mr-1">
-        Confidence
-      </span>
-      {[1, 2, 3, 4, 5].map((i) => (
-        <div
-          key={i}
-          className={`h-2 w-8 rounded-full transition-all ${
-            i <= level
-              ? "bg-gradient-to-r from-gold to-goldsoft shadow-[0_0_8px_rgba(212,175,55,0.6)]"
-              : "bg-white/10"
-          }`}
-        />
-      ))}
-      <span className="text-gold font-display text-lg ml-1">{level}/5</span>
-    </div>
-  );
-}
-
-function AnalysisCard({ a }: { a: Analysis }) {
-  const g = a.game;
-  return (
-    <div className="rounded-xl border border-gold/30 bg-gradient-to-b from-gold/10 to-transparent p-5 mb-3">
-      <div className="flex items-center justify-between mb-1">
-        <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-gold">
-          {g.sport.replace(/_/g, " ")} · {gameTime(g.commence)}
-        </p>
-        {a.onCard && (
-          <span className="px-2 py-0.5 rounded-full bg-gold text-black text-[10px] font-bold uppercase tracking-wider">
-            ★ On today's card
-          </span>
-        )}
-      </div>
-      <h3 className="font-display text-xl mb-3">
-        {g.away} <span className="text-muted text-sm">at</span> {g.home}
-      </h3>
-
-      {/* Lines */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        {g.spread && (
-          <span className="px-2.5 py-1 rounded bg-white/5 border border-white/10 text-xs">
-            Spread: {g.away} {fmtOdds(g.spread.away)} / {g.home} {fmtOdds(g.spread.home)}
-          </span>
-        )}
-        {g.total && (
-          <span className="px-2.5 py-1 rounded bg-white/5 border border-white/10 text-xs">
-            Total: {g.total.line}
-          </span>
-        )}
-        {g.ml && (
-          <span className="px-2.5 py-1 rounded bg-white/5 border border-white/10 text-xs">
-            ML: {g.away} {fmtOdds(g.ml.away)} / {g.home} {fmtOdds(g.ml.home)}
-          </span>
-        )}
-      </div>
-
-      {/* The lean */}
-      <div className="mb-3 p-3 rounded-lg bg-black/40 border border-gold/20">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-muted mb-1">MoyAI lean</p>
-        <p className="font-display text-2xl text-gold">{a.lean}</p>
-      </div>
-
-      <div className="mb-3">
-        <ConfidenceMeter level={a.confidence} />
-      </div>
-
-      {a.factors.length > 0 && (
-        <div className="mb-3">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-muted mb-1.5">
-            Key factors
-          </p>
-          <ul className="space-y-1">
-            {a.factors.map((f, i) => (
-              <li key={i} className="text-sm text-paper/90 flex gap-2">
-                <span className="text-gold">✦</span> {f}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <p className="text-xs text-muted mb-1">
-        <span className="font-bold text-paper/70">Edge: </span>
-        {a.edge}
-      </p>
-      <p className="text-[11px] text-muted/60 italic">{a.caveat}</p>
-    </div>
-  );
-}
+const STORAGE_KEY = "moyline-ask-chat-v2";
 
 export function AskClient({ suggestions }: { suggestions?: string[] }) {
   const chips = suggestions && suggestions.length >= 2 ? suggestions : SUGGESTIONS;
-  const [msgs, setMsgs] = useState<Msg[]>([
-    {
-      role: "moy",
-      text: "Ask me about any matchup on the board — I'll give you the lines, my lean, and a confidence rating. Try a team name to start.",
-    },
-  ]);
+  const [msgs, setMsgs] = useState<Msg[]>([GREETING]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [lastGameId, setLastGameId] = useState<string | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const [staleMins, setStaleMins] = useState<number | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // Restore the conversation after a refresh (same tab session only).
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [msgs, loading]);
-
-  async function send(text: string) {
-    const q = text.trim();
-    if (!q || loading) return;
-    setMsgs((m) => [...m, { role: "user", text: q }]);
-    setInput("");
-    setLoading(true);
     try {
-      // If the question is short/generic and we have context, treat as follow-up
-      const isFollowUp = lastGameId && q.split(/\s+/).length <= 4 &&
-        !/[a-z]{4,}/i.test(q.replace(/what|about|the|total|spread|line|odds|moneyline|over|under/gi, ""));
-      const res = await fetch("/api/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question: isFollowUp ? "" : q,
-          contextGameId: isFollowUp ? lastGameId : undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setMsgs((m) => [...m, { role: "moy", error: data.error || "Something went wrong." }]);
-      } else {
-        setMsgs((m) => [...m, { role: "moy", analyses: data.analyses }]);
-        if (data.analyses?.[0]?.game?.id) {
-          setLastGameId(data.analyses[0].game.id);
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMsgs(
+            parsed
+              .filter((m: any) => m && (m.role === "user" || m.role === "moy") && typeof m.text === "string")
+              .slice(-40)
+          );
         }
       }
     } catch {
-      setMsgs((m) => [...m, { role: "moy", error: "Couldn't reach the brain — try again." }]);
+      /* storage unavailable — chat still works in-memory */
     }
-    setLoading(false);
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(msgs.slice(-40)));
+    } catch {
+      /* ignore quota errors */
+    }
+  }, [msgs, hydrated]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [msgs, loading]);
+
+  const send = useCallback(
+    async (text: string) => {
+      const q = text.trim();
+      if (!q || loading) return;
+
+      const history = msgs
+        .filter((m) => !m.error)
+        .slice(-10)
+        .map((m) => ({
+          role: m.role === "user" ? ("user" as const) : ("assistant" as const),
+          text: m.text,
+          gameIds: m.gameIds,
+        }));
+
+      setMsgs((m) => [...m, { role: "user", text: q }]);
+      setInput("");
+      if (inputRef.current) inputRef.current.style.height = "auto";
+      setLoading(true);
+      try {
+        const res = await fetch("/api/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: q, history }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.reply) {
+          setMsgs((m) => [
+            ...m,
+            { role: "moy", text: data.error || "Something went wrong — try that again.", error: true },
+          ]);
+        } else {
+          setMsgs((m) => [...m, { role: "moy", text: data.reply, gameIds: data.gameIds }]);
+          if (typeof data.meta?.staleMins === "number") setStaleMins(data.meta.staleMins);
+        }
+      } catch {
+        setMsgs((m) => [
+          ...m,
+          { role: "moy", text: "Couldn't reach the brain — check your connection and try again.", error: true },
+        ]);
+      }
+      setLoading(false);
+      inputRef.current?.focus();
+    },
+    [msgs, loading]
+  );
+
+  function newChat() {
+    setMsgs([GREETING]);
+    setStaleMins(null);
+    try {
+      sessionStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+    inputRef.current?.focus();
   }
+
+  const chatting = msgs.some((m) => m.role === "user");
 
   return (
     <div className="max-w-3xl mx-auto">
       {/* Header */}
-      <div className="text-center mb-6">
+      <div className="text-center mb-5">
         <div className="inline-flex items-center gap-2 mb-3 px-3 py-1.5 rounded-full border border-gold/40 bg-gold/10 text-gold text-[11px] font-bold uppercase tracking-[0.2em]">
           <span>✦</span> Ask MoyAI
         </div>
         <h1 className="font-display text-4xl sm:text-5xl">
-          ASK ABOUT <span className="gold-text">ANY GAME.</span>
+          CHAT WITH <span className="gold-text">MOYAI.</span>
         </h1>
         <p className="text-muted mt-2 text-sm max-w-xl mx-auto">
-          Not on today's card? No problem. Ask about any matchup and get the live lines,
-          MoyAI's lean, and a confidence rating — instantly.
+          Real talk on the live board — lines, leans, today's card, and the record.
+          Ask a question, then keep asking. It remembers the conversation.
         </p>
       </div>
 
-      {/* Chat */}
-      <div className="card p-4 sm:p-6 mb-4 min-h-[400px] max-h-[60vh] overflow-y-auto">
-        <div className="space-y-4">
-          {msgs.map((msg, i) => (
-            <div key={i}>
-              {msg.role === "user" ? (
-                <div className="flex justify-end">
-                  <div className="max-w-[80%] px-4 py-2.5 rounded-2xl rounded-br-md bg-gold text-black font-medium text-sm">
+      {/* Chat panel */}
+      <div className="card overflow-hidden flex flex-col h-[62dvh] min-h-[430px]">
+        {/* Panel toolbar */}
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/10 bg-white/[0.02]">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted">
+              MoyAI · live board
+            </span>
+          </div>
+          {chatting && (
+            <button
+              onClick={newChat}
+              className="text-[11px] font-bold uppercase tracking-widest text-gold/80 hover:text-gold transition"
+            >
+              ↺ New chat
+            </button>
+          )}
+        </div>
+
+        {/* Thread */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 sm:px-5 py-4">
+          <div className="space-y-4">
+            {msgs.map((msg, i) =>
+              msg.role === "user" ? (
+                <div key={i} className="flex justify-end">
+                  <div className="max-w-[82%] px-4 py-2.5 rounded-2xl rounded-br-md bg-gold text-black font-medium text-sm leading-relaxed whitespace-pre-wrap break-words">
                     {msg.text}
                   </div>
                 </div>
               ) : (
-                <div className="flex justify-start">
-                  <div className="max-w-[95%] w-full">
-                    {msg.text && (
-                      <div className="px-4 py-2.5 rounded-2xl rounded-bl-md bg-white/5 border border-white/10 text-sm text-paper/90 inline-block">
-                        {msg.text}
-                      </div>
-                    )}
-                    {msg.error && (
-                      <div className="px-4 py-2.5 rounded-2xl rounded-bl-md bg-red-500/10 border border-red-500/30 text-sm text-red-200 inline-block">
-                        {msg.error}
-                      </div>
-                    )}
-                    {msg.analyses && (
-                      <div className="mt-2">
-                        {msg.analyses.map((a, j) => (
-                          <AnalysisCard key={j} a={a} />
-                        ))}
-                      </div>
-                    )}
+                <div key={i} className="flex gap-2.5">
+                  <div className="shrink-0 w-8 h-8 rounded-full bg-gold/15 border border-gold/40 flex items-center justify-center text-gold text-sm select-none">
+                    ✦
+                  </div>
+                  <div className="min-w-0 max-w-[88%]">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gold/70 mb-1">
+                      MoyAI
+                    </p>
+                    <div
+                      className={`px-4 py-3 rounded-2xl rounded-tl-md text-sm leading-relaxed whitespace-pre-wrap break-words ${
+                        msg.error
+                          ? "bg-red-500/10 border border-red-500/30 text-red-200"
+                          : "bg-white/5 border border-white/10 text-paper/90"
+                      }`}
+                    >
+                      {msg.text}
+                    </div>
                   </div>
                 </div>
-              )}
-            </div>
-          ))}
-          {loading && (
-            <div className="flex justify-start">
-              <div className="px-4 py-3 rounded-2xl rounded-bl-md bg-white/5 border border-white/10">
-                <div className="flex gap-1.5">
-                  {[0, 1, 2].map((d) => (
-                    <div
-                      key={d}
-                      className="w-2 h-2 rounded-full bg-gold animate-bounce"
-                      style={{ animationDelay: `${d * 0.15}s` }}
-                    />
-                  ))}
+              )
+            )}
+
+            {/* Starter chips — empty state only */}
+            {!chatting && !loading && (
+              <div className="flex flex-wrap gap-2 pl-10 pt-1">
+                {chips.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => send(s)}
+                    className="px-3 py-1.5 rounded-full border border-gold/30 text-gold text-xs hover:bg-gold/10 transition text-left"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Thinking indicator */}
+            {loading && (
+              <div className="flex gap-2.5 items-start">
+                <div className="shrink-0 w-8 h-8 rounded-full bg-gold/15 border border-gold/40 flex items-center justify-center text-gold text-sm select-none">
+                  ✦
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gold/70 mb-1">
+                    MoyAI
+                  </p>
+                  <div className="px-4 py-3 rounded-2xl rounded-tl-md bg-white/5 border border-white/10 flex items-center gap-2">
+                    <span className="flex gap-1.5">
+                      {[0, 1, 2].map((d) => (
+                        <span
+                          key={d}
+                          className="w-2 h-2 rounded-full bg-gold animate-bounce"
+                          style={{ animationDelay: `${d * 0.15}s` }}
+                        />
+                      ))}
+                    </span>
+                    <span className="text-xs text-muted">thinking…</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-          <div ref={bottomRef} />
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Suggestions */}
-      <div className="flex flex-wrap gap-2 mb-4 justify-center">
-        {chips.map((s) => (
-          <button
-            key={s}
-            onClick={() => send(s)}
-            className="px-3 py-1.5 rounded-full border border-gold/30 text-gold text-xs hover:bg-gold/10 transition"
-          >
-            {s}
-          </button>
-        ))}
-      </div>
-
-      {/* Input */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          send(input);
-        }}
-        className="flex gap-2"
-      >
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask about any matchup… e.g. 'Lakers Celtics'"
-          className="flex-1 px-4 py-3 rounded-xl bg-white/5 border border-white/15 text-paper placeholder:text-muted/50 text-sm focus:outline-none focus:border-gold/50"
-        />
-        <button
-          type="submit"
-          disabled={loading || !input.trim()}
-          className="px-6 py-3 rounded-xl btn-gold font-bold text-sm disabled:opacity-40"
+        {/* Input bar */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            send(input);
+          }}
+          className="border-t border-white/10 p-3 flex gap-2 items-end bg-white/[0.02]"
         >
-          Ask
-        </button>
-      </form>
+          <textarea
+            ref={inputRef}
+            value={input}
+            rows={1}
+            onChange={(e) => setInput(e.target.value)}
+            onInput={(e) => {
+              const el = e.currentTarget;
+              el.style.height = "auto";
+              el.style.height = Math.min(el.scrollHeight, 120) + "px";
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send(input);
+              }
+            }}
+            placeholder="Ask about a game, the card, the record…"
+            className="flex-1 px-4 py-3 rounded-xl bg-white/5 border border-white/15 text-paper placeholder:text-muted/50 text-sm leading-relaxed resize-none focus:outline-none focus:border-gold/50 max-h-[120px]"
+          />
+          <button
+            type="submit"
+            disabled={loading || !input.trim()}
+            className="px-5 py-3 rounded-xl btn-gold font-bold text-sm disabled:opacity-40 shrink-0"
+          >
+            Send
+          </button>
+        </form>
+      </div>
+
       <p className="text-[11px] text-muted/50 text-center mt-3">
-        Board-only reads from live lines. For entertainment purposes — not financial advice.
+        Answers come only from the live board, today's card, and the graded record — no made-up lines.
+        {staleMins !== null && staleMins > 0 ? ` Lines cached ${staleMins}m ago.` : ""} For entertainment
+        purposes — not financial advice.
       </p>
     </div>
   );
