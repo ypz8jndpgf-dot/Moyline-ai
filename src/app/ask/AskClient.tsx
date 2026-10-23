@@ -146,7 +146,8 @@ function AnalysisCard({ a }: { a: Analysis }) {
   );
 }
 
-export function AskClient() {
+export function AskClient({ suggestions }: { suggestions?: string[] }) {
+  const chips = suggestions && suggestions.length >= 2 ? suggestions : SUGGESTIONS;
   const [msgs, setMsgs] = useState<Msg[]>([
     {
       role: "moy",
@@ -268,7 +269,7 @@ export function AskClient() {
 
       {/* Suggestions */}
       <div className="flex flex-wrap gap-2 mb-4 justify-center">
-        {SUGGESTIONS.map((s) => (
+        {chips.map((s) => (
           <button
             key={s}
             onClick={() => send(s)}

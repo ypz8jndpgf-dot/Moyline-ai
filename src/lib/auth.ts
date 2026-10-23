@@ -37,8 +37,24 @@ function emailProvider() {
         to: identifier,
         from,
         subject: "Sign in to MoyLine AI",
-        text: `Sign in to MoyLine AI:\n\n${url}\n\nThis link expires in 24 hours.`,
-        html: `<p>Sign in to <strong>MoyLine AI</strong>:</p><p><a href="${url}">Sign in</a></p><p>This link expires in 24 hours.</p>`,
+        text:
+          `Sign in to MoyLine AI:\n\n${url}\n\nThis link expires in 24 hours.\n\n` +
+          `IMPORTANT — open the link in your browser (Safari or Chrome), not inside an email app. ` +
+          `If you're reading this in the Gmail app: long-press the link and tap "Open in Safari" (or copy it into your browser). ` +
+          `Links opened inside Gmail's built-in browser don't stay signed in.`,
+        html: `
+          <div style="background:#0a0a0a;padding:32px 16px;font-family:Arial,sans-serif;">
+            <div style="max-width:520px;margin:0 auto;background:#111;border:1px solid #333;border-radius:12px;padding:32px 24px;text-align:center;">
+              <div style="font-size:13px;color:#f5c518;font-weight:700;letter-spacing:2px;margin-bottom:16px;">MOYLINE AI</div>
+              <p style="color:#eee;font-size:16px;margin:0 0 20px;">Tap below to sign in — no password needed.</p>
+              <a href="${url}" style="display:inline-block;background:#f5c518;color:#0a0a0a;font-weight:900;padding:14px 40px;border-radius:10px;text-decoration:none;font-size:16px;">SIGN IN →</a>
+              <p style="color:#888;font-size:12px;margin:20px 0 0;">This link expires in 24 hours.</p>
+              <div style="text-align:left;background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:14px 16px;margin-top:24px;">
+                <p style="color:#f5c518;font-size:12px;font-weight:700;margin:0 0 6px;">📱 ON YOUR PHONE? READ THIS FIRST</p>
+                <p style="color:#ccc;font-size:13px;line-height:1.55;margin:0;">Open the link in <strong>Safari or Chrome</strong> — not inside an email app. If you're reading this in the Gmail app, <strong>long-press the button and tap "Open in Safari"</strong> (or copy the link into your browser). Links opened inside Gmail's built-in browser don't stay signed in.</p>
+              </div>
+            </div>
+          </div>`,
       });
     },
   });

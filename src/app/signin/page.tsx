@@ -21,6 +21,14 @@ export default function SignInPage() {
       <div className="max-w-md mx-auto text-center py-16">
         <h1 className="font-display text-3xl mb-3">CHECK YOUR <span className="gold-text">INBOX</span></h1>
         <p className="text-muted">We sent a sign-in link to <span className="text-paper">{email}</span>.</p>
+        <div className="card p-4 mt-6 text-left">
+          <p className="text-gold text-xs font-bold uppercase tracking-widest mb-1.5">📱 Opening it on your phone?</p>
+          <p className="text-sm text-muted leading-relaxed">
+            Open the link in <strong className="text-paper">Safari or Chrome</strong> — not inside your email app.
+            If you&apos;re in the Gmail app, <strong className="text-paper">long-press the link and tap &ldquo;Open in Safari&rdquo;</strong> (or copy it into your browser).
+            Links opened inside Gmail&apos;s built-in browser don&apos;t stay signed in.
+          </p>
+        </div>
       </div>
     );
   }
