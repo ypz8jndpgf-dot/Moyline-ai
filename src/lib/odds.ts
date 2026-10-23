@@ -327,6 +327,23 @@ export async function refreshOdds(force = false): Promise<RefreshResult> {
 }
 
 export async function getOdds(): Promise<RefreshResult> {
+  // Cost discipline (user's call, 2026-10-22): page loads and other readers
+  // serve the shared Redis snapshot for free while it's under ~20h old, so
+  // the only Odds API spend is the scheduled daily refresh (plus a forced
+  // /api/refresh). If the snapshot is missing or older than that, fall
+  // through to a live fetch — self-healing if a scheduled refresh fails.
+  const SNAPSHOT_MAX_AGE_MS = 20 * 60 * 60 * 1000;
+  const snap = await readOddsSnapshot();
+  if (snap && snap.events.length > 0 && Date.now() - snap.fetchedAt < SNAPSHOT_MAX_AGE_MS) {
+    memCache = { fetchedAt: snap.fetchedAt, events: snap.events };
+    return {
+      events: snap.events,
+      fetchedAt: snap.fetchedAt,
+      fromCache: true,
+      sportsRefreshed: [],
+      quotaRemaining,
+    };
+  }
   return refreshOdds(false);
 }
 
