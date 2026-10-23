@@ -46,6 +46,7 @@ export async function GET(req: Request) {
         >
           <div
             style={{
+              display: "flex",
               fontSize: "34px",
               fontWeight: 900,
               color: "#f5c518",
@@ -56,6 +57,7 @@ export async function GET(req: Request) {
           </div>
           <div
             style={{
+              display: "flex",
               fontSize: "20px",
               fontWeight: 700,
               color: "#ffe9a3",
@@ -74,11 +76,11 @@ export async function GET(req: Request) {
             justifyContent: "center",
           }}
         >
-          <div style={{ fontSize: "38px", color: "#ffffff", fontWeight: 700 }}>
+          <div style={{ display: "flex", fontSize: "38px", color: "#ffffff", fontWeight: 700 }}>
             {game}
           </div>
           {when ? (
-            <div style={{ fontSize: "24px", color: "#999999", marginTop: "10px" }}>
+            <div style={{ display: "flex", fontSize: "24px", color: "#999999", marginTop: "10px" }}>
               {when}
             </div>
           ) : null}
@@ -89,12 +91,13 @@ export async function GET(req: Request) {
               marginTop: "26px",
             }}
           >
-            <div style={{ fontSize: "64px", color: "#ffffff", fontWeight: 900 }}>
+            <div style={{ display: "flex", fontSize: "64px", color: "#ffffff", fontWeight: 900 }}>
               {play}
             </div>
             {price ? (
               <div
                 style={{
+                  display: "flex",
                   fontSize: "36px",
                   color: "#f5c518",
                   fontWeight: 700,
@@ -106,7 +109,7 @@ export async function GET(req: Request) {
             ) : null}
           </div>
           {conf ? (
-            <div style={{ fontSize: "24px", color: "#999999", marginTop: "18px" }}>
+            <div style={{ display: "flex", fontSize: "24px", color: "#999999", marginTop: "18px" }}>
               Confidence {conf}/5 · Graded &amp; published after the game
             </div>
           ) : null}
@@ -119,10 +122,10 @@ export async function GET(req: Request) {
             alignItems: "center",
           }}
         >
-          <div style={{ fontSize: "24px", color: "#f5c518", fontWeight: 700 }}>
+          <div style={{ display: "flex", fontSize: "24px", color: "#f5c518", fontWeight: 700 }}>
             moylineai.com
           </div>
-          <div style={{ fontSize: "20px", color: "#666666" }}>
+          <div style={{ display: "flex", fontSize: "20px", color: "#666666" }}>
             Every play graded &amp; published — no hiding losers
           </div>
         </div>
