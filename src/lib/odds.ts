@@ -13,6 +13,7 @@
 import type { OddsEvent } from "./odds-shared";
 import { promises as fs } from "fs";
 import path from "path";
+import { Redis } from "@upstash/redis";
 
 const API_BASE = "https://api.the-odds-api.com/v4";
 
@@ -74,6 +75,83 @@ interface CacheEntry {
 
 let memCache: CacheEntry | null = null;
 let quotaRemaining: number | null = null;
+
+// ---------------------------------------------------------------------------
+// Durable snapshot in Upstash Redis: serverless instances each have their own
+// memory and an ephemeral/read-only filesystem, so the mem/file caches alone
+// leave cold instances with an empty board (Ask MoyAI 503s). refreshOdds
+// mirrors every successful fetch here; cache-only readers fall back to it.
+// ---------------------------------------------------------------------------
+const ODDS_CACHE_KEY = "moyline:odds:cache";
+const OPENINGS_KEY = "moyline:odds:openings";
+
+function getRedis(): Redis | null {
+  try {
+    const url = (process.env.UPSTASH_REDIS_REST_URL || "").trim();
+    const token = (process.env.UPSTASH_REDIS_REST_TOKEN || "").trim();
+    if (!url || !token) return null;
+    return new Redis({ url, token });
+  } catch {
+    return null;
+  }
+}
+
+interface OddsSnapshot {
+  fetchedAt: number;
+  events: OddsEvent[];
+}
+
+async function writeOddsSnapshot(fetchedAt: number, events: OddsEvent[]): Promise<void> {
+  try {
+    const redis = getRedis();
+    if (!redis) return;
+    await redis.set(ODDS_CACHE_KEY, JSON.stringify({ fetchedAt, events }));
+  } catch {
+    /* best-effort — mem/file caches still serve warm instances */
+  }
+}
+
+async function readOddsSnapshot(): Promise<OddsSnapshot | null> {
+  try {
+    const redis = getRedis();
+    if (!redis) return null;
+    const raw = await redis.get<string>(ODDS_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = (typeof raw === "string" ? JSON.parse(raw) : raw) as OddsSnapshot;
+    if (!parsed || !Array.isArray(parsed.events)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function loadOpenings(): Promise<Record<string, OpeningBook>> {
+  try {
+    const redis = getRedis();
+    if (redis) {
+      const raw = await redis.get<string>(OPENINGS_KEY);
+      if (raw) {
+        const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+        if (parsed && typeof parsed === "object") {
+          return parsed as Record<string, OpeningBook>;
+        }
+      }
+    }
+  } catch {
+    /* fall through to file */
+  }
+  return readJson<Record<string, OpeningBook>>(OPENING_FILE, {});
+}
+
+async function saveOpenings(openings: Record<string, OpeningBook>): Promise<void> {
+  await writeJson(OPENING_FILE, openings);
+  try {
+    const redis = getRedis();
+    if (redis) await redis.set(OPENINGS_KEY, JSON.stringify(openings));
+  } catch {
+    /* best-effort */
+  }
+}
 let quotaUsed: number | null = null;
 
 export function getQuotaRemaining() {
@@ -233,6 +311,7 @@ export async function refreshOdds(force = false): Promise<RefreshResult> {
   if (allEvents.length > 0) {
     memCache = { fetchedAt: now, events: allEvents };
     await writeJson(CACHE_FILE, allEvents);
+    await writeOddsSnapshot(now, allEvents);
     await snapshotOpenings(allEvents);
   }
 
@@ -257,10 +336,30 @@ export async function getOdds(): Promise<RefreshResult> {
  * fresh lines — saves credits and works even when the API is down.
  */
 export async function getOddsCached(): Promise<RefreshResult> {
-  const events = memCache?.events || (await readJson<OddsEvent[]>(CACHE_FILE, []));
+  if (memCache) {
+    return {
+      events: memCache.events,
+      fetchedAt: memCache.fetchedAt,
+      fromCache: true,
+      sportsRefreshed: [],
+      quotaRemaining,
+    };
+  }
+  const snap = await readOddsSnapshot();
+  if (snap && snap.events.length > 0) {
+    memCache = { fetchedAt: snap.fetchedAt, events: snap.events };
+    return {
+      events: snap.events,
+      fetchedAt: snap.fetchedAt,
+      fromCache: true,
+      sportsRefreshed: [],
+      quotaRemaining,
+    };
+  }
+  const events = await readJson<OddsEvent[]>(CACHE_FILE, []);
   return {
     events,
-    fetchedAt: memCache?.fetchedAt || 0,
+    fetchedAt: 0,
     fromCache: true,
     sportsRefreshed: [],
     quotaRemaining,
@@ -276,7 +375,7 @@ export type OpeningBook = Record<
 >;
 
 async function snapshotOpenings(events: OddsEvent[]) {
-  const openings = await readJson<Record<string, OpeningBook>>(OPENING_FILE, {});
+  const openings = await loadOpenings();
   let changed = false;
   for (const ev of events) {
     if (!openings[ev.id]) {
@@ -294,9 +393,9 @@ async function snapshotOpenings(events: OddsEvent[]) {
       changed = true;
     }
   }
-  if (changed) await writeJson(OPENING_FILE, openings);
+  if (changed) await saveOpenings(openings);
 }
 
 export async function getOpenings(): Promise<Record<string, OpeningBook>> {
-  return readJson<Record<string, OpeningBook>>(OPENING_FILE, {});
+  return loadOpenings();
 }
