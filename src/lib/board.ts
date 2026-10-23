@@ -89,6 +89,12 @@ export function buildBoard(
   for (const ev of events) {
     sportSet.add(ev.sport_key);
     const open = openings[ev.id] || {};
+    // Movement signals (steam, movers, delta badges, edge sort) are pregame
+    // signals. Once a game is in progress, live prices whipsaw against the
+    // tracked open and produce absurd "moves" — a live -5000 moneyline is
+    // not steam. Started games keep their prices and the Open benchmark but
+    // report no movement.
+    const started = new Date(ev.commence_time).getTime() <= Date.now();
 
     // First pass: gather raw outcomes per book into a clean intermediate shape
     interface RawCell {
@@ -154,6 +160,12 @@ export function buildBoard(
           continue;
         }
         const c = makeCell(raw.open, raw.cur, bestByCol[col] === rb.key);
+        if (started) {
+          c.moved = false;
+          c.steam = false;
+          c.pointDelta = undefined;
+          c.priceDelta = undefined;
+        }
         finalCells[col] = c;
         const mag = Math.abs(c.pointDelta ?? 0) * 10 + Math.abs(c.priceDelta ?? 0) / 10;
         if (c.moved) edgeScore = Math.max(edgeScore, mag);
