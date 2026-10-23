@@ -74,17 +74,17 @@ export async function POST(req: NextRequest) {
         const rows = top
           .map(
             (p) => `
-        <div style="padding:8px 0;border-bottom:1px solid #262626;">
-          <span style="color:#ddd;font-size:14px;">${p.star ? "★ " : ""}<strong style="color:#fff;">${esc(p.play)}</strong> <span style="color:#999;">— ${esc(p.game)}</span></span>
-          <span style="float:right;color:#f5c518;font-size:13px;font-weight:700;">${esc(p.price)}</span>
-        </div>`
+          <div style="padding:9px 14px;border-bottom:1px solid #262626;">
+            <span style="color:#ddd;font-size:14px;">${p.star ? "★ " : ""}<strong style="color:#fff;">${esc(p.play)}</strong> <span style="color:#999;">— ${esc(p.game)}</span></span>
+            <span style="float:right;color:#f5c518;font-size:13px;font-weight:700;">${esc(p.price)}</span>
+          </div>`
           )
           .join("");
         topPicksHtml = `
-            <div style="background:#1a1a1a;border:1px solid #f5c518;border-radius:8px;padding:16px 20px;margin-bottom:20px;">
-              <p style="color:#f5c518;font-size:12px;font-weight:700;letter-spacing:1px;margin:0;">🔥 TODAY'S TOP PLAYS — ALREADY ON THE CARD</p>
+            <div style="border:1px solid #333;margin:0 0 22px;">
+              <div style="background:#1a1a1a;border-bottom:2px solid #f5c518;padding:10px 14px;color:#f5c518;font-size:11px;font-weight:800;letter-spacing:1px;">🔥 TODAY'S TOP PLAYS — ALREADY ON THE CARD</div>
               ${rows}
-              <p style="color:#999;font-size:12px;margin:10px 0 0;">Sign in below to see the full card with write-ups.</p>
+              <p style="color:#999;font-size:12px;margin:0;padding:10px 14px;">Sign in below to see the full card with write-ups.</p>
             </div>`;
       }
     } catch {
@@ -98,41 +98,55 @@ export async function POST(req: NextRequest) {
         normalized,
         "You're in — welcome to MoyLine AI",
         `
-        <div style="background:#0a0a0a;padding:32px 16px;font-family:Arial,sans-serif;">
-          <div style="max-width:560px;margin:0 auto;background:#111;border:1px solid #333;border-radius:12px;padding:36px 28px;">
-            <div style="text-align:center;margin-bottom:8px;">
-              <div style="font-size:13px;color:#f5c518;font-weight:700;letter-spacing:2px;">MOYLINE AI</div>
-            </div>
-            <h1 style="color:#fff;font-size:26px;text-align:center;margin:8px 0 4px;">You're in. 🎉</h1>
-            <p style="color:#ccc;font-size:15px;line-height:1.6;text-align:center;margin:0 0 24px;">
-              This address now has <strong style="color:#fff;">full member access</strong> to MoyLine AI — no payment, no card, nothing to buy.
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0a0a0a;">
+        <tr><td align="center" style="padding:0;">
+        <table role="presentation" width="720" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:720px;background-color:#0a0a0a;font-family:Arial,Helvetica,sans-serif;">
+          <tr><td style="background-color:#0a0a0a;border-bottom:3px solid #f5c518;padding:30px 24px 22px 24px;text-align:center;">
+            <div style="font-size:32px;font-weight:900;color:#f5c518;letter-spacing:5px;line-height:1;">MOYLINE AI</div>
+            <div style="font-size:12px;font-weight:700;color:#ffe9a3;letter-spacing:7px;margin-top:10px;">MEMBERSHIP ACTIVATED</div>
+            <div style="font-size:13px;color:#999999;margin-top:12px;">Data-driven picks across every major sport — every play graded and published.</div>
+          </td></tr>
+          <tr><td style="padding:26px 24px 8px 24px;">
+            <h1 style="font-family:'Arial Black','Helvetica Neue',Arial,sans-serif;color:#ffffff;font-size:30px;letter-spacing:1px;margin:0 0 10px;">YOU'RE IN<span style="color:#f5c518;">.</span></h1>
+            <p style="color:#cccccc;font-size:15px;line-height:1.6;margin:0 0 22px;">
+              This address now has <strong style="color:#ffffff;">full member access</strong> to MoyLine AI — no payment, no card, nothing to buy. Here's everything you need.
             </p>
             ${topPicksHtml}
-            <div style="background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:18px 20px;margin-bottom:20px;">
-              <p style="color:#f5c518;font-size:12px;font-weight:700;letter-spacing:1px;margin:0 0 10px;">HOW TO SIGN IN (30 SECONDS)</p>
-              <ol style="color:#ddd;font-size:14px;line-height:1.7;margin:0;padding-left:18px;">
-                <li>Go to <a href="https://moylineai.com/signin" style="color:#f5c518;">moylineai.com/signin</a></li>
-                <li>Enter this exact email address — we'll send you a magic sign-in link (no password)</li>
-                <li>Open the link in your browser and you're in</li>
-              </ol>
-              <p style="color:#ccc;font-size:13px;line-height:1.55;margin:12px 0 0;">📱 <strong>On your phone:</strong> open the sign-in link in Safari or Chrome, not inside your email app. In the Gmail app, long-press the link and tap "Open in Safari" — links opened inside Gmail don't stay signed in.</p>
-              <p style="color:#ccc;font-size:13px;line-height:1.55;margin:8px 0 0;">⚡ <strong>Shortcut:</strong> the gold button below signs you in with one tap — no email round-trip (link works for 24 hours).</p>
+            <div style="border:1px solid #333;margin:0 0 22px;">
+              <div style="background:#1a1a1a;border-bottom:2px solid #f5c518;padding:10px 14px;color:#f5c518;font-size:11px;font-weight:800;letter-spacing:1px;">HOW TO SIGN IN (30 SECONDS)</div>
+              <div style="padding:16px 18px;">
+                <ol style="color:#dddddd;font-size:14px;line-height:1.7;margin:0;padding-left:18px;">
+                  <li>Go to <a href="https://moylineai.com/signin" style="color:#f5c518;">moylineai.com/signin</a></li>
+                  <li>Enter this exact email address — we'll send you a magic sign-in link (no password)</li>
+                  <li>Open the link in your browser and you're in</li>
+                </ol>
+                <p style="color:#cccccc;font-size:13px;line-height:1.55;margin:12px 0 0;"><strong style="color:#ffffff;">On your phone:</strong> open the sign-in link in Safari or Chrome, not inside your email app. In the Gmail app, long-press the link and tap "Open in Safari" — links opened inside Gmail don't stay signed in.</p>
+                <p style="color:#cccccc;font-size:13px;line-height:1.55;margin:8px 0 0;"><strong style="color:#ffffff;">Shortcut:</strong> the gold button below signs you in with one tap — no email round-trip (link works for 24 hours).</p>
+              </div>
             </div>
-            <p style="color:#f5c518;font-size:12px;font-weight:700;letter-spacing:1px;margin:0 0 10px;">WHAT YOU GET</p>
-            <ul style="color:#ddd;font-size:14px;line-height:1.7;margin:0 0 24px;padding-left:18px;">
-              <li><strong style="color:#fff;">The daily brief</strong> — every morning at 7am ET, straight to this inbox</li>
-              <li><strong style="color:#fff;">Today's Card</strong> — the day's researched plays with confidence ratings</li>
-              <li><strong style="color:#fff;">Lines board</strong> — every game's lines vs. the opening benchmark, best price highlighted</li>
-              <li><strong style="color:#fff;">Ask MoyAI</strong> — ask about any matchup, get the lines and a lean</li>
-              <li><strong style="color:#fff;">Parlay Lab + Ticket Builder</strong> — build parlays and teasers off the day's edges</li>
-            </ul>
+            <div style="border:1px solid #333;margin:0 0 26px;">
+              <div style="background:#1a1a1a;border-bottom:2px solid #f5c518;padding:10px 14px;color:#f5c518;font-size:11px;font-weight:800;letter-spacing:1px;">WHAT YOU GET</div>
+              <ul style="color:#dddddd;font-size:14px;line-height:1.7;margin:0;padding:14px 18px 14px 32px;">
+                <li><strong style="color:#ffffff;">The daily brief</strong> — every morning at 7am ET, straight to this inbox</li>
+                <li><strong style="color:#ffffff;">Today's Card</strong> — the day's researched plays with confidence ratings</li>
+                <li><strong style="color:#ffffff;">Lines board</strong> — every game's lines vs. the opening benchmark, best price highlighted</li>
+                <li><strong style="color:#ffffff;">Ask MoyAI</strong> — ask about any matchup, get the lines and a lean</li>
+                <li><strong style="color:#ffffff;">Parlay Lab + Ticket Builder</strong> — build parlays and teasers off the day's edges</li>
+              </ul>
+            </div>
             <div style="text-align:center;">
               <a href="${signInUrl}" style="display:inline-block;background:#f5c518;color:#0a0a0a;font-weight:900;padding:14px 40px;border-radius:10px;text-decoration:none;font-size:16px;">SIGN IN →</a>
-              <p style="color:#888;font-size:12px;margin:16px 0 0;">Your first brief arrives tomorrow at 7am ET.</p>
+              <p style="color:#888888;font-size:12px;margin:16px 0 0;">Your first brief arrives tomorrow at 7am ET.</p>
             </div>
-            <p style="color:#666;font-size:11px;text-align:center;margin:24px 0 0;">Analysis for entertainment purposes — not financial advice.</p>
-          </div>
-        </div>`
+            <p style="text-align:center;margin:28px 0 0;">
+              <span style="color:#f5c518;font-weight:900;letter-spacing:2px;font-size:13px;">MOYLINE AI</span>
+              <span style="color:#666666;font-size:11px;"> — live lines, steam alerts, pro picks.</span>
+            </p>
+            <p style="color:#666666;font-size:11px;text-align:center;margin:6px 0 0;">Analysis for entertainment purposes — not financial advice.</p>
+          </td></tr>
+        </table>
+        </td></tr>
+        </table>`
       );
     } catch (e) {
       console.error("[beta] welcome email failed:", e instanceof Error ? e.message : e);

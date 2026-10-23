@@ -43,18 +43,25 @@ function emailProvider() {
           `If you're reading this in the Gmail app: long-press the link and tap "Open in Safari" (or copy it into your browser). ` +
           `Links opened inside Gmail's built-in browser don't stay signed in.`,
         html: `
-          <div style="background:#0a0a0a;padding:32px 16px;font-family:Arial,sans-serif;">
-            <div style="max-width:520px;margin:0 auto;background:#111;border:1px solid #333;border-radius:12px;padding:32px 24px;text-align:center;">
-              <div style="font-size:13px;color:#f5c518;font-weight:700;letter-spacing:2px;margin-bottom:16px;">MOYLINE AI</div>
-              <p style="color:#eee;font-size:16px;margin:0 0 20px;">Tap below to sign in — no password needed.</p>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0a0a0a;">
+          <tr><td align="center" style="padding:0;">
+          <table role="presentation" width="720" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:720px;background-color:#0a0a0a;font-family:Arial,Helvetica,sans-serif;">
+            <tr><td style="background-color:#0a0a0a;border-bottom:3px solid #f5c518;padding:30px 24px 22px 24px;text-align:center;">
+              <div style="font-size:32px;font-weight:900;color:#f5c518;letter-spacing:5px;line-height:1;">MOYLINE AI</div>
+              <div style="font-size:12px;font-weight:700;color:#ffe9a3;letter-spacing:7px;margin-top:10px;">SIGN IN</div>
+            </td></tr>
+            <tr><td style="padding:28px 24px 30px 24px;text-align:center;">
+              <p style="color:#eeeeee;font-size:16px;margin:0 0 22px;">Tap below to sign in — no password needed.</p>
               <a href="${url}" style="display:inline-block;background:#f5c518;color:#0a0a0a;font-weight:900;padding:14px 40px;border-radius:10px;text-decoration:none;font-size:16px;">SIGN IN →</a>
-              <p style="color:#888;font-size:12px;margin:20px 0 0;">This link expires in 24 hours.</p>
-              <div style="text-align:left;background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:14px 16px;margin-top:24px;">
-                <p style="color:#f5c518;font-size:12px;font-weight:700;margin:0 0 6px;">📱 ON YOUR PHONE? READ THIS FIRST</p>
-                <p style="color:#ccc;font-size:13px;line-height:1.55;margin:0;">Open the link in <strong>Safari or Chrome</strong> — not inside an email app. If you're reading this in the Gmail app, <strong>long-press the button and tap "Open in Safari"</strong> (or copy the link into your browser). Links opened inside Gmail's built-in browser don't stay signed in.</p>
+              <p style="color:#888888;font-size:12px;margin:20px 0 0;">This link expires in 24 hours.</p>
+              <div style="border:1px solid #333;margin:26px auto 0;max-width:560px;text-align:left;">
+                <div style="background:#1a1a1a;border-bottom:2px solid #f5c518;padding:10px 14px;color:#f5c518;font-size:11px;font-weight:800;letter-spacing:1px;">ON YOUR PHONE? READ THIS FIRST</div>
+                <p style="color:#cccccc;font-size:13px;line-height:1.55;margin:0;padding:14px;">Open the link in <strong style="color:#ffffff;">Safari or Chrome</strong> — not inside an email app. If you're reading this in the Gmail app, <strong style="color:#ffffff;">long-press the button and tap "Open in Safari"</strong> (or copy the link into your browser). Links opened inside Gmail's built-in browser don't stay signed in.</p>
               </div>
-            </div>
-          </div>`,
+            </td></tr>
+          </table>
+          </td></tr>
+          </table>`,
       });
     },
   });
