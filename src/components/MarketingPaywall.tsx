@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { PicksFeed } from "@/lib/picks";
-import { getTrackRecord } from "@/lib/store";
+import { getTrackRecord, getBetaCount } from "@/lib/store";
 
 /**
  * Marketing paywall page for non-members.
@@ -23,6 +23,9 @@ export default async function MarketingPaywall({
   const picks = feed?.picks || [];
   const freePick = picks.find((p) => p.star) || picks[0] || null;
   const lockedCount = picks.filter((p) => p !== freePick).length;
+
+  // Founding-member count, live from the beta list (null = count-free copy)
+  const betaCount = await getBetaCount().catch(() => null);
 
   // Pull track record highlights for social proof
   let starRecord: string | null = null;
@@ -51,6 +54,16 @@ export default async function MarketingPaywall({
           Every edge.<br />
           <span className="gold-text">Every day.</span>
         </h1>
+        <div className="mb-5">
+          <span className="inline-block px-4 py-1.5 rounded-full border border-gold/40 bg-gold/10 text-gold text-[11px] font-bold uppercase tracking-[0.25em]">
+            ✦ Founding Members
+          </span>
+          <p className="text-sm text-goldsoft mt-3">
+            {betaCount
+              ? `The founding class is in — ${betaCount} members strong. Join them before public launch.`
+              : "The founding class is in — join them before public launch."}
+          </p>
+        </div>
         <p className="text-muted text-lg mb-2 max-w-2xl mx-auto">
           {subline}
         </p>
@@ -137,17 +150,30 @@ export default async function MarketingPaywall({
       {!betaPlaceholder && (
       <div className="card p-8 mb-8 text-center">
         <h2 className="font-display text-3xl mb-6">Simple pricing</h2>
-        <div className="grid sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
+        <div className="grid sm:grid-cols-3 gap-4 max-w-3xl mx-auto items-stretch">
           {[
-            ["Day Pass", "$9.99", "One-time", "Full card for a day"],
-            ["Week Pass", "$19.99", "One-time", "Seven days of edges"],
-            ["Monthly", "$49.99", "/month", "Every pick, every day"],
-          ].map(([name, price, per, desc]) => (
-            <div key={name} className="border border-line rounded-lg p-5">
-              <p className="font-bold mb-1">{name}</p>
-              <p className="font-display text-3xl text-gold mb-1">{price}</p>
-              <p className="text-xs text-muted mb-2">{per}</p>
-              <p className="text-sm text-muted">{desc}</p>
+            { name: "Day Pass", price: "$9.99", per: "One-time", desc: "Full card for a day", sub: "Try it for a day", badge: null as string | null, featured: false },
+            { name: "Week Pass", price: "$19.99", per: "One-time", desc: "Seven days of edges", sub: null as string | null, badge: null as string | null, featured: false },
+            { name: "Monthly", price: "$49.99", per: "/month", desc: "Every pick, every day", sub: null as string | null, badge: "Best value", featured: true },
+          ].map((t) => (
+            <div
+              key={t.name}
+              className={`relative rounded-lg p-5 ${
+                t.featured
+                  ? "border-2 border-gold bg-gold/10 shadow-[0_0_25px_rgba(212,175,55,0.2)]"
+                  : "border border-line"
+              }`}
+            >
+              {t.badge && (
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-gold text-black text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap">
+                  {t.badge}
+                </span>
+              )}
+              <p className="font-bold mb-1">{t.name}</p>
+              <p className="font-display text-3xl text-gold mb-1">{t.price}</p>
+              <p className="text-xs text-muted mb-2">{t.per}</p>
+              <p className="text-sm text-muted">{t.desc}</p>
+              {t.sub && <p className="text-xs font-bold text-goldsoft mt-2">{t.sub}</p>}
             </div>
           ))}
         </div>

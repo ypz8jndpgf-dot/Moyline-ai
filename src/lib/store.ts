@@ -282,6 +282,26 @@ export async function hasAccess(email: string | null | undefined, sub: SubRecord
   return false;
 }
 
+/**
+ * Live beta (founding member) count — same source and precedence as
+ * hasAccess: the Redis `moyline:beta` set first, BETA_EMAILS env as the
+ * seed/fallback. Returns null when neither source yields anyone.
+ */
+export async function getBetaCount(): Promise<number | null> {
+  const redis = getRedis();
+  if (redis) {
+    try {
+      const members = await redis.smembers("moyline:beta");
+      if (members && members.length > 0) return members.length;
+    } catch { /* fall through to env */ }
+  }
+  const env = (process.env.BETA_EMAILS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return env.length > 0 ? env.length : null;
+}
+
 /** Backwards-compat sync wrapper (env var only). Prefer the async hasAccess. */
 export function hasAccessSync(email: string | null | undefined, sub: SubRecord): boolean {
   const admin = (process.env.ADMIN_EMAIL || "").toLowerCase();

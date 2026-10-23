@@ -3,6 +3,8 @@ import { getOdds, getOpenings, getQuotaRemaining } from "@/lib/odds";
 import { buildBoard } from "@/lib/board";
 import OddsBoard from "@/components/OddsBoard";
 import FeaturedPlays from "@/components/FeaturedPlays";
+import ProofStrip from "@/components/ProofStrip";
+import FeaturedRecord from "@/components/FeaturedRecord";
 import RecentResults from "@/components/RecentResults";
 import GoldenRun from "@/components/GoldenRun";
 import TrackHighlights from "@/components/TrackHighlights";
@@ -62,6 +64,9 @@ export default async function Home() {
         </div>
       </div>
 
+      {/* Social proof — the record, above the fold */}
+      <ProofStrip />
+
       {/* Promo video */}
       <PromoVideo />
 
@@ -72,6 +77,8 @@ export default async function Home() {
         )}
 
       <FeaturedPlays />
+
+      <FeaturedRecord />
 
       <GoldenRun />
 

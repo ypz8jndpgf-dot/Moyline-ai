@@ -1,23 +1,17 @@
-import { getTrackRecord } from "@/lib/store";
+import { getShowcaseRecords } from "@/lib/records";
 
 /**
  * THE GOLDEN STICKER — the record since the Oct 16 algo recalibration,
- * computed live from the graded track record. Auto-hides if the run ever
- * dips below .500 (standing honesty rule: never showcase a losing segment).
+ * computed live from the graded track record via the shared showcase
+ * helper. Auto-hides below a 55% win rate (standing honesty rule:
+ * never showcase a losing segment).
  */
-const RECAL_DATE = "2026-10-16";
-
 export default async function GoldenRun() {
-  const rec = await getTrackRecord();
-  const picks = rec.picks.filter(
-    (p) => p.date >= RECAL_DATE && (p.result === "Win" || p.result === "Loss")
-  );
-
-  const w = picks.filter((p) => p.result === "Win").length;
-  const l = picks.filter((p) => p.result === "Loss").length;
+  const { sinceRecal, showSinceRecal } = await getShowcaseRecords();
+  const { w, l } = sinceRecal;
   const total = w + l;
 
-  if (total < 5 || w / total < 0.55) return null;
+  if (!showSinceRecal) return null;
 
   const pct = `${((w / total) * 100).toFixed(0)}%`;
 

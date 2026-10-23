@@ -10,6 +10,7 @@ const TIERS: {
   price: string;
   per: string;
   tag?: string;
+  sub?: string;
   blurb: string;
   cta: string;
   featured?: boolean;
@@ -19,7 +20,7 @@ const TIERS: {
     name: "Day Pass",
     price: "$9.99",
     per: "24 hours",
-    tag: "Trial",
+    sub: "Try it for a day",
     blurb: "Full access for a day. Perfect for trying it out.",
     cta: "Try it for a day",
   },
@@ -30,15 +31,16 @@ const TIERS: {
     per: "7 days",
     blurb: "A full week of cards. One-time payment, no subscription.",
     cta: "Get the week",
-    featured: true,
   },
   {
     id: "monthly",
     name: "Monthly Pro",
     price: "$49.99",
     per: "per month",
+    tag: "Best value",
     blurb: "Every card, all season. Cancel anytime.",
     cta: "Go monthly",
+    featured: true,
   },
 ];
 
@@ -78,13 +80,21 @@ export default function PricingPage() {
       <h1 className="font-display text-5xl mb-3">
         GO <span className="gold-text">PRO</span>
       </h1>
-      <p className="text-muted mb-8">Unlock tonight&apos;s card, every card, all season.</p>
+      <p className="text-muted mb-4">Unlock tonight&apos;s card, every card, all season.</p>
+      <div className="mb-8">
+        <span className="inline-block px-4 py-1.5 rounded-full border border-gold/40 bg-gold/10 text-gold text-[11px] font-bold uppercase tracking-[0.25em]">
+          ✦ Founding Members
+        </span>
+        <p className="text-sm text-muted mt-3">
+          The founding class is in — join them before public launch.
+        </p>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-3 mb-8">
         {TIERS.map((t) => (
           <div
             key={t.id}
-            className={`card p-6 flex flex-col ${t.featured ? "card-glow gold-border" : ""}`}
+            className={`card p-6 flex flex-col ${t.featured ? "card-glow gold-border md:scale-[1.03]" : ""}`}
           >
             {t.tag && (
               <p className="text-xs font-bold uppercase tracking-[0.25em] text-gold mb-2">{t.tag}</p>
@@ -94,6 +104,7 @@ export default function PricingPage() {
               {t.price}
               <span className="text-sm text-muted"> / {t.per}</span>
             </p>
+            {t.sub && <p className="text-xs font-bold text-gold mb-2">{t.sub}</p>}
             <p className="text-muted text-sm mb-6 min-h-[40px]">{t.blurb}</p>
             <button
               onClick={() => subscribe(t.id)}
