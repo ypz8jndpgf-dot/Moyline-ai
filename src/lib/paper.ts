@@ -187,3 +187,21 @@ export async function settlePaperBets(
   }
   return settled;
 }
+
+/** Open bets for one card date, split by source. Lets push/seed responses
+ *  distinguish "0 newly placed" (idempotent re-push — bets already exist)
+ *  from "0 placed ever" (a real failure). The bare placed:0 count was
+ *  misread as a placement outage for over a week (Oct 2026). */
+export async function countOpenBetsForDate(
+  date: string
+): Promise<{ card: number; backpage: number }> {
+  const bets = await getBets();
+  let card = 0;
+  let backpage = 0;
+  for (const b of bets) {
+    if (b.date !== date || b.status !== "open") continue;
+    if (b.source === "backpage") backpage++;
+    else card++;
+  }
+  return { card, backpage };
+}

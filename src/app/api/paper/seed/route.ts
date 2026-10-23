@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Redis } from "@upstash/redis";
-import { placePaperBets, getBankroll } from "@/lib/paper";
+import { placePaperBets, getBankroll, countOpenBetsForDate } from "@/lib/paper";
 
 function cleanEnv(v: string | undefined): string {
   let s = (v || "").trim();
@@ -57,10 +57,13 @@ export async function POST(req: Request) {
       "backpage"
     );
     const bankroll = await getBankroll();
+    const openCounts = await countOpenBetsForDate(feed.date);
     return NextResponse.json({
       ok: true,
       placed: placed.length,
       backpage_placed: bpPlaced.length,
+      open_today: openCounts.card,
+      backpage_open_today: openCounts.backpage,
       bankroll: Math.round(bankroll * 100) / 100,
     });
   } catch (e) {

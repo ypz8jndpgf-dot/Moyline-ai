@@ -326,6 +326,19 @@ export async function POST(req: Request) {
       console.error("[paper] place failed:", e instanceof Error ? e.message : e);
     }
 
+    // Open-bet counts for this card date, so a placed:0 on an idempotent
+    // re-push is visibly "already placed" rather than "never placed."
+    let paperOpenToday = 0;
+    let backpageOpenToday = 0;
+    try {
+      const { countOpenBetsForDate } = await import("@/lib/paper");
+      const counts = await countOpenBetsForDate(body.date);
+      paperOpenToday = counts.card;
+      backpageOpenToday = counts.backpage;
+    } catch {
+      /* informational only */
+    }
+
     return NextResponse.json({
       ok: true,
       picks: merged.picks.length,
@@ -335,6 +348,8 @@ export async function POST(req: Request) {
       merged_into_existing: !!existing,
       paper_bets_placed: paperPlaced,
       backpage_bets_placed: backpagePlaced,
+      paper_bets_open_today: paperOpenToday,
+      backpage_bets_open_today: backpageOpenToday,
     });
   } catch (e) {
     return NextResponse.json(
