@@ -32,7 +32,6 @@ function DeltaBadge({ cell }: { cell: CellVM }) {
 
 function SideCell({ cell }: { cell: CellVM | null }) {
   if (!cell) return <div className="py-1.5 text-muted/40 text-[11px]">—</div>;
-  const showOpen = cell.moved && cell.openDisplay !== "—" && cell.openDisplay !== cell.display;
   return (
     <div
       className={`py-1.5 px-1 text-[12px] whitespace-nowrap rounded ${
@@ -41,11 +40,21 @@ function SideCell({ cell }: { cell: CellVM | null }) {
     >
       {cell.display}
       <DeltaBadge cell={cell} />
-      {showOpen && (
-        <div className="text-[10px] text-muted/70 font-normal">was {cell.openDisplay}</div>
-      )}
     </div>
   );
+}
+
+/** The benchmark for a market row: the first-tracked line, from DraftKings
+ *  when it posted one, otherwise the first book that did. */
+function openForRow(game: GameVM, get: (b: BookVM) => CellVM | null): string {
+  const ordered = [...game.books].sort((a, b) =>
+    a.key === "draftkings" ? -1 : b.key === "draftkings" ? 1 : 0
+  );
+  for (const b of ordered) {
+    const c = get(b);
+    if (c && c.openDisplay && c.openDisplay !== "—") return c.openDisplay;
+  }
+  return "—";
 }
 
 const SHORT_BOOK: Record<string, string> = {
@@ -103,6 +112,9 @@ function GameCard({ game }: { game: GameVM }) {
           <thead>
             <tr className="text-[10px] uppercase tracking-widest text-muted">
               <th className="text-left py-1 pr-2 w-14"></th>
+              <th className="text-left py-1 pr-2 font-bold text-[11px] whitespace-nowrap">
+                Open
+              </th>
               {game.books.map((b) => (
                 <th
                   key={b.key}
@@ -118,6 +130,9 @@ function GameCard({ game }: { game: GameVM }) {
               <tr key={ri} className="border-t border-line/60">
                 <td className="py-1 pr-2 text-[10px] uppercase tracking-widest text-muted whitespace-nowrap">
                   {row.label} <span className="text-paper font-bold">{row.tag}</span>
+                </td>
+                <td className="pr-2 py-1.5 text-[12px] whitespace-nowrap text-muted">
+                  {openForRow(game, row.get)}
                 </td>
                 {game.books.map((b) => (
                   <td key={b.key} className="pr-2">
@@ -203,7 +218,7 @@ export default function OddsBoard({
       </div>
 
       <p className="text-xs text-muted mb-4">
-        Updated {updated} ET · gold cell = best price, not a pick · ▲▼ = move since first tracked · "was" = first tracked line · 🔥 = steam move
+        Updated {updated} ET · gold cell = best price, not a pick · Open = first tracked line (DraftKings when posted) — the benchmark every current line is judged against · ▲▼ = move since first tracked · 🔥 = steam move
         {quotaNote && <span className="text-down"> · {quotaNote}</span>}
       </p>
 
