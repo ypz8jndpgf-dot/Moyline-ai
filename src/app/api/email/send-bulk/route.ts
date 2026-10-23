@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sendEmail, getMemberEmails } from "@/lib/email";
 import { unsubUrl } from "@/lib/unsub";
+import { briefSignInUrl } from "@/lib/brief-signin";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,12 @@ export async function POST(req: Request) {
   const members = await getMemberEmails();
   let sent = 0;
   for (const to of members) {
-    const perHtml = html.replace(/\{\{UNSUBSCRIBE_URL\}\}/g, unsubUrl(to));
+    let perHtml = html.replace(/\{\{UNSUBSCRIBE_URL\}\}/g, unsubUrl(to));
+    if (perHtml.includes("{{SIGNIN_URL}}")) {
+      // Per-recipient one-click sign-in link (single-use, 24h) — minted only
+      // when the email actually carries the placeholder.
+      perHtml = perHtml.replace(/\{\{SIGNIN_URL\}\}/g, await briefSignInUrl(to));
+    }
     try {
       if (await sendEmail(to, subject, perHtml)) sent++;
     } catch {

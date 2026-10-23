@@ -8,6 +8,7 @@ import { findBoardGame, bestPriceForPick, badgeBeatsPlay, steamForGame, BestPric
 import { readTails } from "@/lib/tails";
 import TailButton from "./TailButton";
 import MarketingPaywall from "@/components/MarketingPaywall";
+import PushPrompt from "@/components/PushPrompt";
 
 export const dynamic = "force-dynamic";
 
@@ -369,6 +370,8 @@ export default async function PicksPage() {
       <p className="text-xs text-muted mb-6">
         Best-price tags compare the four books on that pick — they&apos;re not extra picks.
       </p>
+
+      <PushPrompt />
 
       {!feed || feed.picks.length === 0 ? (
         <div className="card p-8 text-center">

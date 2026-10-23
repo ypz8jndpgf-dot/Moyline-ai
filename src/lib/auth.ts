@@ -96,6 +96,12 @@ function getAdapter() {
   return fileAdapter();
 }
 
+/** Exposed for server utilities that need the same adapter NextAuth uses
+ *  (e.g. minting one-click sign-in tokens for brief emails). */
+export function getAuthAdapter() {
+  return getAdapter();
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: getAdapter(),
   session: { strategy: "jwt" },

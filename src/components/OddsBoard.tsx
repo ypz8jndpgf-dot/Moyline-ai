@@ -172,6 +172,12 @@ export default function OddsBoard({
 
   return (
     <div>
+      {/* Lines freshness — surfaced on its own line, not buried in the legend */}
+      <p className="text-xs text-muted mb-4">
+        🕐 Lines updated <span className="text-paper font-semibold">{updated} ET</span>
+        <span className="hidden sm:inline"> · refreshes every morning, plus Thu–Sun evenings</span>
+      </p>
+
       {/* Biggest movers strip */}
       {movers.length > 0 && (
         <div className="mb-6">
@@ -218,7 +224,7 @@ export default function OddsBoard({
       </div>
 
       <p className="text-xs text-muted mb-4">
-        Updated {updated} ET · gold cell = best price, not a pick · Open = first tracked line (DraftKings when posted) — the benchmark every current line is judged against · ▲▼ = move since first tracked · 🔥 = steam move
+        Gold cell = best price, not a pick · Open = first tracked line (DraftKings when posted) — the benchmark every current line is judged against · ▲▼ = move since first tracked · 🔥 = steam move
         {quotaNote && <span className="text-down"> · {quotaNote}</span>}
       </p>
 

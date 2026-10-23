@@ -1,17 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { subscribeToPush } from "@/lib/push-client";
 
 type PushState = "unsupported" | "loading" | "off" | "on" | "denied" | "error";
-
-function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
-  const padding = "=".repeat((4 - (base64.length % 4)) % 4);
-  const b64 = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const raw = atob(b64);
-  const out = new Uint8Array(new ArrayBuffer(raw.length));
-  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
-  return out;
-}
 
 /**
  * Bell toggle for Web Push notifications (new ★ plays, steam alerts).
@@ -44,32 +36,7 @@ export default function PushBell() {
 
   const enable = async () => {
     setState("loading");
-    try {
-      const perm = await Notification.requestPermission();
-      if (perm !== "granted") {
-        setState(perm === "denied" ? "denied" : "off");
-        return;
-      }
-      const keyRes = await fetch("/api/push/subscribe");
-      const keyJson = (await keyRes.json()) as { ok: boolean; publicKey?: string };
-      if (!keyJson.ok || !keyJson.publicKey) {
-        setState("error");
-        return;
-      }
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(keyJson.publicKey),
-      });
-      const saveRes = await fetch("/api/push/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subscription: sub.toJSON() }),
-      });
-      setState(saveRes.ok ? "on" : "error");
-    } catch {
-      setState("error");
-    }
+    setState(await subscribeToPush());
   };
 
   const disable = async () => {
