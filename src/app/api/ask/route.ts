@@ -75,6 +75,14 @@ export async function POST(req: NextRequest) {
       parlay: feed?.parlay
         ? { legs: feed.parlay.legs, odds: (feed.parlay as any).odds, confidence: feed.parlay.confidence }
         : null,
+      lookaheadTeaser: feed?.lookaheads?.teaser
+        ? {
+            legs: feed.lookaheads.teaser.legs,
+            points: feed.lookaheads.teaser.points,
+            confidence: feed.lookaheads.teaser.confidence,
+            target_date: feed.lookaheads.teaser.target_date,
+          }
+        : null,
       records: records
         ? {
             allTime: records.allTime,

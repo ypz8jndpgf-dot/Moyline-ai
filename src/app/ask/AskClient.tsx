@@ -22,6 +22,11 @@ const GREETING: Msg = {
 
 const STORAGE_KEY = "moyline-ask-chat-v2";
 
+/** ET calendar date — a restored conversation is only valid the same day. */
+function todayET(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+}
+
 export function AskClient({ suggestions }: { suggestions?: string[] }) {
   const chips = suggestions && suggestions.length >= 2 ? suggestions : SUGGESTIONS;
   const [msgs, setMsgs] = useState<Msg[]>([GREETING]);
@@ -32,18 +37,23 @@ export function AskClient({ suggestions }: { suggestions?: string[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Restore the conversation after a refresh (same tab session only).
+  // Restore the conversation after a refresh (same tab session, same ET day
+  // only — yesterday's game context would resolve against a stale board).
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        const stored = Array.isArray(parsed) ? parsed : parsed?.msgs;
+        const fresh = Array.isArray(parsed) ? true : parsed?.date === todayET();
+        if (fresh && Array.isArray(stored) && stored.length > 0) {
           setMsgs(
-            parsed
+            stored
               .filter((m: any) => m && (m.role === "user" || m.role === "moy") && typeof m.text === "string")
               .slice(-40)
           );
+        } else {
+          sessionStorage.removeItem(STORAGE_KEY);
         }
       }
     } catch {
@@ -55,7 +65,7 @@ export function AskClient({ suggestions }: { suggestions?: string[] }) {
   useEffect(() => {
     if (!hydrated) return;
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(msgs.slice(-40)));
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ date: todayET(), msgs: msgs.slice(-40) }));
     } catch {
       /* ignore quota errors */
     }
