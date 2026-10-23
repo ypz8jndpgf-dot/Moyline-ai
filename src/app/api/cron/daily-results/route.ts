@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { Redis } from "@upstash/redis";
 import { getMemberEmails, sendEmail } from "@/lib/email";
+import { unsubUrl } from "@/lib/unsub";
+import { briefSignInUrl } from "@/lib/brief-signin";
 import { DayResults } from "../../results/update/route";
 
 export const dynamic = "force-dynamic";
@@ -55,32 +57,40 @@ export async function GET(req: Request) {
 
   const { wins, losses, pushes, highlights } = results;
   const headline = `Last night: ${wins}-${losses}${pushes > 0 ? `-${pushes}` : ""}`;
-  const showRebuildBanner = Date.now() < new Date("2026-10-19T00:00:00-04:00").getTime();
+  // On the brief brand system (black/gold table, Arial Black headline).
+  // {{SIGNIN_URL}} and {{UNSUB_URL}} are replaced per recipient below — the
+  // card button is a one-click sign-in link, so a logged-out member tapping
+  // it lands on /picks already signed in instead of at the sign-in wall.
   const html = `
-    <div style="font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0a0a0a; color: #e8e8e8; padding: 0;">
-      <div style="background-color: #0a0a0a; border-bottom: 3px solid #f5c518; padding: 28px 24px 20px; text-align: center;">
-        <p style="font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: #f5c518; margin: 0 0 8px; font-weight: 700;">MoyLine AI · Daily results</p>
-        <p style="font-size: 13px; color: #888; margin: 0;">${yesterday}</p>
-      </div>
-      <div style="padding: 28px 24px;">
-        <h1 style="font-size: 36px; margin: 0 0 16px; color: #ffffff; font-weight: 800;">${headline}</h1>
-        ${showRebuildBanner ? `<p style="font-size: 13px; background: rgba(245,197,24,0.1); border: 1px solid #f5c518; border-radius: 8px; padding: 12px 16px; color: #f5c518; margin: 0 0 16px; line-height: 1.5;">✦ <b>Algo rebuilt Oct 15</b> — tighter gates on spreads, dogs and CFB sides; totals now rank first. See today's 7am brief for the full grid.</p>` : ""}
-        ${
-          highlights.length > 0
-            ? `<ul style="line-height: 1.8; color: #d0d0d0; padding-left: 20px; margin: 0 0 8px;">${highlights.map((h) => `<li style="margin-bottom: 8px;">${h}</li>`).join("")}</ul>`
-            : `<p style="color: #888;">Full breakdown in today's 7am brief.</p>`
-        }
-        <p style="margin: 28px 0 8px; text-align: center;"><a href="https://moylineai.com/picks" style="background: #f5c518; color: #0a0a0a; font-weight: 800; padding: 14px 32px; border-radius: 999px; text-decoration: none; display: inline-block; font-size: 16px;">Today's card</a></p>
-        <p style="font-size: 11px; color: #666; margin: 24px 0 0; text-align: center;">Analysis for entertainment purposes — not financial advice.</p>
-      </div>
-    </div>`;
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0a0a0a;">
+  <tr><td align="center" style="padding:0;">
+  <table role="presentation" width="720" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:720px;background-color:#0a0a0a;font-family:Arial,Helvetica,sans-serif;">
+    <tr><td style="background-color:#0a0a0a;border-bottom:3px solid #f5c518;padding:30px 24px 22px 24px;text-align:center;">
+      <div style="font-size:32px;font-weight:900;color:#f5c518;letter-spacing:5px;line-height:1;">MOYLINE AI</div>
+      <div style="font-size:12px;font-weight:700;color:#ffe9a3;letter-spacing:7px;margin-top:10px;">DAILY RESULTS</div>
+      <div style="font-size:13px;color:#999999;margin-top:12px;">${yesterday}</div>
+    </td></tr>
+    <tr><td style="padding:26px 24px 8px 24px;">
+      <h1 style="font-family:'Arial Black','Helvetica Neue',Arial,sans-serif;color:#ffffff;font-size:30px;letter-spacing:1px;margin:0 0 16px;">${headline.toUpperCase()}<span style="color:#f5c518;">.</span></h1>
+      ${
+        highlights.length > 0
+          ? `<ul style="line-height:1.8;color:#d0d0d0;padding-left:20px;margin:0 0 8px;font-size:15px;">${highlights.map((h) => `<li style="margin-bottom:8px;">${h}</li>`).join("")}</ul>`
+          : `<p style="color:#999999;font-size:15px;margin:0 0 8px;">Full breakdown in today's 7am brief.</p>`
+      }
+      <p style="margin:28px 0 8px;text-align:center;"><a href="{{SIGNIN_URL}}" style="background:#f5c518;color:#0a0a0a;font-weight:800;padding:14px 32px;border-radius:999px;text-decoration:none;display:inline-block;font-size:16px;">See today's full card →</a></p>
+      <p style="font-size:12px;color:#999999;margin:18px 0 0;text-align:center;"><a href="https://moylineai.com" style="color:#f5c518;text-decoration:none;">moylineai.com</a></p>
+      <p style="font-size:11px;color:#666666;margin:10px 0 0;text-align:center;">Analysis for entertainment purposes — not financial advice.</p>
+      <p style="font-size:11px;color:#888888;margin:8px 0 20px;text-align:center;"><a href="{{UNSUB_URL}}" style="color:#888888;">Unsubscribe from these emails</a></p>
+    </td></tr>
+  </table>
+  </td></tr>
+  </table>`;
 
   let sent = 0;
-  const { unsubUrl } = await import("@/lib/unsub");
   for (const to of members) {
-    const perHtml =
-      html +
-      `<p style="font-size: 11px; color: #888; margin-top: 16px;"><a href="${unsubUrl(to)}" style="color: #888;">Unsubscribe from these emails</a></p>`;
+    const perHtml = html
+      .replace(/\{\{SIGNIN_URL\}\}/g, await briefSignInUrl(to))
+      .replace(/\{\{UNSUB_URL\}\}/g, unsubUrl(to));
     if (await sendEmail(to, `MoyLine AI: ${headline}`, perHtml)) sent++;
   }
   return NextResponse.json({ ok: true, sent, date: yesterday, headline });

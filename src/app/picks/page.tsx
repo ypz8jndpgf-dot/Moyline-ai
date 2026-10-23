@@ -7,8 +7,10 @@ import { buildBoard, MoverVM } from "@/lib/board";
 import { findBoardGame, bestPriceForPick, badgeBeatsPlay, steamForGame, BestPrice } from "@/lib/card-utils";
 import { readTails } from "@/lib/tails";
 import TailButton from "./TailButton";
+import ShareButton from "./ShareButton";
 import MarketingPaywall from "@/components/MarketingPaywall";
 import PushPrompt from "@/components/PushPrompt";
+import IosInstallPrompt from "@/components/IosInstallPrompt";
 
 export const dynamic = "force-dynamic";
 
@@ -169,8 +171,17 @@ function PickCard({
           </div>
         </details>
       )}
-      <div className="mt-3">
+      <div className="mt-3 flex items-center gap-2">
         <TailButton game={p.game} play={p.play} price={p.price} initiallyTailed={initiallyTailed} />
+        <ShareButton
+          game={p.game}
+          play={p.play}
+          price={p.price}
+          confidence={p.confidence}
+          star={!!p.star}
+          dateLabel={cardDate}
+          starts={p.starts}
+        />
       </div>
     </div>
   );
@@ -372,6 +383,7 @@ export default async function PicksPage() {
       </p>
 
       <PushPrompt />
+      <IosInstallPrompt />
 
       {!feed || feed.picks.length === 0 ? (
         <div className="card p-8 text-center">
@@ -442,6 +454,15 @@ export default async function PicksPage() {
                   {feed.teaser.reasoning && (
                     <p className="text-sm text-muted">{feed.teaser.reasoning}</p>
                   )}
+                  <div className="mt-3">
+                    <ShareButton
+                      game="Teaser of the Day"
+                      play={feed.teaser.legs.join(" · ")}
+                      price={`${feed.teaser.points}-pt teaser`}
+                      confidence={feed.teaser.confidence}
+                      dateLabel={cardDate}
+                    />
+                  </div>
                 </>
               ) : (
                 <p className="text-sm text-muted">No teaser today — nothing cleared the bar.</p>
@@ -470,6 +491,15 @@ export default async function PicksPage() {
                   {feed.parlay.reasoning && (
                     <p className="text-sm text-muted">{feed.parlay.reasoning}</p>
                   )}
+                  <div className="mt-3">
+                    <ShareButton
+                      game="Parlay of the Day"
+                      play={feed.parlay.legs.join(" · ")}
+                      price={`${feed.parlay.odds} (${feed.parlay.book})`}
+                      confidence={feed.parlay.confidence}
+                      dateLabel={cardDate}
+                    />
+                  </div>
                 </>
               ) : (
                 <p className="text-sm text-muted">No parlay today — nothing cleared the bar.</p>
