@@ -112,6 +112,176 @@ export function steamForGame(game: GameVM, movers: MoverVM[]): MoverVM[] {
   });
 }
 
+/* ------------------------------------------------------------------ */
+/* Steam-alert selection — used ONLY by /api/refresh's alertCardSteam. */
+/* (The picks page keeps using steamForGame above; untouched.)         */
+/* ------------------------------------------------------------------ */
+
+export interface CardSteamMove {
+  game: string; // board label "Away @ Home"
+  label: string; // display line for the alert email
+  detail: string; // "<Book> · <market label>" of the representative mover
+  /**
+   * Collapsed dedupe identity: "v2|<game>|<book>|<market>" for totals,
+   * "v2|<game>|<book>|<market>|<side>" for spread/ML (their lines are
+   * side-specific, so the side is part of the collapsed identity).
+   */
+  id: string;
+  /** Labels of every raw mover collapsed into this line (legacy dedupe keys). */
+  sourceLabels: string[];
+}
+
+type AlertMarket = "total" | "moneyline" | "spread";
+
+/**
+ * Market of a feed pick, mirroring bestPriceForPick's derivation.
+ * Props return null — the board carries no prop markets, so a prop pick
+ * can never have an actionable board move.
+ */
+function pickAlertMarket(pick: FeedPick): AlertMarket | null {
+  const market = (pick.market || "").toLowerCase();
+  if (market === "prop") return null;
+  const play = (pick.play || "").toLowerCase();
+  if (market === "total" || /\bover\b|\bunder\b/.test(play)) return "total";
+  if (market === "ml" || /\bml\b/.test(play)) return "moneyline";
+  return "spread";
+}
+
+/**
+ * Market of a board mover, parsed from its detail string. board.ts builds
+ * detail as "<Book label> · <colLabel(col)>" where colLabel maps
+ * totalOver/totalUnder -> "total", spreadAway/spreadHome -> "spread",
+ * mlAway/mlHome -> "moneyline". Fallback: totals are the only movers whose
+ * outcome name (the label's leading word) is Over/Under.
+ */
+function moverMarket(m: MoverVM): AlertMarket | null {
+  const seg = (m.detail.split("·").pop() || "").trim().toLowerCase();
+  if (seg === "total") return "total";
+  if (seg === "spread") return "spread";
+  if (seg === "moneyline" || seg === "ml" || seg === "h2h") return "moneyline";
+  if (/^(over|under)\b/i.test(m.label)) return "total";
+  return null;
+}
+
+/** Book label of a mover: the segment before " · " in its detail string. */
+function moverBook(m: MoverVM): string {
+  return (m.detail.split("·")[0] || "").trim();
+}
+
+/**
+ * Outcome (side) name at the head of a mover label. Labels look like
+ * "Toronto Maple Leafs (-125)" or "Arizona State Sun Devils +2.5 (-110)"
+ * before the arrow: strip the trailing "(price)" and the optional point.
+ */
+function moverOutcome(m: MoverVM): string {
+  const head = m.label.split("→")[0].trim();
+  return head
+    .replace(/\s*\([^)]*\)\s*$/, "")
+    .replace(/\s+[+-]?\d+(?:\.\d+)?$/, "")
+    .trim();
+}
+
+/**
+ * Open/current point values from a mover label, without the spurious
+ * leading "+" that cellDisplay puts on (always-positive) total points:
+ * "Over +63.5 (-108) → +59.5 (-112)" -> { open: "63.5", cur: "59.5" }.
+ */
+function moverPoints(label: string): { open: string; cur: string } | null {
+  const parts = label.split("→");
+  if (parts.length !== 2) return null;
+  const grab = (s: string): string | null => {
+    const mm = s.match(/[+-]?\d+(?:\.\d+)?/);
+    return mm ? mm[0].replace(/^\+/, "") : null;
+  };
+  const open = grab(parts[0]);
+  const cur = grab(parts[1]);
+  return open !== null && cur !== null ? { open, cur } : null;
+}
+
+/** Display label for a collapsed total move: "Total 63.5 → 59.5". */
+function totalMoveLabel(rep: MoverVM): string {
+  const pts = moverPoints(rep.label);
+  if (pts) return `Total ${pts.open} → ${pts.cur}`;
+  // Fallback: the raw label with the spurious "+" before point values removed.
+  return rep.label.replace(/\+(?=\d)/g, "");
+}
+
+/**
+ * Select the steam moves that are actually actionable for the main card.
+ *
+ * Replaces the alert path's old steamForGame matching, which (a) matched a
+ * mover when ANY single team-name word appeared in its label — a pick on
+ * "Arizona State" matched a San Diego State @ Colorado State mover via the
+ * shared word "State", for a game that wasn't on the card at all — and
+ * (b) fired on every market in a matched game, so a Maple Leafs ML pick
+ * alerted on the TOR/EDM total move. Rules:
+ *
+ *  - A pick only sees movers from its OWN board game (via findBoardGame),
+ *    and only movers whose `game` string is exactly that game's
+ *    "Away @ Home" label.
+ *  - A mover must be steam and its market must equal the pick's market.
+ *  - Movers collapse to one alert line per game+book+market. The Over and
+ *    Under rows of the same total are a single move (one line, "Total
+ *    63.5 → 59.5"); spread/ML lines stay side-specific, keyed by side.
+ *    A move selected via two picks in the same game+market appears once.
+ */
+export function selectCardSteamMoves(
+  picks: FeedPick[],
+  games: GameVM[],
+  movers: MoverVM[]
+): CardSteamMove[] {
+  interface Group {
+    game: string;
+    detail: string;
+    id: string;
+    isTotal: boolean;
+    rep: MoverVM;
+    sourceLabels: string[];
+  }
+  const groups = new Map<string, Group>();
+
+  for (const pick of picks) {
+    const market = pickAlertMarket(pick);
+    if (!market) continue;
+    const bg = findBoardGame(pick, games);
+    if (!bg) continue;
+    const gameLabel = `${bg.away} @ ${bg.home}`;
+
+    for (const m of movers) {
+      if (!m.steam || m.game !== gameLabel) continue;
+      if (moverMarket(m) !== market) continue;
+      const book = moverBook(m);
+      const id =
+        market === "total"
+          ? `${gameLabel}|${book}|total`
+          : `${gameLabel}|${book}|${market}|${moverOutcome(m)}`;
+      const g = groups.get(id);
+      if (g) {
+        g.sourceLabels.push(m.label);
+        // The Over row represents the collapsed total line.
+        if (market === "total" && /^over\b/i.test(m.label)) g.rep = m;
+      } else {
+        groups.set(id, {
+          game: gameLabel,
+          detail: m.detail,
+          id,
+          isTotal: market === "total",
+          rep: m,
+          sourceLabels: [m.label],
+        });
+      }
+    }
+  }
+
+  return [...groups.values()].map((g) => ({
+    game: g.game,
+    label: g.isTotal ? totalMoveLabel(g.rep) : g.rep.label,
+    detail: g.detail,
+    id: `v2|${g.id}`,
+    sourceLabels: g.sourceLabels,
+  }));
+}
+
 /**
  * Merge key for the holistic card: normalized game + market + side.
  * A re-published play at a changed line (e.g. "Penn State -1.5" -> "-2")

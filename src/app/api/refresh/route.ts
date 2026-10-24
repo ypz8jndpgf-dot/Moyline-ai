@@ -4,7 +4,7 @@ import { refreshOdds, getQuotaRemaining, getOdds, getOpenings } from "@/lib/odds
 import { buildBoard } from "@/lib/board";
 import { getPicksFeed } from "@/lib/picks";
 import { captureClvLines } from "@/lib/clv";
-import { findBoardGame, steamForGame } from "@/lib/card-utils";
+import { selectCardSteamMoves } from "@/lib/card-utils";
 import { getMemberEmails, sendEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
@@ -97,19 +97,40 @@ async function alertCardSteam(): Promise<number> {
   const [oddsResult, openings] = await Promise.all([getOdds(), getOpenings()]);
   const { games, movers } = buildBoard(oddsResult.events, openings);
 
+  // Only steam moves in a pick's own game AND own market, collapsed to one
+  // line per game+book+market (see selectCardSteamMoves in card-utils).
+  const selected = selectCardSteamMoves(feed.picks, games, movers);
+  console.log(
+    `[steam] selected ${selected.length} card steam move(s)` +
+      (selected.length
+        ? `: ${selected.map((s) => `${s.game} — ${s.label} (${s.detail})`).join("; ")}`
+        : "")
+  );
+
   const redis = new Redis({ url, token });
   const fresh: { game: string; label: string; detail: string }[] = [];
 
-  for (const pick of feed.picks) {
-    const bg = findBoardGame(pick, games);
-    if (!bg) continue;
-    for (const m of steamForGame(bg, movers)) {
-      const key = STEAM_PREFIX + Buffer.from(`${m.game}|${m.label}`).toString("base64url").slice(0, 80);
-      const seen = await redis.get(key);
-      if (!seen) {
-        await redis.set(key, "1", { ex: 24 * 3600 });
-        fresh.push({ game: m.game, label: m.label, detail: m.detail });
+  for (const mv of selected) {
+    // Dedupe on the COLLAPSED move identity (game+book+market[/side]).
+    const key = STEAM_PREFIX + Buffer.from(mv.id).toString("base64url").slice(0, 80);
+    let seen: unknown = await redis.get(key);
+    if (!seen) {
+      // Migration guard: pre-fix keys were base64(game|raw mover label), one
+      // per book×column cell. If any raw mover collapsed into this line was
+      // already alerted under the old scheme, don't re-alert the same move
+      // tonight under the new key.
+      for (const lbl of mv.sourceLabels) {
+        const legacyKey =
+          STEAM_PREFIX + Buffer.from(`${mv.game}|${lbl}`).toString("base64url").slice(0, 80);
+        if (await redis.get(legacyKey)) {
+          seen = "legacy";
+          break;
+        }
       }
+    }
+    if (!seen) {
+      await redis.set(key, "1", { ex: 24 * 3600 });
+      fresh.push({ game: mv.game, label: mv.label, detail: mv.detail });
     }
   }
 
