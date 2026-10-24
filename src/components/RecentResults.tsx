@@ -37,7 +37,7 @@ export default async function RecentResults() {
             <p className="text-xs text-muted mt-1">Every pick graded · win-loss-push</p>
           </div>
           <a
-            href="/record"
+            href="/track-record"
             className="shrink-0 text-xs font-bold uppercase tracking-widest text-gold hover:text-goldsoft transition-colors"
           >
             Full record →

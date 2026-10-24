@@ -83,7 +83,7 @@ export default async function TrackHighlights() {
         </div>
         <p className="text-[11px] text-muted/60 mt-4 text-center">
           Live from {picks.length} graded picks ·{" "}
-          <a href="/record" className="text-gold hover:text-goldsoft">
+          <a href="/track-record" className="text-gold hover:text-goldsoft">
             Full record →
           </a>
         </p>
