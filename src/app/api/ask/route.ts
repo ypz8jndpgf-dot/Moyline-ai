@@ -4,6 +4,7 @@ import { getOddsCached, getOpenings } from "@/lib/odds";
 import { getPicksFeed } from "@/lib/picks";
 import { getShowcaseRecords } from "@/lib/records";
 import { answerQuestion, type AskData, type ChatTurn } from "@/lib/ask-engine";
+import { recordAskStat } from "@/lib/ask-stats";
 
 /**
  * Ask MoyAI — conversational endpoint.
@@ -96,7 +97,10 @@ export async function POST(req: NextRequest) {
         : null,
     };
 
-    const { reply, gameIds } = answerQuestion(question, history, data);
+    const { reply, gameIds, intent } = answerQuestion(question, history, data);
+
+    // Usage counters (counts only, no content) — fire-and-forget.
+    recordAskStat(intent);
 
     return NextResponse.json({
       reply,

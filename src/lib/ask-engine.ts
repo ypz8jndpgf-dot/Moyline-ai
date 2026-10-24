@@ -9,6 +9,18 @@
  * cover something the reply says so plainly. Nothing is invented.
  */
 
+/** Coarse question category, for privacy-clean usage stats (counts only). */
+export type AskIntent =
+  | "matchup"
+  | "sport_slate"
+  | "card"
+  | "record"
+  | "props"
+  | "followup"
+  | "fallback"
+  | "smalltalk"
+  | "other";
+
 export type ChatTurn = {
   role: "user" | "assistant";
   text: string;
@@ -1208,7 +1220,7 @@ export function answerQuestion(
   question: string,
   history: ChatTurn[],
   data: AskData
-): { reply: string; gameIds: string[] } {
+): { reply: string; gameIds: string[]; intent: AskIntent } {
   const raw = question.trim();
   const q = norm(raw);
 
@@ -1217,10 +1229,11 @@ export function answerQuestion(
     return {
       reply: "Hey! I can walk you through tonight's board, today's card, any matchup's lines and leans, or how the record's looking. What do you want to dig into?",
       gameIds: [],
+      intent: "smalltalk",
     };
   }
   if (/^(thanks|thank you|thx|ty)\b/.test(q)) {
-    return { reply: "Anytime. Holler if you want a read on another game.", gameIds: [] };
+    return { reply: "Anytime. Holler if you want a read on another game.", gameIds: [], intent: "smalltalk" };
   }
 
   // Futures / championships — not a market the board carries.
@@ -1228,6 +1241,7 @@ export function answerQuestion(
     return {
       reply: "I only track game lines on the board — spreads, totals, and moneylines for scheduled games. Futures like Super Bowl or championship winners aren't on it, so I won't guess at one. Ask me about a game or a slate and I'll give you the real numbers.",
       gameIds: [],
+      intent: "other",
     };
   }
 
@@ -1237,6 +1251,7 @@ export function answerQuestion(
     return {
       reply: "Tomorrow's card isn't posted yet — picks drop with the morning brief, and I won't pretend today's card is tomorrow's. If you want, ask me about tomorrow's slate and I'll walk you through the games and lines that are already up.",
       gameIds: [],
+      intent: "other",
     };
   }
 
@@ -1246,29 +1261,29 @@ export function answerQuestion(
   const recordAsk =
     /\brecord\b|\btrack record\b|\bwin rate\b|how (are|have) you (doing|been)|how are we doing|how'?d you do|how did you do|star plays? (doing|been|record)|how'?s the (week|month)\b/.test(q);
   if (recordAsk && !namedGames.length) {
-    return { reply: answerRecord(data), gameIds: [] };
+    return { reply: answerRecord(data), gameIds: [], intent: "record" };
   }
 
   // Card sub-questions (checked before team matching: "card" used to
   // false-match "Cardinals", "star" questions hit the fallback, etc.)
   if (/\bstar (play|pick)|★|star of the day\b/.test(q)) {
-    return { reply: answerStar(data), gameIds: cardGameIds(data) };
+    return { reply: answerStar(data), gameIds: cardGameIds(data), intent: "card" };
   }
   if (/\bteaser\b/.test(q)) {
-    return { reply: answerTeaser(data), gameIds: [] };
+    return { reply: answerTeaser(data), gameIds: [], intent: "card" };
   }
   if (/\bparlay\b/.test(q)) {
-    return { reply: answerParlay(data), gameIds: [] };
+    return { reply: answerParlay(data), gameIds: [], intent: "card" };
   }
   if (/\bfree pick\b/.test(q)) {
-    return { reply: answerFreePick(data), gameIds: cardGameIds(data) };
+    return { reply: answerFreePick(data), gameIds: cardGameIds(data), intent: "card" };
   }
 
   // Today's card / best bets
   const cardAsk =
     /\b(today'?s|the) card\b|\bon the card\b|\byour picks\b|\bwhat are you on\b|\bplays today\b|\bcard today\b|\bbest bets?\b/.test(q);
   if (cardAsk && !namedGames.length) {
-    return answerCard(data);
+    return { ...answerCard(data), intent: "card" };
   }
 
   // Sport-scoped questions (slate or value) — before team matching so
@@ -1278,7 +1293,7 @@ export function answerQuestion(
     const scope = scopeFromQuestion(q);
     const slatey = /\bwhat|games|on\b|tonight|today|tomorrow|weekend|sunday|monday|tuesday|wednesday|thursday|friday|saturday|slate|schedule\b/.test(q);
     if (!namedGames.length || VALUE_PHRASE.test(q) || slatey) {
-      return answerSport(sport, scope, VALUE_PHRASE.test(q) || /\b(best|good|value)\b/.test(q), data);
+      return { ...answerSport(sport, scope, VALUE_PHRASE.test(q) || /\b(best|good|value)\b/.test(q), data), intent: "sport_slate" };
     }
   }
 
@@ -1288,11 +1303,17 @@ export function answerQuestion(
   if (kt) {
     const g = gameForTeam(kt, data.events);
     if (g) {
-      return { reply: answerAboutGame(g, subIntent(q), raw, data), gameIds: [g.id] };
+      const si = subIntent(q);
+      return {
+        reply: answerAboutGame(g, si, raw, data),
+        gameIds: [g.id],
+        intent: si === "props" ? "props" : "matchup",
+      };
     }
     return {
       reply: `The ${titleCase(kt.name)} aren't on the board — no ${titleCase(kt.nick)} game in the current slate. I won't guess at lines for a game that isn't posted. Ask me what's on tonight, or name a team that is playing, and I'll give you the real numbers.`,
       gameIds: [],
+      intent: "fallback",
     };
   }
 
@@ -1309,13 +1330,13 @@ export function answerQuestion(
           .join("; ");
         reply += `\n\nThere's also: ${others} — if you meant one of those, say the word.`;
       }
-      return { reply, gameIds: namedGames.map((g) => g.id) };
+      return { reply, gameIds: namedGames.map((g) => g.id), intent: intent === "props" ? "props" : "matchup" };
     }
     const parts = [describeGame(primary, data)];
     for (const g of namedGames.slice(1)) {
       parts.push(`Also on the board: ${briefGameLine(g)}, ${timeET(g.commence)}. Want me to dig into that one too?`);
     }
-    return { reply: parts.join("\n\n"), gameIds: namedGames.map((g) => g.id) };
+    return { reply: parts.join("\n\n"), gameIds: namedGames.map((g) => g.id), intent: "matchup" };
   }
 
   // Date-scoped slate ("what games are on tomorrow?", "this weekend?")
@@ -1324,24 +1345,29 @@ export function answerQuestion(
     /\bwhat games|games (on|tonight|today)|tonight'?s (games|board|slate)|the board|slate|schedule|what'?s on|anything (on|good)\b/.test(q) ||
     isFutureScope(scope)
   ) {
-    return answerSlate(data, scope);
+    return { ...answerSlate(data, scope), intent: "sport_slate" };
   }
 
   // Props with no named team — resolve against context if possible.
   if (subIntent(q) === "props") {
     const ctx = resolveContextGame(raw, history, data);
-    return { reply: answerProps(raw, ctx ? [ctx] : [], data), gameIds: ctx ? [ctx.id] : [] };
+    return {
+      reply: answerProps(raw, ctx ? [ctx] : [], data),
+      gameIds: ctx ? [ctx.id] : [],
+      intent: ctx ? "followup" : "props",
+    };
   }
 
   // Follow-up against the conversation's game(s).
   const ctx = resolveContextGame(raw, history, data);
   if (ctx) {
-    return { reply: answerAboutGame(ctx, subIntent(q), raw, data), gameIds: [ctx.id] };
+    return { reply: answerAboutGame(ctx, subIntent(q), raw, data), gameIds: [ctx.id], intent: "followup" };
   }
 
   return {
     reply:
       "I couldn't find that on the board. Give me a team or a matchup — like “Celtics” or “Chiefs vs Chargers” — or ask me what's on tonight, a sport (\"any CFB value?\"), what's on today's card, or how the record's looking.",
     gameIds: [],
+    intent: "fallback",
   };
 }
