@@ -83,6 +83,101 @@ export async function getShowcaseRecords(): Promise<ShowcaseRecords> {
 }
 
 /* ------------------------------------------------------------------ */
+/* Homepage "Where the edge lives" trend cards — the same eight       */
+/* segments the block has always shown, but computed live from the    */
+/* track record on every render so the numbers can never go stale.    */
+/* Two of the original cards were confidence-tier cuts (Soccer        */
+/* conf-3, NFL conf-3); the stored record carries a conf value on     */
+/* only a handful of recent picks, so those cuts cannot be recomputed */
+/* and are replaced with same-spirit tie-able segments (Soccer        */
+/* moneylines for the soccer card; WNBA overall for the NFL slot —    */
+/* NFL overall sits below the .500 honesty floor and stays hidden).   */
+/* Floors: a card shows only with ≥8 decisions and win% ≥ 50          */
+/* (pushes excluded from win%, matching the rest of this module).     */
+/* ------------------------------------------------------------------ */
+
+export interface TrendCard {
+  pct: string;
+  label: string;
+  detail: string;
+}
+
+export async function getTrendCards(): Promise<TrendCard[]> {
+  const rec = await getTrackRecord();
+  const graded = rec.picks.filter((p) => p.result !== "Pending");
+  const sport = (p: TrackPick) => sportLabel(p.sport);
+  const type = (p: TrackPick) => classifyPick(p);
+
+  const defs: {
+    label: string;
+    detail: (rec: string) => string;
+    keep: (p: TrackPick) => boolean;
+  }[] = [
+    {
+      label: "Sharpened ★",
+      detail: (r) => `${r} · NHL/NFL ML & spread`,
+      keep: (p) =>
+        p.star === true &&
+        (sport(p) === "NHL" || sport(p) === "NFL") &&
+        (type(p) === "Moneyline" || type(p) === "Spread"),
+    },
+    {
+      label: "Overs overall",
+      detail: (r) => `${r} · not just unders`,
+      keep: (p) => type(p) === "Total" && /\bover\b/i.test(p.play),
+    },
+    {
+      label: "NHL moneylines",
+      detail: (r) => `${r} · all NHL moneylines`,
+      keep: (p) => sport(p) === "NHL" && type(p) === "Moneyline",
+    },
+    {
+      label: "Soccer moneylines",
+      detail: (r) => `${r} · all soccer moneylines`,
+      keep: (p) => sport(p) === "Soccer" && type(p) === "Moneyline",
+    },
+    {
+      label: "CFB unders",
+      detail: (r) => `${r} · tempo + defense`,
+      keep: (p) =>
+        sport(p) === "CFB" && type(p) === "Total" && /\bunder\b/i.test(p.play),
+    },
+    {
+      label: "Soccer overall",
+      detail: (r) => `${r} · consistent edge`,
+      keep: (p) => sport(p) === "Soccer",
+    },
+    {
+      label: "Moneylines",
+      detail: (r) => `${r} · every sport`,
+      keep: (p) => type(p) === "Moneyline",
+    },
+    {
+      label: "WNBA overall",
+      detail: (r) => `${r} · all WNBA plays`,
+      keep: (p) => sport(p) === "WNBA",
+    },
+  ];
+
+  const cards: (TrendCard & { exact: number; decisions: number })[] = [];
+  for (const d of defs) {
+    const s = tally(graded.filter(d.keep));
+    const decisions = s.w + s.l;
+    if (decisions < 8 || s.pct === null || s.pct < 50) continue;
+    const rec = s.p > 0 ? `${s.w}-${s.l}-${s.p}` : `${s.w}-${s.l}`;
+    cards.push({
+      pct: `${Math.round(s.pct)}%`,
+      label: d.label,
+      detail: d.detail(rec),
+      exact: s.pct,
+      decisions,
+    });
+  }
+  cards.sort((a, b) => b.exact - a.exact || b.decisions - a.decisions);
+  return cards.map(({ pct, label, detail }) => ({ pct, label, detail }));
+}
+
+/* ------------------------------------------------------------------ */
 /* Units — profit at the prices the picks were published at.           */
 /* 1 unit risked per bet: win pays the price profit, loss −1, push 0.  */
 /* Prices live in the pick's `line` field (American or decimal); a few */

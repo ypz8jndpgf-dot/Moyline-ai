@@ -9,23 +9,17 @@ import RecentResults from "@/components/RecentResults";
 import GoldenRun from "@/components/GoldenRun";
 import TrackHighlights from "@/components/TrackHighlights";
 import TrackTicker from "@/components/TrackTicker";
+import { getTrendCards } from "@/lib/records";
 import PromoVideo from "@/components/PromoVideo";
 
 export const dynamic = "force-dynamic";
 
-const TRENDS = [
-  { pct: "74%", label: "Sharpened ★", detail: "14-5-1 · NHL/NFL ML & spread" },
-  { pct: "72%", label: "Soccer conf-3", detail: "13-5 · never starred" },
-  { pct: "66%", label: "NHL moneylines", detail: "Best sport · 27-18 overall" },
-  { pct: "64%", label: "NFL conf-3", detail: "14-8 · the workhorse tier" },
-  { pct: "61%", label: "CFB unders", detail: "11-7 · tempo + defense" },
-  { pct: "58%", label: "Overs overall", detail: "14-10 · not just unders" },
-  { pct: "57%", label: "Soccer overall", detail: "30-23-1 · consistent edge" },
-  { pct: "54%", label: "Moneylines", detail: "61-52-1 · best pick type" },
-];
-
 export default async function Home() {
-  const [oddsResult, openings] = await Promise.all([getOdds(), getOpenings()]);
+  const [oddsResult, openings, trends] = await Promise.all([
+    getOdds(),
+    getOpenings(),
+    getTrendCards(),
+  ]);
   const { games, movers, sports } = buildBoard(oddsResult.events, openings);
 
   return (
@@ -100,7 +94,7 @@ export default async function Home() {
           These are the segments that keep winning:
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {TRENDS.map((t) => (
+          {trends.map((t) => (
             <div
               key={t.label}
               className="rounded border border-gold/30 bg-black/40 px-3 py-4 text-center"
