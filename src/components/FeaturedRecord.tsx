@@ -1,41 +1,50 @@
 import Link from "next/link";
-import { getShowcaseRecords, formatPct, type RecordStat } from "@/lib/records";
+import {
+  getFeaturedMetrics,
+  formatPct,
+  formatUnits,
+  formatRoi,
+  type StatWithUnits,
+} from "@/lib/records";
 
 /**
  * THE RECORD — featured record block for the homepage, styled after the
  * /share pick cards (black card, gold glow, small-caps gold eyebrow).
- * Same numbers, same source, same honesty floors as the hero proof strip:
- * all-time always shows, ★ hides below .500, since-Oct-16 hides below 55%,
- * last-7-days hides below .500.
+ * The anchor cell is the all-time record with its units at published
+ * prices — always shown, per the standing honesty rule. Beside it, the
+ * two best story stats selected daily by the fixed curation rules in
+ * getFeaturedMetrics (labeled windows/segments that clear sample and
+ * performance floors). The complete record lives one tap away.
  */
 export default async function FeaturedRecord() {
-  const r = await getShowcaseRecords();
+  const f = await getFeaturedMetrics();
+  const stories = f.stories.slice(0, 2);
 
-  const cells: { label: string; stat: RecordStat; note: string }[] = [
-    { label: "All-time", stat: r.allTime, note: "Every graded pick, ever" },
+  const cells: {
+    label: string;
+    stat: StatWithUnits;
+    note: string;
+    anchor?: boolean;
+  }[] = [
+    {
+      label: "All-time",
+      stat: f.anchor,
+      note: "Every graded pick, ever",
+      anchor: true,
+    },
+    ...stories.map((s) => ({
+      label: s.label,
+      stat: s.stat,
+      note: s.note,
+    })),
   ];
-  if (r.showStars) {
-    cells.push({ label: "★ Featured plays", stat: r.stars, note: "Biggest-edge plays only" });
-  }
-  if (r.showSinceRecal) {
-    cells.push({
-      label: "Since Oct 16",
-      stat: r.sinceRecal,
-      note: "Post-recalibration · the Golden Run",
-    });
-  }
-  if (r.showLast7) {
-    cells.push({ label: "Last 7 days", stat: r.last7, note: "Current form" });
-  }
 
   const cols =
-    cells.length === 4
-      ? "grid-cols-2 lg:grid-cols-4"
-      : cells.length === 3
-        ? "grid-cols-3"
-        : cells.length === 2
-          ? "grid-cols-2"
-          : "grid-cols-1";
+    cells.length === 3
+      ? "grid-cols-1 sm:grid-cols-3"
+      : cells.length === 2
+        ? "grid-cols-2"
+        : "grid-cols-1";
 
   return (
     <section className="mb-10">
@@ -81,6 +90,20 @@ export default async function FeaturedRecord() {
               {formatPct(c.stat) && (
                 <p className="text-gold font-bold text-lg mt-1">{formatPct(c.stat)}</p>
               )}
+              <p
+                className={`font-bold text-sm mt-1 ${
+                  c.stat.units.units >= 0 ? "text-emerald-400" : "text-red-400"
+                }`}
+              >
+                {formatUnits(c.stat.units.units)}
+                {c.anchor && (
+                  <span className="text-muted font-normal text-[11px]">
+                    {" "}· units at published prices
+                    {formatRoi(c.stat.units.roiPct) &&
+                      ` · ${formatRoi(c.stat.units.roiPct)}`}
+                  </span>
+                )}
+              </p>
               <p className="text-[11px] text-muted mt-1">{c.note}</p>
             </div>
           ))}

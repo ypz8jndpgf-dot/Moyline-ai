@@ -1,29 +1,39 @@
-import { getShowcaseRecords, formatRecord, formatPct } from "@/lib/records";
+import {
+  getFeaturedMetrics,
+  formatRecord,
+  formatPct,
+  type FeaturedMetric,
+} from "@/lib/records";
 
 /**
  * Hero proof strip — the record, above the fold, in five seconds.
- * All-time always shows; the ★ and since-Oct-16 stats obey the standing
- * honesty floors (★ hides below .500, Golden Run hides below 55%) and
- * the strip reflows with whatever stats remain.
+ * All-time always shows; the ★ stat obeys its honesty floor (hides below
+ * .500); the third slot is curated daily by fixed rules in
+ * getFeaturedMetrics — the since-Oct-16 run when it clears its floor,
+ * otherwise the best eligible recent window, otherwise it hides and the
+ * strip reflows.
  */
 export default async function ProofStrip() {
-  const r = await getShowcaseRecords();
+  const f = await getFeaturedMetrics();
+
+  const thirdLabel = (m: FeaturedMetric): string =>
+    m.key === "sinceRecal" ? "Since Oct 16 · Golden Run" : m.label;
 
   const stats: { label: string; record: string; pct: string | null }[] = [
-    { label: "All-time record", record: formatRecord(r.allTime), pct: formatPct(r.allTime) },
+    { label: "All-time record", record: formatRecord(f.anchor), pct: formatPct(f.anchor) },
   ];
-  if (r.showStars) {
+  if (f.showStars) {
     stats.push({
       label: "★ Featured plays",
-      record: formatRecord(r.stars),
-      pct: formatPct(r.stars),
+      record: formatRecord(f.stars),
+      pct: formatPct(f.stars),
     });
   }
-  if (r.showSinceRecal) {
+  if (f.proofThird) {
     stats.push({
-      label: "Since Oct 16 · Golden Run",
-      record: formatRecord(r.sinceRecal),
-      pct: formatPct(r.sinceRecal),
+      label: thirdLabel(f.proofThird),
+      record: formatRecord(f.proofThird.stat),
+      pct: formatPct(f.proofThird.stat),
     });
   }
 
