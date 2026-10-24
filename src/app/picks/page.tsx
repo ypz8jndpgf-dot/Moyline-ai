@@ -114,8 +114,11 @@ function PickCard({
   return (
     <div className="card card-glow p-5">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-bold uppercase tracking-widest text-gold">
-          #{index + 1} {p.star && "★"}
+        <span className="flex items-center gap-2">
+          <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-gold/40 bg-gold/10 text-gold text-xs font-bold tracking-widest">
+            #{index + 1}
+          </span>
+          {p.star && <span className="text-gold text-sm leading-none">★</span>}
         </span>
         <span className="flex items-center gap-2">
           <StatusBadge status={status} />
@@ -414,6 +417,9 @@ export default async function PicksPage() {
             </div>
           )}
 
+          <p className="text-xs font-bold uppercase tracking-widest text-gold mb-3">
+            Ranked by confidence — #1 is our top play
+          </p>
           <div className="grid gap-4 md:grid-cols-2 mb-8">
             {sortedPicks.map(({ p, status }, i) => {
               const key = `${p.game}|${p.play}`;
