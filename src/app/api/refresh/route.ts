@@ -3,6 +3,7 @@ import { Redis } from "@upstash/redis";
 import { refreshOdds, getQuotaRemaining, getOdds, getOpenings } from "@/lib/odds";
 import { buildBoard } from "@/lib/board";
 import { getPicksFeed } from "@/lib/picks";
+import { captureClvLines } from "@/lib/clv";
 import { findBoardGame, steamForGame } from "@/lib/card-utils";
 import { getMemberEmails, sendEmail } from "@/lib/email";
 
@@ -34,6 +35,14 @@ export async function GET(req: Request) {
   }
   try {
     const result = await refreshOdds(true);
+
+    // CLV capture (fire-and-forget; never awaited, never fails or delays
+    // the refresh). Upserts the just-fetched board line for every
+    // not-yet-started pick on today's card — the last write before a
+    // game's start is its closing proxy. Zero extra Odds API calls.
+    void captureClvLines(result.events).catch((e) =>
+      console.error("[refresh] clv capture failed:", e instanceof Error ? e.message : e)
+    );
 
     // Steam alerts on card games (best-effort; never fails the refresh).
     let steamAlerts = 0;
