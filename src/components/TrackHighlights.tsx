@@ -28,7 +28,7 @@ export default async function TrackHighlights() {
     }
   };
 
-  // By sport (min 8)
+  // By sport (min 15 decisions — showcase segment floor)
   const bySport = new Map<string, typeof picks>();
   for (const p of picks) {
     const arr = bySport.get(p.sport) || [];
@@ -37,7 +37,7 @@ export default async function TrackHighlights() {
   }
   for (const [sport, list] of bySport) {
     const [w, l] = tally(list);
-    add(`${sport} picks`, w, l, "by sport", 8);
+    add(`${sport} picks`, w, l, "by sport", 15);
   }
 
   // By play type (min 8)
@@ -49,7 +49,7 @@ export default async function TrackHighlights() {
   ];
   for (const [label, detail, match] of types) {
     const [w, l] = tally(picks.filter((p) => match(p.play)));
-    add(label, w, l, detail, 8);
+    add(label, w, l, detail, 15);
   }
 
   // Recent form: last 20 (min 15 graded)

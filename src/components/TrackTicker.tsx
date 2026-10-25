@@ -17,7 +17,7 @@ function collectSegments(
     list.filter((p) => p.result === "Loss").length,
   ];
 
-  // By sport (min 8 graded)
+  // By sport (min 15 graded — showcase segment floor)
   const bySport = new Map<string, typeof picks>();
   for (const p of picks) {
     const arr = bySport.get(p.sport) || [];
@@ -26,11 +26,11 @@ function collectSegments(
   }
   for (const [sport, list] of bySport) {
     const [w, l] = tally(list);
-    if (w + l >= 8 && w / (w + l) >= 0.5)
+    if (w + l >= 15 && w / (w + l) >= 0.5)
       segments.push({ label: sport.toUpperCase(), w, l });
   }
 
-  // By play type (min 8 graded)
+  // By play type (min 15 graded — showcase segment floor)
   const types: [string, (play: string) => boolean][] = [
     ["UNDERS", (pl) => pl.toLowerCase().includes("under")],
     ["OVERS", (pl) => pl.toLowerCase().includes("over")],
@@ -40,7 +40,7 @@ function collectSegments(
   for (const [label, match] of types) {
     const list = picks.filter((p) => match(p.play));
     const [w, l] = tally(list);
-    if (w + l >= 8 && w / (w + l) >= 0.5) segments.push({ label, w, l });
+    if (w + l >= 15 && w / (w + l) >= 0.5) segments.push({ label, w, l });
   }
 
   // Recent form: last 10 graded
