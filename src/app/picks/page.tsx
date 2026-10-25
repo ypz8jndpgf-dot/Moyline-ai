@@ -4,7 +4,7 @@ import { getSubscription, hasAccess } from "@/lib/store";
 import { getPicksFeed, PicksFeed, FeedPick } from "@/lib/picks";
 import { getOdds, getOpenings } from "@/lib/odds";
 import { buildBoard, MoverVM } from "@/lib/board";
-import { findBoardGame, bestPriceForPick, badgeBeatsPlay, steamForGame, BestPrice } from "@/lib/card-utils";
+import { findBoardGame, bestPriceForPick, badgeBeatsPlay, selectCardSteamMoves, BestPrice } from "@/lib/card-utils";
 import { readTails } from "@/lib/tails";
 import TailButton from "./TailButton";
 import ShareButton from "./ShareButton";
@@ -359,7 +359,6 @@ export default async function PicksPage() {
   }
 
   const bestByPick = new Map<string, BestPrice>();
-  const steamByPick = new Map<string, MoverVM[]>();
   for (const p of feed?.picks || []) {
     const key = `${p.game}|${p.play}`;
     const bg = findBoardGame(p, boardGames);
@@ -368,10 +367,15 @@ export default async function PicksPage() {
       // Only show the badge when the live price is at least as good as the
       // locked-in play price — never contradict the card after line movement.
       bestByPick.set(key, bp && badgeBeatsPlay(p, bp) ? bp : null);
-      const steam = steamForGame(bg, boardMovers);
-      if (steam.length > 0) steamByPick.set(key, steam);
     }
   }
+
+  // Steam section: the same strict selection as the alert emails — the
+  // pick's own game, market and side only, collapsed to one line per
+  // game+market+side across books. (The old per-pick fuzzy matcher listed
+  // both teams at every book and once attached a Texas Tech CFB move to
+  // Wild @ Canucks via the substring "wild" in "Wildcats".)
+  const cardSteam = selectCardSteamMoves(feed?.picks || [], boardGames, boardMovers);
 
   // Member's tailed picks (for initial button state).
   const tails = email ? await readTails(email) : [];
@@ -417,22 +421,19 @@ export default async function PicksPage() {
         </div>
       ) : (
         <>
-          {steamByPick.size > 0 && (
+          {cardSteam.length > 0 && (
             <div className="card p-5 mb-8 border-gold/40">
               <h2 className="font-display text-xl mb-3">
                 🔥 Steam on your card
               </h2>
               <ul className="text-sm space-y-2">
-                {[...steamByPick.entries()].map(([key, movers]) => (
-                  <li key={key}>
-                    <span className="font-bold">{key.split("|")[0]}</span>
+                {cardSteam.map((mv) => (
+                  <li key={mv.id}>
+                    <span className="font-bold">{mv.game}</span>
                     <span className="text-muted"> — </span>
-                    {movers.map((m, j) => (
-                      <span key={j} className="text-paper">
-                        {m.label} <span className="text-muted">({m.detail})</span>
-                        {j < movers.length - 1 && "; "}
-                      </span>
-                    ))}
+                    <span className="text-paper">
+                      {mv.label} <span className="text-muted">({mv.detail})</span>
+                    </span>
                   </li>
                 ))}
               </ul>

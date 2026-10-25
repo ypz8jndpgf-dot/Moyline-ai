@@ -100,21 +100,13 @@ export function badgeBeatsPlay(pick: FeedPick, best: BestPrice): boolean {
   return payout(bestPrice) >= payout(playPrice);
 }
 
-/** Movers (steam) involving a card game's teams. */
-export function steamForGame(game: GameVM, movers: MoverVM[]): MoverVM[] {
-  const away = norm(game.away);
-  const home = norm(game.home);
-  return movers.filter((m) => {
-    const label = norm(m.game + " " + m.detail);
-    const awayHit = away.split(" ").some((w) => w.length > 2 && label.includes(w));
-    const homeHit = home.split(" ").some((w) => w.length > 2 && label.includes(w));
-    return m.steam && (awayHit || homeHit);
-  });
-}
-
 /* ------------------------------------------------------------------ */
-/* Steam-alert selection — used ONLY by /api/refresh's alertCardSteam. */
-/* (The picks page keeps using steamForGame above; untouched.)         */
+/* Steam selection — used by /api/refresh's alertCardSteam AND the      */
+/* /picks page "Steam on your card" section. The old steamForGame fuzzy  */
+/* matcher (any team-name word appearing anywhere in a mover's label,    */
+/* substring-matched) was removed 2026-10-25 after it attached a Texas   */
+/* Tech CFB spread move to Wild @ Canucks ("wild" ⊂ "Wildcats") and     */
+/* listed both teams at every book on the picks page.                   */
 /* ------------------------------------------------------------------ */
 
 export interface CardSteamMove {
