@@ -248,6 +248,97 @@ export async function captureClvLines(events: OddsEvent[]): Promise<number> {
   }
 }
 
+export type ClvMovement = { movement: number; unit: "pts" | "cents" };
+
+/** "+1.0" for points movements, "+24¢" for moneyline price movements. */
+export function formatClvMovement(m: ClvMovement): string {
+  if (m.unit === "cents") return `${m.movement > 0 ? "+" : ""}${Math.round(m.movement)}¢`;
+  const v = Math.round(m.movement * 10) / 10;
+  return `${v > 0 ? "+" : ""}${v.toFixed(1)}`;
+}
+
+/** Published American price from a track-record `line` field (American or decimal). */
+function parseAmericanPrice(line: string | undefined): number | null {
+  const s = (line || "").trim();
+  if (/^[+-]\d+$/.test(s)) return parseInt(s, 10);
+  if (/^\d+\.\d+$/.test(s)) {
+    const dec = parseFloat(s);
+    if (dec <= 1 || dec > 20) return null;
+    return dec >= 2 ? Math.round((dec - 1) * 100) : Math.round(-100 / (dec - 1));
+  }
+  return null;
+}
+
+type ClvPickLike = { id: string; date: string; game: string; play: string; line?: string };
+
+/**
+ * Beat-the-close movements for graded picks, using the SAME signed formula
+ * the 6:30am grader writes into the tracker's CLV column (positive always
+ * means the market moved toward the pick after publication):
+ *   spread: published point − closing line (pts)
+ *   total:  Over → closing − published; Under → published − closing (pts)
+ *   ML:     published price − closing price (cents)
+ * Data comes from the capture hashes above (game days from 2026-10-24 on;
+ * hashes live ~10 days). A pick with no captured proxy is simply absent
+ * from the result — never guessed, matching the grader's N/A.
+ */
+export async function clvMovementsForPicks(
+  picks: ClvPickLike[]
+): Promise<Record<string, ClvMovement>> {
+  const out: Record<string, ClvMovement> = {};
+  const cutoff = new Date(Date.now() - 11 * 24 * 3600 * 1000).toLocaleDateString("en-CA", {
+    timeZone: "America/New_York",
+  });
+  const dates = [...new Set(picks.map((p) => p.date))].filter(
+    (d) => d >= "2026-10-24" && d >= cutoff
+  );
+  if (dates.length === 0) return out;
+  const byDate = new Map<string, Record<string, ClvEntry>>();
+  await Promise.all(
+    dates.map(async (d) => byDate.set(d, await getClvForDate(d)))
+  );
+
+  for (const pick of picks) {
+    const entries = byDate.get(pick.date);
+    if (!entries || Object.keys(entries).length === 0) continue;
+    const playNorm = norm(pick.play || "");
+    const isTotal = /\b(over|under)\b/.test(playNorm);
+    const isMl = !isTotal && (/\bml\b/.test(playNorm) || /\bdraw\b/.test(playNorm));
+    const inferred = isTotal ? "total" : isMl ? "ml" : "spread";
+    const keys = [
+      ...new Set([
+        mergeKey({ game: pick.game, play: pick.play, market: inferred }),
+        mergeKey({ game: pick.game, play: pick.play }),
+      ]),
+    ];
+    const entry = keys.map((k) => entries[k]).find(Boolean);
+    if (!entry) continue;
+
+    if (isTotal) {
+      const m = (pick.play || "").match(/\d+(?:\.\d+)?/);
+      if (!m || entry.line === null) continue;
+      const published = parseFloat(m[0]);
+      const movement = /\bover\b/.test(playNorm)
+        ? entry.line - published
+        : published - entry.line;
+      out[pick.id] = { movement: Math.round(movement * 10) / 10, unit: "pts" };
+    } else if (isMl) {
+      const published = parseAmericanPrice(pick.line);
+      if (published === null) continue;
+      out[pick.id] = { movement: Math.round(published - entry.price), unit: "cents" };
+    } else {
+      const m = (pick.play || "").match(/[+-]\d+(?:\.\d+)?/);
+      if (!m || entry.line === null) continue;
+      const published = parseFloat(m[0]);
+      out[pick.id] = {
+        movement: Math.round((published - entry.line) * 10) / 10,
+        unit: "pts",
+      };
+    }
+  }
+  return out;
+}
+
 /** Read one ET day's captured closing proxies (field -> entry). */
 export async function getClvForDate(date: string): Promise<Record<string, ClvEntry>> {
   const redis = getRedis();

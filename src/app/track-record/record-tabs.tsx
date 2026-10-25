@@ -3,8 +3,17 @@
 import { useState } from "react";
 import type { TrackPick, TrackRecord } from "@/lib/store";
 import type { RecordAnalytics, SegmentRow } from "@/lib/records";
+import type { ClvMovement } from "@/lib/clv";
 
 type Tab = "all" | "opt";
+
+/** Local copy of lib/clv's formatter — this is a client component and
+ *  must not import the server-only clv module at runtime. */
+function formatClvMovement(m: ClvMovement): string {
+  if (m.unit === "cents") return `${m.movement > 0 ? "+" : ""}${Math.round(m.movement)}¢`;
+  const v = Math.round(m.movement * 10) / 10;
+  return `${v > 0 ? "+" : ""}${v.toFixed(1)}`;
+}
 
 function tally(list: TrackPick[]) {
   const w = list.filter((x) => x.result === "Win").length;
@@ -105,7 +114,13 @@ function Featured({ picks }: { picks: TrackPick[] }) {
   );
 }
 
-function PickTable({ picks }: { picks: TrackPick[] }) {
+function PickTable({
+  picks,
+  clvByPick,
+}: {
+  picks: TrackPick[];
+  clvByPick?: Record<string, ClvMovement>;
+}) {
   const sorted = [...picks].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   return (
     <div className="card overflow-hidden">
@@ -130,6 +145,11 @@ function PickTable({ picks }: { picks: TrackPick[] }) {
                 </td>
                 <td className="p-3.5 whitespace-nowrap">
                   {pick.play} <span className="text-muted text-xs">{pick.line} · {pick.book}</span>
+                  {clvByPick?.[pick.id] && clvByPick[pick.id].movement > 0 && (
+                    <span className="block text-[10px] font-bold text-emerald-400 mt-0.5">
+                      ⚡ Beat the close {formatClvMovement(clvByPick[pick.id])}
+                    </span>
+                  )}
                 </td>
                 <td className="p-3.5"><ResultBadge result={pick.result} /></td>
                 <td className="p-3.5 text-muted text-xs">{pick.final}</td>
@@ -355,9 +375,11 @@ const REGIME_RULES = [
 export default function RecordTabs({
   rec,
   analytics,
+  clvByPick,
 }: {
   rec: TrackRecord;
   analytics: RecordAnalytics;
+  clvByPick?: Record<string, ClvMovement>;
 }) {
   const [tab, setTab] = useState<Tab>("all");
   const optStart = rec.optimizedStartDate ?? "2026-10-16";
@@ -437,7 +459,7 @@ export default function RecordTabs({
 
       <Featured picks={shown} />
       <SegmentTables analytics={analytics} />
-      <PickTable picks={shown} />
+      <PickTable picks={shown} clvByPick={clvByPick} />
 
       {rec.note && <p className="text-xs text-muted mt-4 max-w-2xl">{rec.note}</p>}
       <p className="text-xs text-muted mt-4">Analysis for entertainment purposes — not financial advice.</p>

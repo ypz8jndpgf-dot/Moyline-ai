@@ -249,6 +249,28 @@ function PaywallPreview({
               {freePick.play} <span className="text-sm text-muted">{freePick.price}</span>
             </p>
             {freePick.reasoning && <p className="text-sm text-muted">{freePick.reasoning}</p>}
+            {freePick.writeup && freePick.writeup !== freePick.reasoning && (
+              <details className="mt-3 group">
+                <summary className="text-sm font-bold text-gold cursor-pointer list-none flex items-center gap-1">
+                  <span className="transition-transform group-open:rotate-90">▶</span>
+                  Why this pick
+                </summary>
+                <p className="text-sm text-paper/90 mt-2 leading-relaxed">{freePick.writeup}</p>
+              </details>
+            )}
+            {freePick.deep_dive && (
+              <details className="mt-2 group">
+                <summary className="text-sm font-bold text-gold cursor-pointer list-none flex items-center gap-1">
+                  <span className="transition-transform group-open:rotate-90">▶</span>
+                  Deep dive
+                </summary>
+                <div className="text-sm text-paper/90 mt-2 leading-relaxed space-y-2">
+                  {freePick.deep_dive.split("\n\n").map((para, j) => (
+                    <p key={j}>{para}</p>
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
         </div>
       )}

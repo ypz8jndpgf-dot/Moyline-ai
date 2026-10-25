@@ -1,4 +1,5 @@
 import { getTrackRecord } from "@/lib/store";
+import { clvMovementsForPicks, formatClvMovement } from "@/lib/clv";
 
 export default async function RecentResults() {
   const rec = await getTrackRecord();
@@ -6,6 +7,7 @@ export default async function RecentResults() {
     .filter((p) => p.result !== "Pending")
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
     .slice(0, 10);
+  const clv = await clvMovementsForPicks(graded);
 
   const { w, l, p } = rec.totals;
   // Hide when below .500 — returns automatically when back above
@@ -75,6 +77,11 @@ export default async function RecentResults() {
                 <p className="text-[11px] text-muted leading-tight truncate">{pick.game}</p>
                 {pick.final && (
                   <p className="text-[11px] text-muted/70 truncate">{pick.final}</p>
+                )}
+                {clv[pick.id] && clv[pick.id].movement > 0 && (
+                  <p className="text-[10px] font-bold text-emerald-400">
+                    ⚡ Beat the close {formatClvMovement(clv[pick.id])}
+                  </p>
                 )}
                 <p className="text-[10px] text-muted/50 mt-auto">{pick.date}</p>
               </div>

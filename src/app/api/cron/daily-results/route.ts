@@ -3,6 +3,9 @@ import { Redis } from "@upstash/redis";
 import { getMemberEmails, sendEmail } from "@/lib/email";
 import { unsubUrl } from "@/lib/unsub";
 import { briefSignInUrl } from "@/lib/brief-signin";
+import { broadcastPush } from "@/lib/push";
+import { getTrackRecord } from "@/lib/store";
+import { unitsFor, formatUnits } from "@/lib/records";
 import { DayResults } from "../../results/update/route";
 
 export const dynamic = "force-dynamic";
@@ -93,5 +96,44 @@ export async function GET(req: Request) {
       .replace(/\{\{UNSUB_URL\}\}/g, unsubUrl(to));
     if (await sendEmail(to, `MoyLine AI: ${headline}`, perHtml)) sent++;
   }
-  return NextResponse.json({ ok: true, sent, date: yesterday, headline });
+
+  // Settled-card push: one notification to opted-in members, after the
+  // email. Best-effort — a push failure never fails the results run.
+  // Deduped per graded date so a cron re-run can't double-push.
+  let pushSent = 0;
+  try {
+    const pushKey = `moyline:results-push:${yesterday}`;
+    const claimed = await redis.set(pushKey, "1", { nx: true, ex: 48 * 3600 });
+    if (claimed) {
+      // Units from the canonical track record (same numbers the site
+      // shows); included only when every graded pick that day is priced,
+      // so the figure is exact or absent — never partial.
+      let unitsText = "";
+      try {
+        const rec = await getTrackRecord();
+        const dayPicks = rec.picks.filter((x) => x.date === yesterday);
+        const u = unitsFor(dayPicks);
+        if (u.graded > 0 && u.priced === u.graded) {
+          unitsText = ` · ${formatUnits(u.units)}`;
+        }
+      } catch {
+        unitsText = "";
+      }
+      const push = await broadcastPush({
+        title: "MoyLine AI · Daily results",
+        body: `Yesterday: ${wins}-${losses}${pushes > 0 ? `-${pushes}` : ""}${unitsText} — full record inside`,
+        url: "/track-record",
+      });
+      if (push.vapid) {
+        pushSent = push.sent;
+      } else {
+        // Push not configured — release the claim so a later run can send.
+        await redis.del(pushKey);
+      }
+    }
+  } catch (e) {
+    console.error("[daily-results] settled-card push failed:", e instanceof Error ? e.message : e);
+  }
+
+  return NextResponse.json({ ok: true, sent, pushSent, date: yesterday, headline });
 }
