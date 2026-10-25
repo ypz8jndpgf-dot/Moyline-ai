@@ -122,11 +122,18 @@ export interface CardSteamMove {
   label: string; // display line for the alert email
   detail: string; // "<Book> · <market label>" of the representative mover
   /**
-   * Collapsed dedupe identity: "v2|<game>|<book>|<market>" for totals,
-   * "v2|<game>|<book>|<market>|<side>" for spread/ML (their lines are
-   * side-specific, so the side is part of the collapsed identity).
+   * Collapsed dedupe identity: "v3|<game>|<market>|<side>" — one identity
+   * per game+market+side across ALL books (v2 keyed per book and per side
+   * row, so one spread move produced a bullet per book per team).
+   * Totals use side "total" (Over/Under rows are one move).
    */
   id: string;
+  /**
+   * Every v2 dedupe id this collapsed line subsumes (per book, and for
+   * totals per book). The refresh route treats an already-alerted v2 id as
+   * seen, so a move alerted under the old scheme is not re-alerted under v3.
+   */
+  priorIds: string[];
   /** Labels of every raw mover collapsed into this line (legacy dedupe keys). */
   sourceLabels: string[];
 }
@@ -206,6 +213,44 @@ function totalMoveLabel(rep: MoverVM): string {
   return rep.label.replace(/\+(?=\d)/g, "");
 }
 
+/** True when two team names refer to the same team (either may be the short form). */
+function sameTeam(a: string, b: string): boolean {
+  return teamMatches(a, b) || teamMatches(b, a);
+}
+
+/**
+ * The board team name a spread/ML pick is ON, or null when it can't be
+ * determined. Feed plays name the team in feed naming ("Bengals -1.5",
+ * "Maple Leafs ML"); the side is matched against the feed game string,
+ * then mapped to the board's full team name. A soccer "Draw ML" pick
+ * resolves to "Draw". Null means: do not alert — an unverifiable side is
+ * how the mirror-image team ends up in the email.
+ */
+function pickSideTeam(pick: FeedPick, bg: GameVM): string | null {
+  const teams = parseGameTeams(pick.game);
+  if (!teams) return null;
+  const play = norm((pick.play || "").replace(/\bml\b/gi, " "));
+  if (/\bdraw\b/.test(play)) return "Draw";
+  const sideOf = (feedName: string): boolean =>
+    teamMatches(feedName, play) ||
+    play.split(" ").includes(norm(feedName).split(" ")[0]);
+  if (sideOf(teams.away)) return sameTeam(teams.away, bg.away) ? bg.away : teams.away;
+  if (sideOf(teams.home)) return sameTeam(teams.home, bg.home) ? bg.home : teams.home;
+  return null;
+}
+
+/**
+ * Representative-mover score: DraftKings is the site's reference book, so
+ * its line represents a collapsed cross-book move; for totals the Over row
+ * carries the canonical line.
+ */
+function repScore(m: MoverVM, isTotal: boolean): number {
+  const book = moverBook(m).toLowerCase();
+  let s = book === "draftkings" ? 2 : book === "fanduel" ? 1 : 0;
+  if (isTotal && /^over\b/i.test(m.label)) s += 0.5;
+  return s;
+}
+
 /**
  * Select the steam moves that are actually actionable for the main card.
  *
@@ -220,10 +265,17 @@ function totalMoveLabel(rep: MoverVM): string {
  *    and only movers whose `game` string is exactly that game's
  *    "Away @ Home" label.
  *  - A mover must be steam and its market must equal the pick's market.
- *  - Movers collapse to one alert line per game+book+market. The Over and
- *    Under rows of the same total are a single move (one line, "Total
- *    63.5 → 59.5"); spread/ML lines stay side-specific, keyed by side.
- *    A move selected via two picks in the same game+market appears once.
+ *  - For spread/ML, a mover must be on the pick's OWN side. A spread move
+ *    exists on the board as two mirrored rows (each team's line flips
+ *    sign); the other team's row is the same move, not a second one —
+ *    v2 keyed by side without filtering to the pick's side, so the
+ *    2026-10-25 Bengals alert listed both teams at three books (5 bullets
+ *    for one move).
+ *  - Movers collapse to ONE alert line per game+market+side across all
+ *    books, represented by the DraftKings mover when available. The Over
+ *    and Under rows of the same total are a single move (one line,
+ *    "Total 63.5 → 59.5"). A move selected via two picks in the same
+ *    game+market+side appears once.
  */
 export function selectCardSteamMoves(
   picks: FeedPick[],
@@ -236,6 +288,8 @@ export function selectCardSteamMoves(
     id: string;
     isTotal: boolean;
     rep: MoverVM;
+    repScore: number;
+    priorIds: Set<string>;
     sourceLabels: string[];
   }
   const groups = new Map<string, Group>();
@@ -246,27 +300,40 @@ export function selectCardSteamMoves(
     const bg = findBoardGame(pick, games);
     if (!bg) continue;
     const gameLabel = `${bg.away} @ ${bg.home}`;
+    const isTotal = market === "total";
+    // Totals have no side; spread/ML alert only on the pick's own side.
+    const sideTeam = isTotal ? null : pickSideTeam(pick, bg);
+    if (!isTotal && !sideTeam) continue;
+    const sideKey = isTotal ? "total" : norm(sideTeam as string);
 
     for (const m of movers) {
       if (!m.steam || m.game !== gameLabel) continue;
       if (moverMarket(m) !== market) continue;
+      if (!isTotal && !sameTeam(moverOutcome(m), sideTeam as string)) continue;
       const book = moverBook(m);
-      const id =
-        market === "total"
-          ? `${gameLabel}|${book}|total`
-          : `${gameLabel}|${book}|${market}|${moverOutcome(m)}`;
+      const priorId = isTotal
+        ? `v2|${gameLabel}|${book}|total`
+        : `v2|${gameLabel}|${book}|${market}|${moverOutcome(m)}`;
+      const id = `${gameLabel}|${market}|${sideKey}`;
       const g = groups.get(id);
       if (g) {
         g.sourceLabels.push(m.label);
-        // The Over row represents the collapsed total line.
-        if (market === "total" && /^over\b/i.test(m.label)) g.rep = m;
+        g.priorIds.add(priorId);
+        const s = repScore(m, isTotal);
+        if (s > g.repScore) {
+          g.rep = m;
+          g.repScore = s;
+          g.detail = m.detail;
+        }
       } else {
         groups.set(id, {
           game: gameLabel,
           detail: m.detail,
           id,
-          isTotal: market === "total",
+          isTotal,
           rep: m,
+          repScore: repScore(m, isTotal),
+          priorIds: new Set([priorId]),
           sourceLabels: [m.label],
         });
       }
@@ -277,7 +344,8 @@ export function selectCardSteamMoves(
     game: g.game,
     label: g.isTotal ? totalMoveLabel(g.rep) : g.rep.label,
     detail: g.detail,
-    id: `v2|${g.id}`,
+    id: `v3|${g.id}`,
+    priorIds: [...g.priorIds],
     sourceLabels: g.sourceLabels,
   }));
 }

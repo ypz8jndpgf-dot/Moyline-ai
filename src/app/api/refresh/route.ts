@@ -97,8 +97,9 @@ async function alertCardSteam(): Promise<number> {
   const [oddsResult, openings] = await Promise.all([getOdds(), getOpenings()]);
   const { games, movers } = buildBoard(oddsResult.events, openings);
 
-  // Only steam moves in a pick's own game AND own market, collapsed to one
-  // line per game+book+market (see selectCardSteamMoves in card-utils).
+  // Only steam moves in a pick's own game, own market AND own side,
+  // collapsed to one line per game+market+side across books
+  // (see selectCardSteamMoves in card-utils).
   const selected = selectCardSteamMoves(feed.picks, games, movers);
   console.log(
     `[steam] selected ${selected.length} card steam move(s)` +
@@ -111,9 +112,22 @@ async function alertCardSteam(): Promise<number> {
   const fresh: { game: string; label: string; detail: string }[] = [];
 
   for (const mv of selected) {
-    // Dedupe on the COLLAPSED move identity (game+book+market[/side]).
+    // Dedupe on the COLLAPSED move identity (game+market+side, all books).
     const key = STEAM_PREFIX + Buffer.from(mv.id).toString("base64url").slice(0, 80);
     let seen: unknown = await redis.get(key);
+    if (!seen) {
+      // v2 guard: v2 keyed dedupe per book (and listed both sides of a
+      // spread). If this move was already alerted under any v2 id it
+      // subsumes, don't re-alert it tonight under the v3 key.
+      for (const pid of mv.priorIds) {
+        const priorKey =
+          STEAM_PREFIX + Buffer.from(pid).toString("base64url").slice(0, 80);
+        if (await redis.get(priorKey)) {
+          seen = "v2";
+          break;
+        }
+      }
+    }
     if (!seen) {
       // Migration guard: pre-fix keys were base64(game|raw mover label), one
       // per book×column cell. If any raw mover collapsed into this line was
