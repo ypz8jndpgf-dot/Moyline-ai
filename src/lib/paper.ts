@@ -45,9 +45,25 @@ export function profitFor(odds: number, stake: number): number {
  * Takes the last signed number, not the first number-like token: prop/total
  * price strings can carry digits in the line itself ("o119.5 rush+rec yds
  * (-115)", "Under 48.5 (-110)"), where a naive first match would return the
- * line number (119, 48) instead of the odds. */
+ * line number (119, 48) instead of the odds.
+ *
+ * Book labels are stripped before matching: on 2026-10-25 a fractional price
+ * "8/11 (bet365)" parsed as +365 — the digits of the book's name — crediting
+ * +$36.50 instead of the true 8/11 profit (+$7.27). Fractional prices
+ * ("8/11") are converted to American odds exactly (8/11 → -137.5). */
 export function parseOdds(price: string): number | null {
-  const matches = (price || "").match(/[+-]?\d{2,}/g);
+  const cleaned = (price || "")
+    .replace(/\([^)]*[a-zA-Z][^)]*\)/g, " ") // "(bet365)", "(FanDuel)" — labels, not prices
+    .replace(/bet365/gi, " ");
+  const frac = cleaned.match(/(\d+)\s*\/\s*(\d+)/);
+  if (frac) {
+    const ratio = parseInt(frac[1], 10) / parseInt(frac[2], 10);
+    if (ratio > 0) {
+      const american = ratio >= 1 ? ratio * 100 : -100 / ratio;
+      return Math.round(american * 100) / 100;
+    }
+  }
+  const matches = cleaned.match(/[+-]?\d{2,}/g);
   if (!matches || matches.length === 0) return null;
   const signed = matches.filter((m) => /^[+-]/.test(m));
   const n = parseInt(signed.length > 0 ? signed[signed.length - 1] : matches[matches.length - 1], 10);

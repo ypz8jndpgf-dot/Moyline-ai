@@ -37,6 +37,25 @@ export async function POST(req: Request) {
   if (typeof delta !== "number" || !isFinite(delta)) {
     return NextResponse.json({ ok: false, error: "delta must be a number" }, { status: 400 });
   }
+  // Optional one-off bet correction (e.g. a mis-parsed price): rewrites the
+  // settled bet's odds/pnl so the ledger history ties to the bankroll delta.
+  const fixBet = (body as { fixBet?: unknown }).fixBet as
+    | { gameContains?: unknown; odds?: unknown; pnl?: unknown }
+    | undefined;
+  if (fixBet !== undefined) {
+    if (
+      typeof fixBet?.gameContains !== "string" ||
+      typeof fixBet?.odds !== "number" ||
+      !isFinite(fixBet.odds) ||
+      typeof fixBet?.pnl !== "number" ||
+      !isFinite(fixBet.pnl)
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "fixBet needs gameContains (string), odds and pnl (numbers)" },
+        { status: 400 }
+      );
+    }
+  }
 
   const url = cleanEnv(process.env.UPSTASH_REDIS_REST_URL);
   const token = cleanEnv(process.env.UPSTASH_REDIS_REST_TOKEN);
@@ -46,10 +65,31 @@ export async function POST(req: Request) {
 
   try {
     const redis = new Redis({ url, token });
+    let fixedBet: { id: string; game: string; odds: number; pnl: number } | null = null;
+    if (fixBet) {
+      const bets =
+        (await redis.get<{ id: string; game: string; odds: number; pnl: number | null }[]>(
+          "moyline:paper:bets"
+        )) || [];
+      const target = bets.find((b) =>
+        b.game.toLowerCase().includes((fixBet.gameContains as string).toLowerCase())
+      );
+      if (!target) {
+        return NextResponse.json(
+          { ok: false, error: `no paper bet matching "${fixBet.gameContains}"` },
+          { status: 404 }
+        );
+      }
+      target.odds = fixBet.odds as number;
+      target.pnl = fixBet.pnl as number;
+      await redis.set("moyline:paper:bets", bets);
+      fixedBet = { id: target.id, game: target.game, odds: target.odds, pnl: target.pnl };
+    }
     const newVal = await redis.incrbyfloat("moyline:paper:bankroll", delta);
     return NextResponse.json({
       ok: true,
       delta,
+      fixedBet,
       bankroll: Math.round(Number(newVal) * 100) / 100,
     });
   } catch (e) {
