@@ -48,6 +48,20 @@ export async function getMemberEmails(): Promise<string[]> {
     } catch {
       /* redis unavailable */
     }
+
+    // Redis beta list (managed via /api/admin/beta), same source hasAccess()
+    // reads in store.ts. Merged as a union source so members added via the
+    // admin route reach bulk sends without an env-var redeploy. Fail soft:
+    // an error here leaves the existing sources untouched.
+    try {
+      const betaMembers = await redis.smembers("moyline:beta");
+      for (const m of betaMembers as string[]) {
+        const e = String(m).trim().toLowerCase();
+        if (e.includes("@")) out.add(e);
+      }
+    } catch {
+      /* redis beta set unavailable — existing sources still apply */
+    }
   }
 
   const beta = (process.env.BETA_EMAILS || "")
