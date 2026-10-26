@@ -681,3 +681,50 @@ export function formatRecord(s: RecordStat): string {
 export function formatPct(s: RecordStat): string | null {
   return s.pct !== null ? `${s.pct.toFixed(1)}%` : null;
 }
+
+/* ------------------------------------------------------------------ */
+/* /picks "Yesterday at a glance" strip + confidence explainer data.  */
+/* Same track-record source as everything else on the site. Units    */
+/* are quoted only when every graded pick that day carries a price   */
+/* (the daily-results push rule), so the strip can never overstate.  */
+/* ------------------------------------------------------------------ */
+
+export interface YesterdayGlance {
+  date: string;
+  stat: RecordStat;
+  /** Units for the day, or null unless every graded pick was priced. */
+  units: number | null;
+}
+
+export async function getYesterdayGlance(): Promise<YesterdayGlance | null> {
+  const rec = await getTrackRecord();
+  const yesterday = etDateString(1);
+  const day = rec.picks.filter((p) => p.date === yesterday && p.result !== "Pending");
+  if (day.length === 0) return null;
+  const u = unitsFor(day);
+  return {
+    date: yesterday,
+    stat: tally(day),
+    units: u.priced === u.graded && u.graded > 0 ? u.units : null,
+  };
+}
+
+export interface ConfCalibration {
+  conf: string;
+  stat: RecordStat;
+}
+
+/** Lifetime record per recorded confidence grade (graded picks only). */
+export async function getConfidenceCalibration(): Promise<ConfCalibration[]> {
+  const rec = await getTrackRecord();
+  const byConf = new Map<string, TrackPick[]>();
+  for (const p of rec.picks) {
+    if (p.result === "Pending" || !p.conf) continue;
+    const list = byConf.get(p.conf) ?? [];
+    list.push(p);
+    byConf.set(p.conf, list);
+  }
+  return [...byConf.entries()]
+    .map(([conf, picks]) => ({ conf, stat: tally(picks) }))
+    .sort((a, b) => Number(b.conf) - Number(a.conf));
+}

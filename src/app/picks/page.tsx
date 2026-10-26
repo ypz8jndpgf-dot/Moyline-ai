@@ -9,6 +9,7 @@ import { readTails } from "@/lib/tails";
 import TailButton from "./TailButton";
 import ShareButton from "./ShareButton";
 import MarketingPaywall from "@/components/MarketingPaywall";
+import { getYesterdayGlance, getConfidenceCalibration, formatRecord, formatUnits } from "@/lib/records";
 import PushPrompt from "@/components/PushPrompt";
 import IosInstallPrompt from "@/components/IosInstallPrompt";
 
@@ -377,6 +378,20 @@ export default async function PicksPage() {
   // Wild @ Canucks via the substring "wild" in "Wildcats".)
   const cardSteam = selectCardSteamMoves(feed?.picks || [], boardGames, boardMovers);
 
+  // Yesterday strip + confidence calibration (same track-record source
+  // as /track-record; renders nothing when there's nothing graded).
+  let yesterdayGlance: Awaited<ReturnType<typeof getYesterdayGlance>> = null;
+  let confCalibration: Awaited<ReturnType<typeof getConfidenceCalibration>> = [];
+  try {
+    [yesterdayGlance, confCalibration] = await Promise.all([
+      getYesterdayGlance(),
+      getConfidenceCalibration(),
+    ]);
+  } catch {
+    /* record unavailable — card renders without the strip */
+  }
+  const conf3 = confCalibration.find((c) => c.conf === "3");
+
   // Member's tailed picks (for initial button state).
   const tails = email ? await readTails(email) : [];
   const tailedSet = new Set(tails.map((t) => `${t.game}|${t.play}`));
@@ -413,6 +428,42 @@ export default async function PicksPage() {
 
       <PushPrompt />
       <IosInstallPrompt />
+
+      {yesterdayGlance && (
+        <p className="text-sm mb-3">
+          <span className="text-muted">Yesterday:</span>{" "}
+          <span className="font-bold">{formatRecord(yesterdayGlance.stat)}</span>
+          {yesterdayGlance.units !== null && (
+            <span className="text-muted"> · {formatUnits(yesterdayGlance.units)}</span>
+          )}{" "}
+          <Link href="/track-record" className="underline hover:text-gold">
+            → full record
+          </Link>
+        </p>
+      )}
+
+      <details className="mb-6">
+        <summary className="text-xs text-muted cursor-pointer hover:text-gold">
+          What confidence means
+        </summary>
+        <div className="text-xs text-muted mt-2 space-y-1 max-w-xl">
+          <p>
+            Every play is graded 1–5. <strong className="text-paper">Conf 3</strong> is our
+            workhorse grade — a real quantified edge with a confirmed driver behind it.
+            <strong className="text-paper"> Conf 4</strong> is star-quality only, published
+            rarely. <strong className="text-paper">Conf 5</strong> is the highest bar we
+            have — it has never been awarded.
+          </p>
+          {conf3 && conf3.stat.w + conf3.stat.l >= 10 && (
+            <p>
+              Lifetime on the recorded card, Conf 3 is {formatRecord(conf3.stat)}
+              {conf3.stat.pct !== null && <> ({conf3.stat.pct.toFixed(1)}%)</>} across{" "}
+              {conf3.stat.w + conf3.stat.l + conf3.stat.p} graded picks. Full breakdown on
+              the <Link href="/track-record" className="underline hover:text-gold">record page</Link>.
+            </p>
+          )}
+        </div>
+      </details>
 
       {!feed || feed.picks.length === 0 ? (
         <div className="card p-8 text-center">
