@@ -1,13 +1,14 @@
 import Link from "next/link";
 import SnoozeButtons from "./SnoozeButtons";
 
-export default function UnsubscribeDonePage({
+export default async function UnsubscribeDonePage({
   searchParams,
 }: {
-  searchParams: { email?: string; token?: string };
+  searchParams: Promise<{ email?: string; token?: string }>;
 }) {
-  const email = (searchParams.email || "").trim().toLowerCase();
-  const token = searchParams.token || "";
+  const sp = await searchParams;
+  const email = (sp.email || "").trim().toLowerCase();
+  const token = sp.token || "";
   return (
     <div className="max-w-xl mx-auto px-4 py-16 text-center">
       <h1 className="font-display text-3xl mb-4">

@@ -1,14 +1,15 @@
-export default function UnsubscribePage({
+export default async function UnsubscribePage({
   searchParams,
 }: {
-  searchParams: { error?: string };
+  searchParams: Promise<{ error?: string }>;
 }) {
+  const sp = await searchParams;
   return (
     <div className="max-w-xl mx-auto px-4 py-16 text-center">
       <h1 className="font-display text-3xl mb-4">
         <span className="gold-text">UNSUBSCRIBE</span>
       </h1>
-      {searchParams.error === "invalid" ? (
+      {sp.error === "invalid" ? (
         <p className="text-muted text-sm">
           That unsubscribe link isn&apos;t valid. Links are unique to each email address —
           please use the link from the bottom of a recent email.
