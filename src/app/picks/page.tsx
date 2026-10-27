@@ -4,7 +4,7 @@ import { getSubscription, hasAccess } from "@/lib/store";
 import { getPicksFeed, PicksFeed, FeedPick } from "@/lib/picks";
 import { getOdds, getOpenings } from "@/lib/odds";
 import { buildBoard, MoverVM } from "@/lib/board";
-import { findBoardGame, bestPriceForPick, badgeBeatsPlay, selectCardSteamMoves, BestPrice } from "@/lib/card-utils";
+import { findBoardGame, bestPriceForPick, badgeBeatsPlay, movedAgainstNote, selectCardSteamMoves, BestPrice } from "@/lib/card-utils";
 import { readTails } from "@/lib/tails";
 import TailButton from "./TailButton";
 import ShareButton from "./ShareButton";
@@ -102,6 +102,7 @@ function PickCard({
   index,
   status,
   best,
+  movedNote,
   initiallyTailed,
   cardDate,
 }: {
@@ -109,6 +110,7 @@ function PickCard({
   index: number;
   status: Status;
   best: BestPrice;
+  movedNote?: string | null;
   initiallyTailed: boolean;
   cardDate: string;
 }) {
@@ -149,6 +151,13 @@ function PickCard({
         <p className="text-xs mb-2">
           <span className="inline-block bg-white/10 text-paper/80 px-2 py-0.5 rounded">
             Best price: {best.book} {best.display}
+          </span>
+        </p>
+      )}
+      {!best && movedNote && (
+        <p className="text-xs mb-2">
+          <span className="inline-block bg-red-500/10 text-red-200/80 px-2 py-0.5 rounded">
+            ⚠ {movedNote}
           </span>
         </p>
       )}
@@ -360,6 +369,7 @@ export default async function PicksPage() {
   }
 
   const bestByPick = new Map<string, BestPrice>();
+  const movedByPick = new Map<string, string | null>();
   for (const p of feed?.picks || []) {
     const key = `${p.game}|${p.play}`;
     const bg = findBoardGame(p, boardGames);
@@ -367,7 +377,14 @@ export default async function PicksPage() {
       const bp = bestPriceForPick(p, bg);
       // Only show the badge when the live price is at least as good as the
       // locked-in play price — never contradict the card after line movement.
-      bestByPick.set(key, bp && badgeBeatsPlay(p, bp) ? bp : null);
+      // When the line moved against the pick, say so plainly instead
+      // (optimization #16) so a late tailer never takes a worse number blind.
+      if (bp && badgeBeatsPlay(p, bp)) {
+        bestByPick.set(key, bp);
+      } else {
+        bestByPick.set(key, null);
+        movedByPick.set(key, movedAgainstNote(p, bp));
+      }
     }
   }
 
@@ -504,6 +521,7 @@ export default async function PicksPage() {
                   index={i}
                   status={status}
                   best={bestByPick.get(key) || null}
+                  movedNote={movedByPick.get(key) || null}
                   initiallyTailed={tailedSet.has(key)}
                   cardDate={cardDate}
                 />

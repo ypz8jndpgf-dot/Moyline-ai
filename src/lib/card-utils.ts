@@ -100,6 +100,57 @@ export function badgeBeatsPlay(pick: FeedPick, best: BestPrice): boolean {
   return payout(bestPrice) >= payout(playPrice);
 }
 
+/** First point value in a display string: "-3.5 (-110)" → -3.5, "(+108)" → null. */
+function parsePoint(s: string | undefined): number | null {
+  if (!s) return null;
+  const m = s.replace(/\([^)]*\)/g, " ").match(/([+-]?\d+(?:\.\d+)?)/);
+  return m ? parseFloat(m[1]) : null;
+}
+
+function fmtAmerican(v: number): string {
+  return v > 0 ? `+${v}` : `${v}`;
+}
+
+/**
+ * "Line moved against you" note for a card pick (optimization #16,
+ * 2026-10-27): when the best live board price for the pick's own side is
+ * worse than what the card published, say so plainly instead of just
+ * hiding the best-price badge. Movement uses the grader's CLV convention
+ * (positive = toward the pick): spreads published − closing, totals
+ * side-aware, moneylines by payout. Returns null when the live price is
+ * at least as good, unparseable, or the pick is a prop (no board market).
+ */
+export function movedAgainstNote(pick: FeedPick, best: BestPrice): string | null {
+  if (!best) return null;
+  const market = pickAlertMarket(pick);
+  if (!market) return null;
+  const pubPrice = parseAmerican(pick.price);
+  const nowPrice = parseAmerican(best.display);
+  if (pubPrice === null || nowPrice === null) return null;
+
+  if (market === "moneyline") {
+    if (payout(nowPrice) >= payout(pubPrice)) return null;
+    return `Line moved against this pick — published ${fmtAmerican(pubPrice)}, now ${fmtAmerican(nowPrice)} at ${best.book}`;
+  }
+
+  // Spread / total: compare points first, price breaks the tie.
+  const pubPoint = parsePoint(pick.line) ?? parsePoint(pick.play);
+  const nowPoint = parsePoint(best.display);
+  if (pubPoint === null || nowPoint === null) return null;
+  let movement: number;
+  if (market === "spread") {
+    movement = pubPoint - nowPoint;
+  } else {
+    const isOver = /\bover\b/i.test(pick.play || "");
+    movement = isOver ? nowPoint - pubPoint : pubPoint - nowPoint;
+  }
+  const worse =
+    movement < 0 || (movement === 0 && payout(nowPrice) < payout(pubPrice));
+  if (!worse) return null;
+  const pubDesc = `${pubPoint > 0 && market === "spread" ? "+" : ""}${pubPoint} (${fmtAmerican(pubPrice)})`;
+  return `Line moved against this pick — published ${pubDesc}, now ${best.display} at ${best.book}`;
+}
+
 /* ------------------------------------------------------------------ */
 /* Steam selection — used by /api/refresh's alertCardSteam AND the      */
 /* /picks page "Steam on your card" section. The old steamForGame fuzzy  */

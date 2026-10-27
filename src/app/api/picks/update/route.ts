@@ -234,6 +234,41 @@ export async function POST(req: Request) {
 
     await redis.set(FEED_KEY, JSON.stringify(merged));
 
+    // CARD-LIVE PUSH: the first push carrying picks for a new date fires one
+    // "Today's card is live" push to opted-in members. Deduped per date via
+    // an NX claim (same pattern as the settled-card push), so later editions
+    // (11am/6pm merges, re-pushes, deep dives) never re-fire it. Best-effort:
+    // a push failure never fails the feed update.
+    let cardLivePush = 0;
+    try {
+      if (!existing && mergedPicks.length > 0) {
+        const claimKey = `moyline:cardlive-push:${body.date}`;
+        const claimed = await redis.set(claimKey, "1", { nx: true, ex: 48 * 3600 });
+        if (claimed) {
+          const { broadcastPush } = await import("@/lib/push");
+          const top = [...mergedPicks].sort(
+            (a, b) =>
+              b.confidence - a.confidence || (b.edge_cents || 0) - (a.edge_cents || 0)
+          )[0];
+          const push = await broadcastPush({
+            title: "MoyLine AI · Today's card is live",
+            body: top
+              ? `${mergedPicks.length} play${mergedPicks.length > 1 ? "s" : ""} posted — top: ${top.game} · ${top.play}`
+              : "Today's plays are posted",
+            url: "/picks",
+          });
+          if (push.vapid) {
+            cardLivePush = push.sent;
+          } else {
+            // Push not configured — release the claim so a later push can send.
+            await redis.del(claimKey);
+          }
+        }
+      }
+    } catch (e) {
+      console.error("[card-live] push failed:", e instanceof Error ? e.message : e);
+    }
+
     // 5-STAR ALARM: if any incoming pick has confidence 5 (never awarded before),
     // blast a massive announcement — web push + email to ALL members.
     // Deduped per pick so re-pushes don't re-fire.
@@ -342,6 +377,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       picks: merged.picks.length,
+      card_live_push: cardLivePush,
       backpage: mergedBackpage.length,
       slot: merged.slot,
       editions: merged.editions,

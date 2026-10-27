@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { sendEmail } from "@/lib/email";
-import { unsubUrl, isUnsubscribed } from "@/lib/unsub";
+import { unsubUrl, isUnsubscribed, isSnoozed } from "@/lib/unsub";
 import { briefSignInUrl } from "@/lib/brief-signin";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +35,9 @@ export async function POST(req: Request) {
   }
   if (await isUnsubscribed(to)) {
     return NextResponse.json({ ok: false, unsubscribed: true });
+  }
+  if (await isSnoozed(to)) {
+    return NextResponse.json({ ok: false, snoozed: true });
   }
   let finalHtml = html.replace(/\{\{UNSUBSCRIBE_URL\}\}/g, unsubUrl(to));
   if (finalHtml.includes("{{SIGNIN_URL}}")) {

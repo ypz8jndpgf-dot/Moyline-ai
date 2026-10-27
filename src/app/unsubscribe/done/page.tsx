@@ -1,6 +1,13 @@
 import Link from "next/link";
+import SnoozeButtons from "./SnoozeButtons";
 
-export default function UnsubscribeDonePage() {
+export default function UnsubscribeDonePage({
+  searchParams,
+}: {
+  searchParams: { email?: string; token?: string };
+}) {
+  const email = (searchParams.email || "").trim().toLowerCase();
+  const token = searchParams.token || "";
   return (
     <div className="max-w-xl mx-auto px-4 py-16 text-center">
       <h1 className="font-display text-3xl mb-4">
@@ -14,6 +21,9 @@ export default function UnsubscribeDonePage() {
         The site itself is untouched, so your picks, tails, and account are right
         where you left them whenever you want to check in.
       </p>
+      {email.includes("@") && token ? (
+        <SnoozeButtons email={email} token={token} />
+      ) : null}
       <p className="text-muted text-sm mb-8">
         Miss us? Just sign back in — rejoining as a member puts you back on the
         list automatically. We&apos;ll be here.

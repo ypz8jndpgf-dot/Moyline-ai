@@ -62,3 +62,48 @@ export async function setResubscribed(email: string): Promise<void> {
   if (!redis) return;
   await redis.del(UNSUB_PREFIX + email.trim().toLowerCase());
 }
+
+/* ------------------------------------------------------------------ */
+/* Snooze (optimization #17, 2026-10-27): a pause instead of a          */
+/* permanent unsubscribe. The stored value is the ISO resume date; the  */
+/* key expires on its own shortly after. Bulk sends skip snoozed        */
+/* members exactly like unsubscribed ones. Choosing a snooze clears     */
+/* any permanent unsubscribe — the member picked "pause" over "leave".  */
+/* ------------------------------------------------------------------ */
+
+const SNOOZE_PREFIX = "moyline:snooze:";
+
+export async function getSnoozedUntil(email: string): Promise<string | null> {
+  const redis = redisClient();
+  if (!redis) return null;
+  try {
+    const v = await redis.get<string>(SNOOZE_PREFIX + email.trim().toLowerCase());
+    if (!v) return null;
+    const until = typeof v === "string" ? v : String(v);
+    return new Date(until).getTime() > Date.now() ? until : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function isSnoozed(email: string): Promise<boolean> {
+  return (await getSnoozedUntil(email)) !== null;
+}
+
+/** Pause briefs for `days`; returns the ISO resume date. Clears any unsubscribe. */
+export async function setSnoozed(email: string, days: number): Promise<string> {
+  const e = email.trim().toLowerCase();
+  const until = new Date(Date.now() + days * 24 * 3600 * 1000).toISOString();
+  const redis = redisClient();
+  if (redis) {
+    await redis.set(SNOOZE_PREFIX + e, until, { ex: days * 24 * 3600 + 3600 });
+  }
+  await setResubscribed(e);
+  return until;
+}
+
+export async function clearSnoozed(email: string): Promise<void> {
+  const redis = redisClient();
+  if (!redis) return;
+  await redis.del(SNOOZE_PREFIX + email.trim().toLowerCase());
+}
