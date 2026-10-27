@@ -135,6 +135,20 @@ export function AskClient({ suggestions }: { suggestions?: string[] }) {
 
   const chatting = msgs.some((m) => m.role === "user");
 
+  // Deep-linked question (steal #2): /ask?q=... from a pick card's
+  // "Ask about this game" chips — auto-send it once, then clean the URL
+  // so a refresh doesn't re-ask.
+  const qSentRef = useRef(false);
+  useEffect(() => {
+    if (!hydrated || qSentRef.current) return;
+    const q = new URLSearchParams(window.location.search).get("q");
+    if (q && q.trim()) {
+      qSentRef.current = true;
+      window.history.replaceState(null, "", window.location.pathname);
+      send(q.slice(0, 300));
+    }
+  }, [hydrated, send]);
+
   return (
     <div className="max-w-3xl mx-auto">
       {/* Header */}

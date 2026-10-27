@@ -30,6 +30,8 @@ export type FeedPick = {
   deep_dive?: string;
   /** Quantified edge in cents, e.g. 30 = ~30c edge vs fair price. Optional. */
   edge_cents?: number;
+  /** One-line risk note: what most likely kills this bet (steal #3). Optional. */
+  risk?: string;
   /** Market type for ticket construction. Optional. */
   market?: "spread" | "total" | "ml" | "prop";
   /** Raw line for spread/total picks, e.g. "-1.5", "5.5". Optional. */
@@ -47,6 +49,8 @@ export type PicksFeed = {
   editions?: string[];
   updated_at: string;
   picks: FeedPick[];
+  /** Ranked daily intel: injuries/lineups/weather that move lines (steal #6). */
+  intel?: { headline: string; detail?: string }[];
   /** Notable player props from the brief — eligible legs for the Lab's parlay builder. */
   props?: FeedPick[];
   /** Backpage: conf-3 leans. Separate paywalled tab, admin-only paper trading + grading. */

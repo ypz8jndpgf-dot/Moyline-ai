@@ -17,6 +17,7 @@ type FeedPick = {
   writeup?: string;
   deep_dive?: string;
   edge_cents?: number;
+  risk?: string;
   market?: "spread" | "total" | "ml" | "prop";
   line?: string;
   added_at?: string;
@@ -64,6 +65,8 @@ type PicksFeed = {
   editions: string[]; // all contributing slots for the day
   updated_at: string; // ISO timestamp
   picks: FeedPick[];
+  /** Ranked daily intel items (steal #6). Latest non-empty list wins. */
+  intel?: { headline: string; detail?: string }[];
   /** Notable player props — eligible parlay legs for the Lab builder. */
   props?: FeedPick[];
   /** Backpage: conf-3 leans. Paywalled tab, paper-traded + graded privately for admin. */
@@ -205,6 +208,8 @@ export async function POST(req: Request) {
       picks: mergedPicks,
       props: mergedProps,
       backpage: mergedBackpage,
+      intel:
+        body.intel && body.intel.length > 0 ? body.intel : existing?.intel,
       // Latest non-null ticket wins; null never erases an earlier edition's ticket.
       teaser: body.teaser || existing?.teaser || null,
       parlay: body.parlay || existing?.parlay || null,

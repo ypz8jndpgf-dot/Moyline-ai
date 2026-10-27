@@ -11,6 +11,8 @@ import TrackHighlights from "@/components/TrackHighlights";
 import TrackTicker from "@/components/TrackTicker";
 import { getTrendCards } from "@/lib/records";
 import PromoVideo from "@/components/PromoVideo";
+import { auth } from "@/lib/auth";
+import { getPrefs } from "@/lib/prefs";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +23,25 @@ export default async function Home() {
     getTrendCards(),
   ]);
   const { games, movers, sports } = buildBoard(oddsResult.events, openings);
+
+  // Personalization (steal #5): a signed-in member's favorite sports lead
+  // the board. Stable sort — everything else keeps its natural order.
+  let orderedGames = games;
+  try {
+    const session = await auth();
+    const email = session?.user?.email;
+    if (email) {
+      const prefs = await getPrefs(email);
+      if (prefs.sports.length > 0) {
+        const rank = new Map(prefs.sports.map((s, i) => [s, i]));
+        orderedGames = [...games].sort(
+          (a, b) => (rank.get(a.sport) ?? 99) - (rank.get(b.sport) ?? 99)
+        );
+      }
+    }
+  } catch {
+    /* personalization is best-effort */
+  }
 
   return (
     <div>
@@ -116,7 +137,7 @@ export default async function Home() {
       <TrackHighlights />
 
       <OddsBoard
-        games={games}
+        games={orderedGames}
         movers={movers}
         sports={sports}
         updatedAt={oddsResult.fetchedAt ? new Date(oddsResult.fetchedAt).toISOString() : ""}

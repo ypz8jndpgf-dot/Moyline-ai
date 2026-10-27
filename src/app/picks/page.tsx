@@ -4,7 +4,7 @@ import { getSubscription, hasAccess } from "@/lib/store";
 import { getPicksFeed, PicksFeed, FeedPick } from "@/lib/picks";
 import { getOdds, getOpenings } from "@/lib/odds";
 import { buildBoard, MoverVM } from "@/lib/board";
-import { findBoardGame, bestPriceForPick, badgeBeatsPlay, movedAgainstNote, selectCardSteamMoves, BestPrice } from "@/lib/card-utils";
+import { findBoardGame, bestPriceForPick, badgeBeatsPlay, movedAgainstNote, modelWinProb, bookPriceForPick, selectCardSteamMoves, BestPrice } from "@/lib/card-utils";
 import { readTails } from "@/lib/tails";
 import TailButton from "./TailButton";
 import ShareButton from "./ShareButton";
@@ -12,6 +12,9 @@ import MarketingPaywall from "@/components/MarketingPaywall";
 import { getYesterdayGlance, getConfidenceCalibration, formatRecord, formatUnits } from "@/lib/records";
 import PushPrompt from "@/components/PushPrompt";
 import IosInstallPrompt from "@/components/IosInstallPrompt";
+import { getPrefs, PREF_BOOKS } from "@/lib/prefs";
+import { SPORT_LABELS } from "@/lib/odds-shared";
+import PrefsCard from "./PrefsCard";
 
 export const dynamic = "force-dynamic";
 
@@ -103,6 +106,8 @@ function PickCard({
   status,
   best,
   movedNote,
+  winProb,
+  yourBook,
   initiallyTailed,
   cardDate,
 }: {
@@ -111,9 +116,17 @@ function PickCard({
   status: Status;
   best: BestPrice;
   movedNote?: string | null;
+  winProb?: number | null;
+  yourBook?: BestPrice;
   initiallyTailed: boolean;
   cardDate: string;
 }) {
+  const gameShort = (p.game || "").split("(")[0].trim();
+  const askQuestions = [
+    "Why this pick?",
+    "How has the line moved?",
+    "Any player props?",
+  ];
   return (
     <div className="card card-glow p-5">
       <div className="flex items-center justify-between mb-2">
@@ -154,6 +167,18 @@ function PickCard({
           </span>
         </p>
       )}
+      {yourBook && (
+        <p className="text-xs mb-2">
+          <span className="inline-block bg-gold/10 text-goldsoft px-2 py-0.5 rounded border border-gold/30">
+            Your book · {yourBook.book}: {yourBook.display}
+          </span>
+        </p>
+      )}
+      {winProb != null && (
+        <p className="text-xs text-muted mb-2">
+          Model win prob ~{winProb}% at our fair price
+        </p>
+      )}
       {!best && movedNote && (
         <p className="text-xs mb-2">
           <span className="inline-block bg-red-500/10 text-red-200/80 px-2 py-0.5 rounded">
@@ -162,6 +187,11 @@ function PickCard({
         </p>
       )}
       {p.reasoning && <p className="text-sm text-muted">{p.reasoning}</p>}
+      {p.risk && (
+        <p className="text-xs text-red-200/70 mt-2">
+          <span className="font-bold">Risk:</span> {p.risk}
+        </p>
+      )}
       {p.writeup && p.writeup !== p.reasoning && (
         <details className="mt-3 group">
           <summary className="text-sm font-bold text-gold cursor-pointer list-none flex items-center gap-1">
@@ -184,6 +214,17 @@ function PickCard({
           </div>
         </details>
       )}
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {askQuestions.map((q) => (
+          <a
+            key={q}
+            href={`/ask?q=${encodeURIComponent(`${q} ${gameShort}`)}`}
+            className="text-[11px] px-2 py-1 rounded-full border border-white/15 text-muted hover:text-goldsoft hover:border-gold/40 transition-colors"
+          >
+            💬 {q}
+          </a>
+        ))}
+      </div>
       <div className="mt-3 flex items-center gap-2">
         <TailButton game={p.game} play={p.play} price={p.price} initiallyTailed={initiallyTailed} />
         <ShareButton
@@ -368,12 +409,19 @@ export default async function PicksPage() {
     /* odds unavailable — card renders without badges */
   }
 
+  // Member personalization (steal #5): primary book gets a price line per pick.
+  const prefs = email ? await getPrefs(email) : { sports: [] as string[], book: "" };
+
   const bestByPick = new Map<string, BestPrice>();
   const movedByPick = new Map<string, string | null>();
+  const yourBookByPick = new Map<string, BestPrice>();
   for (const p of feed?.picks || []) {
     const key = `${p.game}|${p.play}`;
     const bg = findBoardGame(p, boardGames);
     if (bg) {
+      if (prefs.book) {
+        yourBookByPick.set(key, bookPriceForPick(p, bg, prefs.book));
+      }
       const bp = bestPriceForPick(p, bg);
       // Only show the badge when the live price is at least as good as the
       // locked-in play price — never contradict the card after line movement.
@@ -482,6 +530,25 @@ export default async function PicksPage() {
         </div>
       </details>
 
+      <PrefsCard
+        sportOptions={Object.entries(SPORT_LABELS).map(([key, label]) => ({ key, label }))}
+        books={PREF_BOOKS}
+      />
+
+      {feed?.intel && feed.intel.length > 0 && (
+        <div className="card p-5 mb-8">
+          <h2 className="font-display text-xl mb-3">📋 Today&apos;s intel</h2>
+          <ul className="text-sm space-y-2">
+            {feed.intel.map((item, i) => (
+              <li key={i}>
+                <span className="font-bold">{item.headline}</span>
+                {item.detail && <span className="text-muted"> — {item.detail}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {!feed || feed.picks.length === 0 ? (
         <div className="card p-8 text-center">
           <p className="text-lg mb-2">Today&apos;s card is being prepared.</p>
@@ -522,6 +589,8 @@ export default async function PicksPage() {
                   status={status}
                   best={bestByPick.get(key) || null}
                   movedNote={movedByPick.get(key) || null}
+                  winProb={modelWinProb(p)}
+                  yourBook={yourBookByPick.get(key) || null}
                   initiallyTailed={tailedSet.has(key)}
                   cardDate={cardDate}
                 />

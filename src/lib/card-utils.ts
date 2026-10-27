@@ -40,31 +40,37 @@ export type BestPrice = { book: string; display: string } | null;
  * Uses the board's precomputed `best` flags; falls back to the first
  * available cell when no best flag is set.
  */
-export function bestPriceForPick(pick: FeedPick, game: GameVM): BestPrice {
+type CellKey = "spreadAway" | "spreadHome" | "totalOver" | "totalUnder" | "mlAway" | "mlHome";
+
+/** Board cell holding this pick's market+side (shared by best/book price lookups). */
+function cellKeyForPick(pick: FeedPick): CellKey | null {
   const teams = parseGameTeams(pick.game);
   const market = pick.market;
   const play = (pick.play || "").toLowerCase();
 
-  let cellKey: "spreadAway" | "spreadHome" | "totalOver" | "totalUnder" | "mlAway" | "mlHome" | null = null;
-
   if (market === "total" || /\bover\b|\bunder\b/.test(play)) {
-    cellKey = /\bunder\b/.test(play) ? "totalUnder" : "totalOver";
-  } else if (market === "ml" || /\bml\b/.test(play)) {
+    return /\bunder\b/.test(play) ? "totalUnder" : "totalOver";
+  }
+  if (market === "ml" || /\bml\b/.test(play)) {
     if (!teams) return null;
     // Which side is the ML team? Match the team name in the play text.
     const playNorm = norm(play.replace(/\bml\b/g, ""));
     const awayFirst = norm(teams.away).split(" ")[0];
-    cellKey = playNorm.includes(awayFirst) ? "mlAway" : "mlHome";
-  } else {
-    // Spread (default): find the team in the play, e.g. "Nevada -9.5".
-    if (!teams) return null;
-    const playNorm = norm(play);
-    const awayFirst = norm(teams.away).split(" ")[0];
-    const homeFirst = norm(teams.home).split(" ")[0];
-    if (playNorm.includes(awayFirst)) cellKey = "spreadAway";
-    else if (playNorm.includes(homeFirst)) cellKey = "spreadHome";
-    else return null;
+    return playNorm.includes(awayFirst) ? "mlAway" : "mlHome";
   }
+  // Spread (default): find the team in the play, e.g. "Nevada -9.5".
+  if (!teams) return null;
+  const playNorm = norm(play);
+  const awayFirst = norm(teams.away).split(" ")[0];
+  const homeFirst = norm(teams.home).split(" ")[0];
+  if (playNorm.includes(awayFirst)) return "spreadAway";
+  if (playNorm.includes(homeFirst)) return "spreadHome";
+  return null;
+}
+
+export function bestPriceForPick(pick: FeedPick, game: GameVM): BestPrice {
+  const cellKey = cellKeyForPick(pick);
+  if (!cellKey) return null;
 
   let fallback: BestPrice = null;
   for (const b of game.books) {
@@ -74,6 +80,17 @@ export function bestPriceForPick(pick: FeedPick, game: GameVM): BestPrice {
     if (cell.best) return { book: b.label, display: cell.display };
   }
   return fallback;
+}
+
+/** The price at one named book for this pick's market+side (steal #5 "my book"). */
+export function bookPriceForPick(pick: FeedPick, game: GameVM, bookLabel: string): BestPrice {
+  const cellKey = cellKeyForPick(pick);
+  if (!cellKey) return null;
+  const b = game.books.find(
+    (x) => x.label.toLowerCase() === bookLabel.toLowerCase()
+  );
+  const cell = b?.[cellKey];
+  return cell && b ? { book: b.label, display: cell.display } : null;
 }
 
 /** Extract an American-odds number from a price string like "-138" or "(-154)". */
@@ -98,6 +115,25 @@ export function badgeBeatsPlay(pick: FeedPick, best: BestPrice): boolean {
   const bestPrice = parseAmerican(best.display);
   if (playPrice === null || bestPrice === null) return true; // can't compare — show it
   return payout(bestPrice) >= payout(playPrice);
+}
+
+/**
+ * Model win probability for a card pick (steal #4): the published edge in
+ * cents is the gap between the market price and our fair price, so the
+ * fair price is published − edge (−110 with a 25¢ edge → fair −135), and
+ * the win probability is that fair price's implied probability. It's the
+ * same number the edge already asserts, re-expressed — nothing new is
+ * invented. Returns a whole percent, or null without a usable edge.
+ */
+export function modelWinProb(pick: FeedPick): number | null {
+  const price = parseAmerican(pick.price);
+  const edge = pick.edge_cents;
+  if (price === null || edge == null || edge <= 0) return null;
+  const fair = price - edge;
+  if (fair === 0) return null;
+  const prob =
+    fair > 0 ? 100 / (fair + 100) : Math.abs(fair) / (Math.abs(fair) + 100);
+  return Math.round(prob * 100);
 }
 
 /** First point value in a display string: "-3.5 (-110)" → -3.5, "(+108)" → null. */

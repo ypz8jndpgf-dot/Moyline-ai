@@ -151,6 +151,77 @@ function rateTicket(legs: Leg[], pool: FeedPick[]): Rating {
 
 const ALL_SPORTS = ["NFL", "CFB", "NBA", "NHL", "MLB", "MLS", "EPL", "La Liga", "Bundesliga", "Serie A", "Ligue 1", "Brasileirão", "UCL"];
 
+/* ---------- slip import (steal #1: snap/paste a bet slip, get it checked) ---------- */
+
+const slipNorm = (s: string) =>
+  s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+
+/** Distinctive tokens of a pool leg: team nicknames, player surnames, line numbers. */
+function legTokens(leg: FeedPick): string[] {
+  const words = slipNorm(`${leg.game} ${leg.play}`).split(" ").filter((w) => w.length >= 4);
+  return [...new Set(words)];
+}
+
+/**
+ * Parse raw slip text (OCR output or pasted) into legs. Lines that match a
+ * pool leg inherit its edge rating; the rest become unrated custom legs —
+ * the verdict flags those honestly instead of pretending to grade them.
+ */
+function parseSlip(text: string, pool: Leg[]): { legs: Leg[]; matched: number } {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length >= 4)
+    .filter((l) => !/^(parlay|sgp|bet slip|wager|to win|potential payout|odds boost|total odds)/i.test(l));
+  const out: Leg[] = [];
+  let matched = 0;
+  for (const line of lines) {
+    const oddsM = line.match(/([+-]\d{3,4})/);
+    const lineTokens = new Set(slipNorm(line).split(" ").filter((w) => w.length >= 4));
+    let best: Leg | null = null;
+    let bestScore = 0;
+    for (const leg of pool) {
+      const toks = legTokens(leg);
+      if (toks.length === 0) continue;
+      const hits = toks.filter((t) => lineTokens.has(t)).length;
+      const score = hits / toks.length;
+      // Require the leg's most distinctive token (a nickname/surname) to appear.
+      if (hits >= 2 && score > bestScore) {
+        best = leg;
+        bestScore = score;
+      }
+    }
+    if (best && bestScore >= 0.34) {
+      matched++;
+      out.push({ ...best, uid: `slip-${Date.now()}-${out.length}` });
+    } else if (oddsM) {
+      out.push({
+        game: "From your slip",
+        play: line.replace(/\s*\(?([+-]\d{3,4})\)?\s*$/, "").slice(0, 90) || line.slice(0, 90),
+        price: oddsM[1],
+        confidence: 0,
+        uid: `slip-${Date.now()}-${out.length}`,
+      } as Leg);
+    }
+    if (out.length >= 8) break;
+  }
+  return { legs: out, matched };
+}
+
+/** Load tesseract.js (UMD) from CDN on demand for in-browser OCR. */
+async function loadTesseract(): Promise<any> {
+  const w = window as any;
+  if (w.Tesseract) return w.Tesseract;
+  await new Promise<void>((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/tesseract.min.js";
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("ocr-load"));
+    document.head.appendChild(s);
+  });
+  return (window as any).Tesseract;
+}
+
 export default function TicketBuilder({
   picks,
   props,
@@ -165,6 +236,9 @@ export default function TicketBuilder({
   const [ticket, setTicket] = useState<Leg[]>([]);
   const [sportFilter, setSportFilter] = useState<string>("All");
   const [search, setSearch] = useState("");
+  const [slipText, setSlipText] = useState("");
+  const [slipBusy, setSlipBusy] = useState(false);
+  const [slipNote, setSlipNote] = useState<string | null>(null);
 
   const pool: Leg[] = useMemo(() => {
     // Card picks first (rated), then board games (unrated — AI flags them).
@@ -204,6 +278,38 @@ export default function TicketBuilder({
     setTicket([...ticket, { ...p, uid: `ticket-${Date.now()}-${Math.random()}` }]);
   };
 
+  const importSlip = (text: string) => {
+    const { legs, matched } = parseSlip(text, pool);
+    if (legs.length === 0) {
+      setSlipNote("Couldn't find any legs in that — try a clearer photo, or paste the slip text.");
+      return;
+    }
+    const fresh = legs.filter(
+      (l) => !ticket.some((t) => t.game === l.game && t.play === l.play)
+    );
+    setTicket([...ticket, ...fresh].slice(0, 8));
+    setSlipNote(
+      `Imported ${fresh.length} leg${fresh.length === 1 ? "" : "s"} — ${matched} matched to rated legs, ${fresh.length - matched} unrated (graded as fair). Check each leg below; tap × to remove anything wrong.`
+    );
+  };
+
+  const onSlipPhoto = async (file: File | undefined) => {
+    if (!file) return;
+    setSlipBusy(true);
+    setSlipNote("Reading your slip…");
+    try {
+      const T = await loadTesseract();
+      const { data } = await T.recognize(file, "eng");
+      const text = (data?.text || "").trim();
+      if (!text) throw new Error("ocr-empty");
+      setSlipText(text);
+      importSlip(text);
+    } catch {
+      setSlipNote("Couldn't read that photo. Paste the slip text below instead — same check.");
+    }
+    setSlipBusy(false);
+  };
+
   const removeLeg = (uid: string) => setTicket(ticket.filter((t) => t.uid !== uid));
 
   const sportsInPool = useMemo(() => {
@@ -213,6 +319,45 @@ export default function TicketBuilder({
   }, []);
 
   return (
+    <div>
+      {/* Slip check (steal #1): snap a photo or paste the text of a slip
+          from any book and the builder grades it with the same verdict. */}
+      <div className="card p-4 mb-4">
+        <h3 className="font-display text-lg mb-1">📸 CHECK YOUR SLIP</h3>
+        <p className="text-xs text-muted mb-3">
+          Already have a ticket somewhere else? Snap it or paste it — we&apos;ll
+          match the legs to our rated card and grade the whole thing.
+        </p>
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          <label className={`btn-gold px-4 py-2 text-sm cursor-pointer ${slipBusy ? "opacity-50 pointer-events-none" : ""}`}>
+            {slipBusy ? "Reading…" : "📷 Upload slip photo"}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => onSlipPhoto(e.target.files?.[0])}
+            />
+          </label>
+          <span className="text-xs text-muted">or paste the slip text:</span>
+        </div>
+        <textarea
+          value={slipText}
+          onChange={(e) => setSlipText(e.target.value)}
+          rows={3}
+          placeholder={"e.g.\nLakers -3.5 (-110)\nJayson Tatum Over 27.5 points (-115)"}
+          className="w-full px-3 py-2 rounded bg-white/5 border border-white/10 text-sm mb-2"
+        />
+        <button
+          type="button"
+          disabled={slipBusy || slipText.trim().length < 4}
+          onClick={() => importSlip(slipText)}
+          className="btn-gold px-5 py-2 text-sm disabled:opacity-50"
+        >
+          Check this slip
+        </button>
+        {slipNote && <p className="text-xs text-muted mt-2">{slipNote}</p>}
+      </div>
+
     <div className="grid md:grid-cols-2 gap-4">
       {/* Left: leg picker */}
       <div>
@@ -337,6 +482,7 @@ export default function TicketBuilder({
           )}
         </div>
       </div>
+    </div>
     </div>
   );
 }
