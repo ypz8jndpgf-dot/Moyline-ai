@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { PicksFeed } from "@/lib/picks";
-import { getTrackRecord, getBetaCount } from "@/lib/store";
+import { getTrackRecord } from "@/lib/store";
 
 /**
  * Marketing paywall page for non-members.
@@ -24,9 +24,6 @@ export default async function MarketingPaywall({
   const freePick = picks.find((p) => p.star) || picks[0] || null;
   const lockedCount = picks.filter((p) => p !== freePick).length;
 
-  // Founding-member count, live from the beta list (null = count-free copy)
-  const betaCount = await getBetaCount().catch(() => null);
-
   // Pull track record highlights for social proof
   let starRecord: string | null = null;
   let winPct: string | null = null;
@@ -46,7 +43,7 @@ export default async function MarketingPaywall({
   return (
     <div className="max-w-4xl mx-auto">
       {/* Hero */}
-      <div className="text-center py-12 px-4">
+      <div className="text-center pt-2 pb-10 sm:py-12 px-4">
         <p className="text-xs font-bold uppercase tracking-[0.3em] text-gold mb-4">
           MoyLine AI Pro
         </p>
@@ -59,9 +56,7 @@ export default async function MarketingPaywall({
             ✦ Founding Members
           </span>
           <p className="text-sm text-goldsoft mt-3">
-            {betaCount
-              ? `The founding class is in — ${betaCount} members strong. Join them before public launch.`
-              : "The founding class is in — join them before public launch."}
+            The founding class is in — join them before public launch.
           </p>
         </div>
         <p className="text-muted text-lg mb-2 max-w-2xl mx-auto">

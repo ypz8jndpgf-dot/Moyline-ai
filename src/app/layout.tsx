@@ -71,7 +71,7 @@ async function Nav() {
           {accountLink}
           <BetaPill />
         </div>
-        <nav className="flex items-center gap-0.5 sm:gap-2 text-xs sm:text-sm font-bold overflow-x-auto whitespace-nowrap order-3 sm:order-2 w-full sm:w-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <nav className="flex items-center gap-0.5 sm:gap-2 text-[11px] sm:text-sm font-bold overflow-x-auto whitespace-nowrap order-3 sm:order-2 w-full sm:w-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,black_88%,transparent)] sm:[mask-image:none]">
           <Link href="/ask" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Ask MoyAI ✨</Link>
           <Link href="/" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Lines</Link>
           <Link href="/picks" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Picks 🔒</Link>
@@ -100,7 +100,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
         <div className="hero-grid min-h-screen">
           <Nav />
-          <main className="max-w-7xl mx-auto px-4 py-6">{children}</main>
+          <main className="max-w-7xl mx-auto px-4 py-4 sm:py-6">{children}</main>
           <footer className="border-t border-line/70 mt-12">
             <div className="max-w-7xl mx-auto px-4 py-6 text-xs text-muted flex flex-col sm:flex-row gap-2 justify-between">
               <span>
