@@ -1,16 +1,20 @@
-import { getTrackRecord } from "@/lib/store";
+import { getTrackRecord, type TrackPick } from "@/lib/store";
+import { classifyPick } from "@/lib/records";
 
 /**
  * Scrolling ticker tape of live track-record highlights.
  * Fully dynamic: any segment clearing 50% with enough picks shows up automatically.
  * Pure CSS animation, no JS needed.
+ *
+ * Play-type segments MUST use classifyPick (the shared classifier behind
+ * /track-record) — never substring matchers. The old includes("ml")
+ * matcher produced a Moneylines tally that contradicted /track-record
+ * (69-60 vs 73-59-1; showcase audit, 2026-10-27).
  */
 
 type Segment = { label: string; w: number; l: number };
 
-function collectSegments(
-  picks: { sport: string; play: string; result: string; date: string }[]
-): Segment[] {
+function collectSegments(picks: TrackPick[]): Segment[] {
   const segments: Segment[] = [];
   const tally = (list: typeof picks): [number, number] => [
     list.filter((p) => p.result === "Win").length,
@@ -31,14 +35,14 @@ function collectSegments(
   }
 
   // By play type (min 15 graded — showcase segment floor)
-  const types: [string, (play: string) => boolean][] = [
-    ["UNDERS", (pl) => pl.toLowerCase().includes("under")],
-    ["OVERS", (pl) => pl.toLowerCase().includes("over")],
-    ["MONEYLINES", (pl) => pl.toLowerCase().includes("ml")],
-    ["SPREADS", (pl) => /[+-]\d+\.5|[+-][1-9]\d?\b/.test(pl) && !pl.toLowerCase().includes("o/u")],
+  const types: [string, (p: TrackPick) => boolean][] = [
+    ["UNDERS", (p) => classifyPick(p) === "Total" && /\bunder\b/i.test(p.play)],
+    ["OVERS", (p) => classifyPick(p) === "Total" && /\bover\b/i.test(p.play)],
+    ["MONEYLINES", (p) => classifyPick(p) === "Moneyline"],
+    ["SPREADS", (p) => classifyPick(p) === "Spread"],
   ];
   for (const [label, match] of types) {
-    const list = picks.filter((p) => match(p.play));
+    const list = picks.filter(match);
     const [w, l] = tally(list);
     if (w + l >= 15 && w / (w + l) >= 0.5) segments.push({ label, w, l });
   }

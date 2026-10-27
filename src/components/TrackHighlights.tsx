@@ -1,9 +1,17 @@
 import { getTrackRecord } from "@/lib/store";
+import { classifyPick } from "@/lib/records";
 
 /**
  * Marketing highlights strip — fully dynamic from the live track record.
  * Any segment clearing 50% with enough picks shows up automatically.
  * Anything below 50% is hidden.
+ *
+ * Play-type segments MUST use classifyPick (the same classifier behind
+ * /track-record and the homepage trend cards) — never substring matchers.
+ * The old includes("ml") matcher missed moneylines written as bare prices
+ * ("Ducks +112") and swept in parlay tickets containing "ML", so this strip
+ * showed Moneylines 69-60 while /track-record said 73-59-1 (caught by the
+ * showcase audit, 2026-10-27).
  */
 export default async function TrackHighlights() {
   const rec = await getTrackRecord();
@@ -11,18 +19,20 @@ export default async function TrackHighlights() {
 
   if (picks.length < 20) return null;
 
-  const tally = (list: typeof picks): [number, number] => [
+  const tally = (list: typeof picks): [number, number, number] => [
     list.filter((p) => p.result === "Win").length,
     list.filter((p) => p.result === "Loss").length,
+    list.filter((p) => p.result === "Push").length,
   ];
 
   const cards: { pct: string; label: string; detail: string; score: number }[] = [];
-  const add = (label: string, w: number, l: number, detail: string, minPicks: number) => {
+  const add = (label: string, w: number, l: number, p: number, detail: string, minPicks: number) => {
     if (w + l >= minPicks && w / (w + l) >= 0.5) {
+      const record = p > 0 ? `${w}-${l}-${p}` : `${w}-${l}`;
       cards.push({
         pct: `${((w / (w + l)) * 100).toFixed(0)}%`,
         label,
-        detail: `${w}-${l} · ${detail}`,
+        detail: `${record} · ${detail}`,
         score: w / (w + l),
       });
     }
@@ -36,26 +46,26 @@ export default async function TrackHighlights() {
     bySport.set(p.sport, arr);
   }
   for (const [sport, list] of bySport) {
-    const [w, l] = tally(list);
-    add(`${sport} picks`, w, l, "by sport", 15);
+    const [w, l, p] = tally(list);
+    add(`${sport} picks`, w, l, p, "by sport", 15);
   }
 
-  // By play type (min 8)
-  const types: [string, string, (play: string) => boolean][] = [
-    ["Unders", "finding value in totals", (pl) => pl.toLowerCase().includes("under")],
-    ["Overs", "riding the over wave", (pl) => pl.toLowerCase().includes("over")],
-    ["Moneylines", "picking winners outright", (pl) => pl.toLowerCase().includes("ml")],
-    ["Spreads", "beating the number", (pl) => /[+-]\d+\.5|[+-][1-9]\d?\b/.test(pl)],
+  // By play type (min 15) — classified with the shared classifier
+  const types: [string, string, (p: (typeof picks)[number]) => boolean][] = [
+    ["Unders", "finding value in totals", (p) => classifyPick(p) === "Total" && /\bunder\b/i.test(p.play)],
+    ["Overs", "riding the over wave", (p) => classifyPick(p) === "Total" && /\bover\b/i.test(p.play)],
+    ["Moneylines", "picking winners outright", (p) => classifyPick(p) === "Moneyline"],
+    ["Spreads", "beating the number", (p) => classifyPick(p) === "Spread"],
   ];
   for (const [label, detail, match] of types) {
-    const [w, l] = tally(picks.filter((p) => match(p.play)));
-    add(label, w, l, detail, 15);
+    const [w, l, p] = tally(picks.filter(match));
+    add(label, w, l, p, detail, 15);
   }
 
   // Recent form: last 20 (min 15 graded)
   const recent = [...picks].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 20);
-  const [rw, rl] = tally(recent);
-  add("Last 20 picks", rw, rl, "recent form", 15);
+  const [rw, rl, rp] = tally(recent);
+  add("Last 20 picks", rw, rl, rp, "recent form", 15);
 
   if (cards.length === 0) return null;
 
