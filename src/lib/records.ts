@@ -122,9 +122,12 @@ export async function getTrendCards(): Promise<TrendCard[]> {
         (type(p) === "Moneyline" || type(p) === "Spread"),
     },
     {
-      label: "Overs overall",
-      detail: (r) => `${r} · not just unders`,
-      keep: (p) => type(p) === "Total" && /\bover\b/i.test(p.play),
+      label: "Overs — game totals",
+      detail: (r) => `${r} · full-game totals only`,
+      keep: (p) =>
+        type(p) === "Total" &&
+        /\bover\b/i.test(p.play) &&
+        !/team total/i.test(p.play),
     },
     {
       label: "NHL moneylines",

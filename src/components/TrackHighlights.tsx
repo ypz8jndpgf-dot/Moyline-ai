@@ -52,8 +52,8 @@ export default async function TrackHighlights() {
 
   // By play type (min 15) — classified with the shared classifier
   const types: [string, string, (p: (typeof picks)[number]) => boolean][] = [
-    ["Unders", "finding value in totals", (p) => classifyPick(p) === "Total" && /\bunder\b/i.test(p.play)],
-    ["Overs", "riding the over wave", (p) => classifyPick(p) === "Total" && /\bover\b/i.test(p.play)],
+    ["Unders", "finding value in totals", (p) => classifyPick(p) === "Total" && /\bunder\b/i.test(p.play) && !/team total/i.test(p.play)],
+    ["Overs", "riding the over wave", (p) => classifyPick(p) === "Total" && /\bover\b/i.test(p.play) && !/team total/i.test(p.play)],
     ["Moneylines", "picking winners outright", (p) => classifyPick(p) === "Moneyline"],
     ["Spreads", "beating the number", (p) => classifyPick(p) === "Spread"],
   ];

@@ -36,8 +36,8 @@ function collectSegments(picks: TrackPick[]): Segment[] {
 
   // By play type (min 15 graded — showcase segment floor)
   const types: [string, (p: TrackPick) => boolean][] = [
-    ["UNDERS", (p) => classifyPick(p) === "Total" && /\bunder\b/i.test(p.play)],
-    ["OVERS", (p) => classifyPick(p) === "Total" && /\bover\b/i.test(p.play)],
+    ["UNDERS", (p) => classifyPick(p) === "Total" && /\bunder\b/i.test(p.play) && !/team total/i.test(p.play)],
+    ["OVERS", (p) => classifyPick(p) === "Total" && /\bover\b/i.test(p.play) && !/team total/i.test(p.play)],
     ["MONEYLINES", (p) => classifyPick(p) === "Moneyline"],
     ["SPREADS", (p) => classifyPick(p) === "Spread"],
   ];
