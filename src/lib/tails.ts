@@ -42,3 +42,17 @@ export async function writeTails(email: string, tails: Tail[]): Promise<void> {
   if (!redis) throw new Error("Storage not configured");
   await redis.set(tailKey(email), JSON.stringify(tails));
 }
+
+/** Every member's tails (for the tail-alerts check). Scans moyline:tails:* keys. */
+export async function getAllTails(): Promise<{ email: string; tails: Tail[] }[]> {
+  const redis = tailsRedis();
+  if (!redis) return [];
+  const keys = await redis.keys("moyline:tails:*");
+  const out: { email: string; tails: Tail[] }[] = [];
+  for (const k of keys) {
+    const email = k.replace("moyline:tails:", "");
+    const tails = await readTails(email);
+    if (tails.length > 0) out.push({ email, tails });
+  }
+  return out;
+}

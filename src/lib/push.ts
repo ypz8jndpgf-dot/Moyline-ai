@@ -132,3 +132,39 @@ export async function broadcastPush(payload: {
 export function getVapidPublicKey(): string {
   return cleanEnv(process.env.VAPID_PUBLIC_KEY);
 }
+
+/**
+ * Sends a push to one member's stored subscription.
+ * Returns true only when the notification was accepted by the push
+ * service. Stale (410/404) subscriptions are removed.
+ */
+export async function sendPushTo(
+  email: string,
+  payload: { title: string; body: string; url?: string }
+): Promise<boolean> {
+  if (!vapidConfigured()) return false;
+  const sub = await getSubscription(email);
+  if (!sub) return false;
+  webpush.setVapidDetails(
+    "mailto:support@moylineai.com",
+    cleanEnv(process.env.VAPID_PUBLIC_KEY),
+    cleanEnv(process.env.VAPID_PRIVATE_KEY)
+  );
+  try {
+    await webpush.sendNotification(
+      { endpoint: sub.endpoint, keys: sub.keys } as webpush.PushSubscription,
+      JSON.stringify({
+        title: payload.title,
+        body: payload.body,
+        url: payload.url || "/picks",
+      })
+    );
+    return true;
+  } catch (e: unknown) {
+    const status = (e as { statusCode?: number })?.statusCode;
+    if (status === 404 || status === 410) {
+      await removeSubscription(email);
+    }
+    return false;
+  }
+}

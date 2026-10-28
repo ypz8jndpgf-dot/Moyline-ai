@@ -187,6 +187,56 @@ export function movedAgainstNote(pick: FeedPick, best: BestPrice): string | null
   return `Line moved against this pick — published ${pubDesc}, now ${best.display} at ${best.book}`;
 }
 
+/**
+ * One-line line journey for a card pick (optimization #20, 2026-10-28):
+ * "Opened +3 (-110) · card +3.5 (-110) · now +3 (-110) at FanDuel".
+ * Open comes from the tracked opening on the same board cell that
+ * supplies the best price; the card beat is the published play itself.
+ * Returns null when there's nothing to tell: no board cell, no tracked
+ * opening AND the live line is identical to the published one, or the
+ * pick is a prop (no board market). Beats that repeat the previous one
+ * verbatim are collapsed so a static line reads "Opened X · now X".
+ */
+export function lineStoryForPick(pick: FeedPick, game: GameVM): string | null {
+  const cellKey = cellKeyForPick(pick);
+  if (!cellKey) return null;
+
+  // Same cell selection as bestPriceForPick: best-flagged cell wins,
+  // first available cell is the fallback.
+  let chosen: { book: string; open: string; now: string } | null = null;
+  for (const b of game.books) {
+    const cell = b[cellKey];
+    if (!cell) continue;
+    if (!chosen) chosen = { book: b.label, open: cell.openDisplay, now: cell.display };
+    if (cell.best) {
+      chosen = { book: b.label, open: cell.openDisplay, now: cell.display };
+      break;
+    }
+  }
+  if (!chosen) return null;
+
+  const pubPrice = parseAmerican(pick.price);
+  if (pubPrice === null) return null;
+  const market = pickAlertMarket(pick);
+  if (!market) return null;
+  const pubPoint = parsePoint(pick.line) ?? parsePoint(pick.play);
+  const cardStr =
+    market !== "moneyline" && pubPoint !== null
+      ? `${pubPoint > 0 && market === "spread" ? "+" : ""}${pubPoint} (${fmtAmerican(pubPrice)})`
+      : `(${fmtAmerican(pubPrice)})`;
+
+  const hasOpen = chosen.open && chosen.open !== "—";
+  if (!hasOpen && chosen.now === cardStr) return null;
+
+  // The "now" beat always shows; the "card" beat is dropped only when
+  // the tracked opening is identical to it (nothing happened pre-card).
+  const beats: string[] = [];
+  if (hasOpen) beats.push(`Opened ${chosen.open}`);
+  if (!hasOpen || chosen.open !== cardStr) beats.push(`card ${cardStr}`);
+  beats.push(`now ${chosen.now} at ${chosen.book}`);
+  return beats.join(" · ");
+}
+
 /* ------------------------------------------------------------------ */
 /* Steam selection — used by /api/refresh's alertCardSteam AND the      */
 /* /picks page "Steam on your card" section. The old steamForGame fuzzy  */

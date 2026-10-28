@@ -68,6 +68,22 @@ export async function GET(req: Request) {
       console.error("[refresh] line alert check failed:", e instanceof Error ? e.message : e);
     }
 
+    // Tailed-pick alerts (best-effort; never fails the refresh).
+    let tailAlerts = 0;
+    try {
+      const base = (process.env.NEXTAUTH_URL || "https://www.moylineai.com").trim();
+      const res = await fetch(`${base}/api/cron/tail-alerts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        tailAlerts = data.sent || 0;
+      }
+    } catch (e) {
+      console.error("[refresh] tail alert check failed:", e instanceof Error ? e.message : e);
+    }
+
     return NextResponse.json({
       ok: true,
       fetchedAt: result.fetchedAt,
@@ -76,6 +92,7 @@ export async function GET(req: Request) {
       quotaRemaining: getQuotaRemaining(),
       steamAlerts,
       lineAlerts,
+      tailAlerts,
       error: result.error || null,
     });
   } catch (e) {

@@ -25,6 +25,8 @@ export type MemberPrefs = {
   sports: string[];
   /** Book label, e.g. "DraftKings". Empty = no primary book. */
   book: string;
+  /** Opt-in pushes for tailed picks: line moved against + start soon (optimization #19). */
+  tailAlerts: boolean;
 };
 
 export const PREF_BOOKS = ["DraftKings", "FanDuel", "BetMGM", "Caesars"];
@@ -32,7 +34,7 @@ export const PREF_BOOKS = ["DraftKings", "FanDuel", "BetMGM", "Caesars"];
 const keyFor = (email: string) => `moyline:prefs:${email.trim().toLowerCase()}`;
 
 export async function getPrefs(email: string): Promise<MemberPrefs> {
-  const empty: MemberPrefs = { sports: [], book: "" };
+  const empty: MemberPrefs = { sports: [], book: "", tailAlerts: false };
   const redis = redisClient();
   if (!redis || !email) return empty;
   try {
@@ -42,6 +44,7 @@ export async function getPrefs(email: string): Promise<MemberPrefs> {
     return {
       sports: Array.isArray(p.sports) ? p.sports.filter((s) => typeof s === "string") : [],
       book: typeof p.book === "string" ? p.book : "",
+      tailAlerts: p.tailAlerts === true,
     };
   } catch {
     return empty;

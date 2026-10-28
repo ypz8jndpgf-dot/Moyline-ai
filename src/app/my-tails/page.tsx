@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { getSubscription, hasAccess, getTrackRecord } from "@/lib/store";
 import { readTails } from "@/lib/tails";
+import TailAlertsToggle from "./TailAlertsToggle";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +71,8 @@ export default async function MyTailsPage() {
         {email} · {w}-{l}-{p}
         {pending > 0 && <span className="text-muted"> · {pending} pending</span>}
       </p>
+
+      <TailAlertsToggle />
 
       {tails.length === 0 ? (
         <div className="card p-8 text-center">

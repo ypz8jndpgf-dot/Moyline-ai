@@ -4,7 +4,7 @@ import { getSubscription, hasAccess } from "@/lib/store";
 import { getPicksFeed, PicksFeed, FeedPick } from "@/lib/picks";
 import { getOdds, getOpenings } from "@/lib/odds";
 import { buildBoard, MoverVM } from "@/lib/board";
-import { findBoardGame, bestPriceForPick, badgeBeatsPlay, movedAgainstNote, modelWinProb, bookPriceForPick, selectCardSteamMoves, BestPrice } from "@/lib/card-utils";
+import { findBoardGame, bestPriceForPick, badgeBeatsPlay, movedAgainstNote, lineStoryForPick, modelWinProb, bookPriceForPick, selectCardSteamMoves, BestPrice } from "@/lib/card-utils";
 import { readTails } from "@/lib/tails";
 import TailButton from "./TailButton";
 import ShareButton from "./ShareButton";
@@ -106,6 +106,7 @@ function PickCard({
   status,
   best,
   movedNote,
+  lineStory,
   winProb,
   yourBook,
   initiallyTailed,
@@ -116,6 +117,7 @@ function PickCard({
   status: Status;
   best: BestPrice;
   movedNote?: string | null;
+  lineStory?: string | null;
   winProb?: number | null;
   yourBook?: BestPrice;
   initiallyTailed: boolean;
@@ -185,6 +187,9 @@ function PickCard({
             ⚠ {movedNote}
           </span>
         </p>
+      )}
+      {lineStory && (
+        <p className="text-[11px] text-muted mb-2">📈 {lineStory}</p>
       )}
       {p.reasoning && <p className="text-sm text-muted">{p.reasoning}</p>}
       {p.risk && (
@@ -410,15 +415,17 @@ export default async function PicksPage() {
   }
 
   // Member personalization (steal #5): primary book gets a price line per pick.
-  const prefs = email ? await getPrefs(email) : { sports: [] as string[], book: "" };
+  const prefs = email ? await getPrefs(email) : { sports: [] as string[], book: "", tailAlerts: false };
 
   const bestByPick = new Map<string, BestPrice>();
   const movedByPick = new Map<string, string | null>();
+  const storyByPick = new Map<string, string | null>();
   const yourBookByPick = new Map<string, BestPrice>();
   for (const p of feed?.picks || []) {
     const key = `${p.game}|${p.play}`;
     const bg = findBoardGame(p, boardGames);
     if (bg) {
+      storyByPick.set(key, lineStoryForPick(p, bg));
       if (prefs.book) {
         yourBookByPick.set(key, bookPriceForPick(p, bg, prefs.book));
       }
@@ -589,6 +596,7 @@ export default async function PicksPage() {
                   status={status}
                   best={bestByPick.get(key) || null}
                   movedNote={movedByPick.get(key) || null}
+                  lineStory={storyByPick.get(key) || null}
                   winProb={modelWinProb(p)}
                   yourBook={yourBookByPick.get(key) || null}
                   initiallyTailed={tailedSet.has(key)}
@@ -597,6 +605,46 @@ export default async function PicksPage() {
               );
             })}
           </div>
+
+          {feed.props && feed.props.length > 0 && (
+            <div className="card p-5 mb-8">
+              <h2 className="font-display text-xl mb-1">🎯 Notable props</h2>
+              <p className="text-xs text-muted mb-4">
+                Prop leans from today&apos;s brief — the same legs the Parlay Lab builds from.
+              </p>
+              <div className="space-y-3">
+                {feed.props.map((prop, i) => {
+                  const key = `${prop.game}|${prop.play}`;
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-start justify-between gap-3 border-l-2 border-gold/40 pl-3"
+                    >
+                      <div>
+                        <p className="text-sm font-bold text-paper">{prop.game}</p>
+                        <p className="text-sm text-goldsoft">
+                          {prop.play} <span className="text-muted">{prop.price}</span>
+                        </p>
+                        <p className="text-xs text-muted">
+                          Conf {prop.confidence}/5
+                          {prop.starts ? ` · 🕐 ${prop.starts}` : ""}
+                        </p>
+                        {prop.reasoning && (
+                          <p className="text-xs text-muted mt-1">{prop.reasoning}</p>
+                        )}
+                      </div>
+                      <TailButton
+                        game={prop.game}
+                        play={prop.play}
+                        price={prop.price}
+                        initiallyTailed={tailedSet.has(key)}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="grid gap-4 md:grid-cols-2 mt-4">
             <div className="card p-5">
