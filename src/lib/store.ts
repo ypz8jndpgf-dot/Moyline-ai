@@ -302,6 +302,32 @@ export async function getBetaCount(): Promise<number | null> {
   return env.length > 0 ? env.length : null;
 }
 
+/**
+ * Founding member check — membership in the same beta source hasAccess uses
+ * (Redis `moyline:beta` first, BETA_EMAILS env fallback). The founding class
+ * is closed and holds lifetime free access (user decision 2026-10-28), so
+ * this set doubles as the lifetime earmark until a dedicated flag exists.
+ * Admin is NOT a founder — the owner bypass is separate.
+ */
+export async function isFounder(email: string | null | undefined): Promise<boolean> {
+  if (!email) return false;
+  let beta: string[] = [];
+  const redis = getRedis();
+  if (redis) {
+    try {
+      const members = await redis.smembers("moyline:beta");
+      if (members && members.length > 0) beta = members.map((s) => String(s).toLowerCase());
+    } catch { /* fall through to env */ }
+  }
+  if (beta.length === 0) {
+    beta = (process.env.BETA_EMAILS || "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+  }
+  return beta.includes(email.toLowerCase());
+}
+
 /** Backwards-compat sync wrapper (env var only). Prefer the async hasAccess. */
 export function hasAccessSync(email: string | null | undefined, sub: SubRecord): boolean {
   const admin = (process.env.ADMIN_EMAIL || "").toLowerCase();

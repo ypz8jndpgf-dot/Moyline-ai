@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
-import { getSubscription, hasAccess } from "@/lib/store";
+import { getSubscription, hasAccess, isFounder } from "@/lib/store";
 import { getPicksFeed, PicksFeed, FeedPick } from "@/lib/picks";
 import { getOdds, getOpenings } from "@/lib/odds";
 import { buildBoard, MoverVM } from "@/lib/board";
@@ -378,6 +378,7 @@ export default async function PicksPage() {
   const email = session?.user?.email || null;
   const sub = await getSubscription(email || "");
   const allowed = await hasAccess(email, sub);
+  const founder = email ? await isFounder(email) : false;
   const feed = await getPicksFeed();
 
   if (!allowed) {
@@ -497,6 +498,18 @@ export default async function PicksPage() {
       <p className="text-xs text-muted mb-6">
         Best-price tags compare the four books on that pick — they&apos;re not extra picks.
       </p>
+
+      {founder && (
+        <div className="mb-6 rounded-xl border border-gold/60 bg-gold/10 px-4 py-3 flex items-center gap-3">
+          <span className="text-2xl" aria-hidden>
+            🏅
+          </span>
+          <p className="text-sm">
+            <span className="font-extrabold text-gold tracking-wide">FOUNDING MEMBER</span>{" "}
+            — thanks for piloting the beta with us. Your access is <b>free for life</b>.
+          </p>
+        </div>
+      )}
 
       <PushPrompt />
       <IosInstallPrompt />

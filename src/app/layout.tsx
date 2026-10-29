@@ -5,6 +5,19 @@ import PwaRegister from "@/components/PwaRegister";
 import PushBell from "@/components/PushBell";
 import Providers from "@/components/Providers";
 import { auth } from "@/lib/auth";
+import { isFounder } from "@/lib/store";
+
+/** Founder sticker — shown only to founding (beta) members, who hold lifetime free access. */
+function FounderPill() {
+  return (
+    <span
+      className="px-2.5 sm:px-3 py-1.5 rounded-full bg-gold text-black whitespace-nowrap shrink-0 text-[10px] sm:text-xs font-extrabold tracking-wide"
+      title="Founding member — free for life. Thanks for piloting the beta."
+    >
+      🏅 FOUNDER
+    </span>
+  );
+}
 
 /** Beta placeholder pill shown where the Go Pro CTA will live once Stripe is wired. */
 function BetaPill() {
@@ -41,6 +54,7 @@ async function Nav() {
   const email = session?.user?.email || null;
   const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase();
   const isAdmin = !!email && !!adminEmail && email.toLowerCase() === adminEmail;
+  const founder = email ? await isFounder(email) : false;
   const accountLink = email ? (
     <>
       <PushBell />
@@ -69,6 +83,7 @@ async function Nav() {
         </Link>
         <div className="flex items-center gap-2 shrink-0 order-2 sm:order-3 text-xs sm:text-sm font-bold">
           {accountLink}
+          {founder && <FounderPill />}
           <BetaPill />
         </div>
         <nav className="flex items-center gap-0.5 sm:gap-2 text-[11px] sm:text-sm font-bold overflow-x-auto whitespace-nowrap order-3 sm:order-2 w-full sm:w-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,black_88%,transparent)] sm:[mask-image:none]">
