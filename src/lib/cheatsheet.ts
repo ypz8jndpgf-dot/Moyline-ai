@@ -470,10 +470,14 @@ function splitOf(rows: CheatRow[]): Split {
 export async function buildCheatsheet(): Promise<CheatSheet | null> {
   const feed = await getPicksFeed();
   if (!feed) return null;
+  // Quality gate (user's call, 2026-10-30): the sheet builds ONLY from
+  // confidence-3-or-better props — the workhorse bar. (Props cap at conf-3
+  // under the algo, so in practice this means genuine published leans,
+  // never conf-2 filler.)
   const pool: FeedPick[] = [
     ...(feed.props || []),
     ...(feed.picks || []).filter((p) => p.market === "prop"),
-  ];
+  ].filter((p) => (p.confidence ?? 0) >= 3);
   const dateET = feed.date;
 
   const poolHash = pool.map((p) => `${p.game}|${p.play}`).join(";;").length;

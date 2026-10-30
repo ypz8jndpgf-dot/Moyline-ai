@@ -180,7 +180,7 @@ export default function CheatsheetBuilder() {
 
       <p className="text-sm text-muted mb-4">
         <span className="text-paper font-bold">{legs.length}</span> leg{legs.length === 1 ? "" : "s"} · ranked by{" "}
-        {BASIS_LABEL[basis].toLowerCase()} · hit rates from actual game logs ({sheet.covered} of {sheet.poolSize} props covered today)
+        {BASIS_LABEL[basis].toLowerCase()} · hit rates from actual game logs ({sheet.covered} of {sheet.poolSize} conf-3+ props covered today)
       </p>
 
       {legs.length === 0 ? (
