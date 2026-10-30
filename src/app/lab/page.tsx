@@ -4,6 +4,8 @@ import { getSubscription, hasAccess } from "@/lib/store";
 import { getPicksFeed } from "@/lib/picks";
 import LabBuilder from "./LabBuilder";
 import LabPromo from "./LabPromo";
+import LabTabs from "./LabTabs";
+import CheatsheetBuilder from "./CheatsheetBuilder";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +56,8 @@ export default async function LabPage() {
       </h1>
       <p className="text-muted text-sm mb-6">
         Build your own ticket from today&apos;s edges — props always eligible
-        for parlays. 🕐 Pool refreshes with the 7am card.
+        for parlays. Or flip to 📋 Cheatsheet: today&apos;s props ranked by how
+        often they&apos;ve actually cashed. 🕐 Pool refreshes with the 7am card.
       </p>
       {!feed || legCount === 0 ? (
         <div className="card p-8 text-center">
@@ -62,7 +65,10 @@ export default async function LabPage() {
           <p className="text-sm text-muted">Check back shortly — it posts with the 7am brief.</p>
         </div>
       ) : (
-        <LabBuilder picks={feed.picks} props={feed.props || []} />
+        <LabTabs
+          lab={<LabBuilder picks={feed.picks} props={feed.props || []} />}
+          sheet={<CheatsheetBuilder />}
+        />
       )}
       <p className="text-xs text-muted mt-8">
         Analysis for entertainment purposes — not financial advice.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FeedPick } from "@/lib/picks";
 
 /* ---------- odds math ---------- */
@@ -254,6 +254,42 @@ export default function TicketBuilder({
     ];
     return all.map((p, i) => ({ ...p, uid: `pool-${i}` }));
   }, [picks, props, backpage, boardLegs]);
+
+  // Cheatsheet hand-off: legs added from the Parlay Lab's Cheatsheet mode
+  // arrive via localStorage and land on the ticket once, matched to rated
+  // pool legs where possible (unmatched legs come in unrated, honestly).
+  const seedApplied = useRef(false);
+  useEffect(() => {
+    if (seedApplied.current) return;
+    seedApplied.current = true;
+    try {
+      const raw = localStorage.getItem("moyline:builder:seed");
+      if (!raw) return;
+      localStorage.removeItem("moyline:builder:seed");
+      const seed = JSON.parse(raw) as { game: string; play: string; price: string }[];
+      if (!Array.isArray(seed) || seed.length === 0) return;
+      const fresh: Leg[] = [];
+      for (const s of seed) {
+        if (!s?.game || !s?.play) continue;
+        if (ticket.some((t) => t.game === s.game && t.play === s.play)) continue;
+        const match = pool.find((p) => p.game === s.game && p.play === s.play);
+        fresh.push(
+          match
+            ? { ...match, uid: `sheet-${Date.now()}-${fresh.length}` }
+            : ({ game: s.game, play: s.play, price: s.price || "", confidence: 0, uid: `sheet-${Date.now()}-${fresh.length}` } as Leg)
+        );
+      }
+      if (fresh.length > 0) {
+        setTicket((prev) => [...prev, ...fresh].slice(0, 8));
+        setSlipNote(
+          `Added ${fresh.length} leg${fresh.length === 1 ? "" : "s"} from your Cheatsheet — graded below with the rest of your ticket.`
+        );
+      }
+    } catch {
+      // Seed is a convenience — never break the builder over it.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pool]);
 
   const filtered = useMemo(() => {
     return pool.filter((p) => {
