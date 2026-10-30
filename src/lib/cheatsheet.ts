@@ -1,5 +1,7 @@
 import { Redis } from "@upstash/redis";
 import { getPicksFeed, sportFromGame, type FeedPick } from "@/lib/picks";
+import { getOddsCached } from "@/lib/odds";
+import type { OddsEvent } from "@/lib/odds-shared";
 
 /**
  * Cheatsheet engine — Linemate-style guided prop sheet, MoyLine rules:
@@ -99,6 +101,7 @@ export type CheatLeg = {
   play: string; // original feed play text
   price: string; // original feed price (incl. book)
   confidence: number; // feed confidence (2 or 3) — conf-2 legs are badged in the UI
+  source: "brief" | "board"; // brief = a researched MoyLine lean; board = live book prop (not a lean)
   player: string; // resolved full name
   team: string; // player's team abbreviation
   direction: "over" | "under";
@@ -461,6 +464,156 @@ async function getEventBox(sport: string, path: string, eventId: string, dateET:
   return box;
 }
 
+/* --------------------- board-props fallback --------------------- */
+
+/**
+ * NEVER-EMPTY RULE (user, 2026-10-30): the sheet must never show zero
+ * options. When the brief's published props run thin, top the pool up from
+ * the LIVE prop board (The Odds API player props for today's unstarted
+ * NBA/NHL/NFL games) — real book lines and prices, same hit-rate engine.
+ * Board legs are NOT MoyLine leans: they carry source "board", confidence 0,
+ * and a badge in the UI. Fetched only when needed and cached 3h in Redis,
+ * to keep Odds API credits in check.
+ */
+const BOARD_SPORTS: Record<string, { label: string; maxEvents: number; markets: Record<string, string> }> = {
+  basketball_nba: {
+    label: "NBA",
+    maxEvents: 8,
+    markets: {
+      player_points: "points",
+      player_rebounds: "rebounds",
+      player_assists: "assists",
+      player_threes: "three-pointers made",
+    },
+  },
+  icehockey_nhl: {
+    label: "NHL",
+    maxEvents: 8,
+    markets: {
+      player_points: "points",
+      player_goals: "goals",
+      player_assists: "assists",
+      player_shots_on_goal: "shots on goal",
+    },
+  },
+  americanfootball_nfl: {
+    label: "NFL",
+    maxEvents: 14,
+    markets: {
+      player_pass_yds: "pass yards",
+      player_pass_tds: "pass TDs",
+      player_rush_yds: "rush yards",
+      player_reception_yds: "receiving yards",
+      player_receptions: "receptions",
+    },
+  },
+};
+
+function fmtPrice(price: number, book: string): string {
+  return `${price > 0 ? "+" : ""}${price} (${book})`;
+}
+
+function formatStarts(iso: string): string {
+  const t = new Date(iso).toLocaleTimeString("en-US", {
+    timeZone: "America/New_York",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `${t.toLowerCase().replace(/\s+/g, "")} ET`;
+}
+
+async function fetchBoardProps(dateET: string): Promise<FeedPick[]> {
+  const cacheKey = `moyline:cheatsheet:boardprops:${dateET}`;
+  const cached = await cacheGet<FeedPick[]>(cacheKey);
+  if (cached) return cached;
+
+  const apiKey = (process.env.ODDS_API_KEY || "").trim().replace(/^["']+|["']+$/g, "").replace(/\s+/g, "");
+  if (!apiKey) return [];
+
+  let events: OddsEvent[] = [];
+  try {
+    events = (await getOddsCached()).events || [];
+  } catch {
+    return [];
+  }
+  const now = Date.now();
+  const upcoming = events
+    .filter(
+      (e) =>
+        BOARD_SPORTS[e.sport_key] &&
+        new Date(e.commence_time).getTime() > now &&
+        new Date(e.commence_time).toLocaleDateString("en-CA", { timeZone: "America/New_York" }) === dateET
+    )
+    .sort((a, b) => (a.commence_time < b.commence_time ? -1 : 1));
+  const counts = new Map<string, number>();
+  const selected = upcoming.filter((e) => {
+    const n = counts.get(e.sport_key) || 0;
+    if (n >= BOARD_SPORTS[e.sport_key].maxEvents) return false;
+    counts.set(e.sport_key, n + 1);
+    return true;
+  });
+  if (selected.length === 0) return [];
+
+  const picks: FeedPick[] = [];
+  await mapLimit(selected, 4, async (ev) => {
+    const cfg = BOARD_SPORTS[ev.sport_key];
+    const marketKeys = Object.keys(cfg.markets).join(",");
+    const data = await fetchJson(
+      `https://api.the-odds-api.com/v4/sports/${ev.sport_key}/events/${ev.id}/odds?apiKey=${apiKey}&regions=us&markets=${marketKeys}&oddsFormat=american`
+    );
+    if (!data?.bookmakers) return;
+    const game = `${ev.away_team} @ ${ev.home_team} (${cfg.label})`;
+    const starts = formatStarts(ev.commence_time);
+    type Side = { price: number; book: string };
+    const table = new Map<string, Map<number, { over?: Side; under?: Side; books: number }>>();
+    for (const bm of data.bookmakers) {
+      for (const mk of bm.markets || []) {
+        if (!cfg.markets[mk.key]) continue;
+        for (const oc of mk.outcomes || []) {
+          const player = String(oc.description || "").trim();
+          if (!player || typeof oc.point !== "number") continue;
+          const key = `${player}|${mk.key}`;
+          if (!table.has(key)) table.set(key, new Map());
+          const byPoint = table.get(key)!;
+          if (!byPoint.has(oc.point)) byPoint.set(oc.point, { books: 0 });
+          const cell = byPoint.get(oc.point)!;
+          cell.books++;
+          const side: Side = { price: oc.price, book: String(bm.title || bm.key || "Book") };
+          if (oc.name === "Over" && (!cell.over || oc.price > cell.over.price)) cell.over = side;
+          if (oc.name === "Under" && (!cell.under || oc.price > cell.under.price)) cell.under = side;
+        }
+      }
+    }
+    for (const [key, byPoint] of table) {
+      const [player, marketKey] = key.split("|");
+      const phrase = cfg.markets[marketKey];
+      const consensus = [...byPoint.entries()].sort((a, b) => b[1].books - a[1].books)[0];
+      if (!consensus) continue;
+      const [point, cell] = consensus;
+      if (!cell.over || !cell.under) continue;
+      picks.push({
+        game,
+        play: `${player} Over ${point} ${phrase}`,
+        price: fmtPrice(cell.over.price, cell.over.book),
+        confidence: 0,
+        market: "prop",
+        starts,
+      });
+      picks.push({
+        game,
+        play: `${player} Under ${point} ${phrase}`,
+        price: fmtPrice(cell.under.price, cell.under.book),
+        confidence: 0,
+        market: "prop",
+        starts,
+      });
+    }
+  });
+
+  await cacheSet(cacheKey, picks, 3 * 3600);
+  return picks;
+}
+
 /* ------------------------------ builder ------------------------------ */
 
 function splitOf(rows: CheatRow[]): Split {
@@ -481,21 +634,46 @@ export async function buildCheatsheet(): Promise<CheatSheet | null> {
   ].filter((p) => (p.confidence ?? 0) >= 2);
   const dateET = feed.date;
 
-  const poolHash = pool.map((p) => `${p.game}|${p.play}`).join(";;").length;
-  const sheetKey = `moyline:cheatsheet:sheet:${dateET}:${poolHash}:${pool.length}`;
+  type Work = { pick: FeedPick; parsed: ParsedProp; sport: string; path: string; source: "brief" | "board" };
+  const toWork = (picks: FeedPick[], source: "brief" | "board"): Work[] => {
+    const out: Work[] = [];
+    for (const pick of picks) {
+      const sport = sportFromGame(pick.game);
+      const path = SPORT_PATH[sport];
+      if (!path) continue;
+      const parsed = parseProp(pick.play);
+      if (!parsed) continue;
+      out.push({ pick, parsed, sport, path, source });
+    }
+    return out;
+  };
+  const workKey = (w: Work) =>
+    `${w.parsed.playerQuery.split(/\s+/).pop()?.toLowerCase()}|${w.parsed.market}|${w.parsed.line}|${w.parsed.direction}`;
+
+  const feedWork = toWork(pool, "brief");
+  let work = feedWork;
+  let boardCandidates = 0;
+  // Never-empty fallback: thin brief pool → top up from the live prop board.
+  if (feedWork.length < 6) {
+    const boardPicks = await fetchBoardProps(dateET);
+    boardCandidates = boardPicks.length;
+    const seen = new Set(feedWork.map(workKey));
+    const players = new Set(feedWork.map((w) => `${w.sport}:${w.parsed.playerQuery.toLowerCase()}`));
+    const extra: Work[] = [];
+    for (const w of toWork(boardPicks, "board")) {
+      if (seen.has(workKey(w))) continue;
+      const pk = `${w.sport}:${w.parsed.playerQuery.toLowerCase()}`;
+      if (!players.has(pk) && players.size >= 48) continue; // bound the ESPN workload
+      players.add(pk);
+      extra.push(w);
+    }
+    work = [...feedWork, ...extra];
+  }
+
+  const poolHash = work.map((w) => `${w.pick.game}|${w.pick.play}`).join(";;").length;
+  const sheetKey = `moyline:cheatsheet:sheet:${dateET}:${poolHash}:${work.length}`;
   const cachedSheet = await cacheGet<CheatSheet>(sheetKey);
   if (cachedSheet) return cachedSheet;
-
-  type Work = { pick: FeedPick; parsed: ParsedProp; sport: string; path: string };
-  const work: Work[] = [];
-  for (const pick of pool) {
-    const sport = sportFromGame(pick.game);
-    const path = SPORT_PATH[sport];
-    if (!path) continue;
-    const parsed = parseProp(pick.play);
-    if (!parsed) continue;
-    work.push({ pick, parsed, sport, path });
-  }
 
   // Resolve players (one search + one gamelog per unique player).
   const uniqueQueries = new Map<string, Work>();
@@ -591,6 +769,7 @@ export async function buildCheatsheet(): Promise<CheatSheet | null> {
       play: w.pick.play,
       price: w.pick.price,
       confidence: w.pick.confidence ?? 0,
+      source: w.source,
       player: a.name,
       team: a.teamAbbr,
       direction: w.parsed.direction,
@@ -617,7 +796,7 @@ export async function buildCheatsheet(): Promise<CheatSheet | null> {
     return ry - rx || y.splits.l10.n - x.splits.l10.n;
   });
 
-  const sheet: CheatSheet = { date: dateET, legs, poolSize: pool.length, covered: legs.length };
+  const sheet: CheatSheet = { date: dateET, legs, poolSize: pool.length + boardCandidates, covered: legs.length };
   await cacheSet(sheetKey, sheet, 30 * 60);
   return sheet;
 }

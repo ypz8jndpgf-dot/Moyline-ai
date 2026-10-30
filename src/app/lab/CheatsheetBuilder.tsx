@@ -121,7 +121,7 @@ export default function CheatsheetBuilder() {
     return (
       <div className="card p-8 text-center">
         <p className="text-lg mb-2">No props on today&apos;s board yet.</p>
-        <p className="text-sm text-muted">The cheatsheet builds from the brief&apos;s researched props — check back after the next edition posts.</p>
+        <p className="text-sm text-muted">No brief props to rank and no NBA, NHL or NFL games left on today&apos;s slate to build from — check back after the next edition posts.</p>
       </div>
     );
   }
@@ -210,11 +210,15 @@ export default function CheatsheetBuilder() {
                       <span className="text-xs font-normal text-muted">
                         {leg.team} · {leg.marketLabel}
                       </span>
-                      {leg.confidence === 2 && (
+                      {leg.source === "board" ? (
+                        <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-goldsoft border border-gold/40 rounded-full px-2 py-0.5">
+                          Board prop · not a MoyLine lean
+                        </span>
+                      ) : leg.confidence === 2 ? (
                         <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-muted border border-line rounded-full px-2 py-0.5">
                           Conf 2 · thinner lean
                         </span>
-                      )}
+                      ) : null}
                       {leg.streak >= 3 && (
                         <span className="ml-2 text-xs font-bold text-gold">🔥 {leg.streak} straight</span>
                       )}
@@ -285,8 +289,10 @@ export default function CheatsheetBuilder() {
       )}
 
       <p className="text-xs text-muted">
-        Hit rates computed from actual ESPN box scores over each player&apos;s last 12 games. A high hit
-        rate isn&apos;t an edge by itself — price still matters, and the graded MoyLine card runs on
+        Hit rates computed from actual ESPN box scores over each player&apos;s last 12 games. Legs come
+        from the brief&apos;s researched props first; when those run thin, the sheet tops up from the
+        live book board — those legs are badged &quot;Board prop&quot; and are not MoyLine leans. A high
+        hit rate isn&apos;t an edge by itself — price still matters, and the graded MoyLine card runs on
         price vs fair line. Analysis for entertainment purposes — not financial advice.
       </p>
     </div>
