@@ -36,6 +36,8 @@ export default function CheatsheetBuilder() {
   const [basis, setBasis] = useState<Basis>("l10");
   const [openId, setOpenId] = useState<string | null>(null);
   const [added, setAdded] = useState<Set<string>>(new Set());
+  const [step, setStep] = useState(1);
+  const [wizardDone, setWizardDone] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -136,48 +138,109 @@ export default function CheatsheetBuilder() {
     );
   }
 
+  const dirLabel = direction === "all" ? "All props" : direction === "over" ? "Overs" : "Unders";
+  const gameLabel = game === "All" ? "All games" : game.replace(/\s*\([^)]*\)\s*$/, "");
+  const QUESTIONS = [
+    "What are you looking for?",
+    "Which props do you want?",
+    "Which games to include?",
+    "What should we rank by?",
+  ];
+
   return (
     <div>
-      {/* wizard */}
-      <div className="card p-5 mb-6">
-        <div className="mb-4">
-          <p className="text-xs font-bold uppercase tracking-widest text-muted mb-2">1 · What are you looking for?</p>
-          <div className="flex gap-2">
-            <button className={pill(direction === "all")} onClick={() => setDirection("all")}>All</button>
-            <button className={pill(direction === "over")} onClick={() => setDirection("over")}>Overs</button>
-            <button className={pill(direction === "under")} onClick={() => setDirection("under")}>Unders</button>
-          </div>
-        </div>
-        <div className="mb-4">
-          <p className="text-xs font-bold uppercase tracking-widest text-muted mb-2">2 · Which props?</p>
-          <div className="flex flex-wrap gap-2">
-            {markets.map((m) => (
-              <button key={m} className={pill(market === m)} onClick={() => setMarket(m)}>{m}</button>
+      {/* wizard — one question at a time, Linemate-style stepper */}
+      {!wizardDone ? (
+        <div className="card p-5 mb-6">
+          <div className="flex items-center gap-2 mb-5">
+            {[1, 2, 3, 4].map((n) => (
+              <div key={n} className="flex items-center gap-2">
+                <span
+                  className={`w-8 h-8 rounded-full border flex items-center justify-center text-sm font-bold ${
+                    n < step
+                      ? "bg-gold text-ink border-gold"
+                      : n === step
+                        ? "border-gold text-gold"
+                        : "border-line text-muted"
+                  }`}
+                >
+                  {n < step ? "✓" : n}
+                </span>
+                {n < 4 && <span className={`w-5 sm:w-8 h-px ${n < step ? "bg-gold" : "bg-line"}`} />}
+              </div>
             ))}
+            <span className="ml-2 text-xs text-muted">Step {step} of 4</span>
           </div>
-        </div>
-        <div className="mb-4">
-          <p className="text-xs font-bold uppercase tracking-widest text-muted mb-2">3 · Which games?</p>
-          <div className="flex flex-wrap gap-2">
-            {games.map((g) => (
-              <button key={g} className={pill(game === g)} onClick={() => setGame(g)}>
-                {g === "All" ? "All games" : g.replace(/\s*\([^)]*\)\s*$/, "")}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <p className="text-xs font-bold uppercase tracking-widest text-muted mb-2">4 · Rank by</p>
-          <div className="flex flex-wrap gap-2">
-            {(Object.keys(BASIS_LABEL) as Basis[]).map((b) => (
-              <button key={b} className={pill(basis === b)} onClick={() => setBasis(b)}>
-                {BASIS_LABEL[b]}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
 
+          <p className="font-display text-xl mb-3">{QUESTIONS[step - 1]}</p>
+
+          {step === 1 && (
+            <div className="flex gap-2">
+              <button className={pill(direction === "all")} onClick={() => setDirection("all")}>All</button>
+              <button className={pill(direction === "over")} onClick={() => setDirection("over")}>Overs</button>
+              <button className={pill(direction === "under")} onClick={() => setDirection("under")}>Unders</button>
+            </div>
+          )}
+          {step === 2 && (
+            <div className="flex flex-wrap gap-2">
+              {markets.map((m) => (
+                <button key={m} className={pill(market === m)} onClick={() => setMarket(m)}>{m}</button>
+              ))}
+            </div>
+          )}
+          {step === 3 && (
+            <div className="flex flex-wrap gap-2">
+              {games.map((g) => (
+                <button key={g} className={pill(game === g)} onClick={() => setGame(g)}>
+                  {g === "All" ? "All games" : g.replace(/\s*\([^)]*\)\s*$/, "")}
+                </button>
+              ))}
+            </div>
+          )}
+          {step === 4 && (
+            <div className="flex flex-wrap gap-2">
+              {(Object.keys(BASIS_LABEL) as Basis[]).map((b) => (
+                <button key={b} className={pill(basis === b)} onClick={() => setBasis(b)}>
+                  {BASIS_LABEL[b]}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between mt-6">
+            {step > 1 ? (
+              <button className={pill(false)} onClick={() => setStep(step - 1)}>← Back</button>
+            ) : (
+              <span />
+            )}
+            <button
+              className="btn-gold px-6 py-2.5 font-bold text-sm"
+              onClick={() => (step < 4 ? setStep(step + 1) : setWizardDone(true))}
+            >
+              {step < 4 ? "Continue →" : "📋 Build my cheatsheet"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="card p-4 mb-6 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold uppercase tracking-widest text-gold mr-1">Your sheet</span>
+          {[dirLabel, market === "All" ? "All prop types" : market, gameLabel, BASIS_LABEL[basis]].map((c) => (
+            <span key={c} className="text-xs border border-line rounded-full px-3 py-1 text-muted">{c}</span>
+          ))}
+          <button
+            className={`${pill(false)} ml-auto`}
+            onClick={() => {
+              setWizardDone(false);
+              setStep(1);
+            }}
+          >
+            Edit answers
+          </button>
+        </div>
+      )}
+
+      {wizardDone && (
+        <>
       <p className="text-sm text-muted mb-4">
         <span className="text-paper font-bold">{legs.length}</span> leg{legs.length === 1 ? "" : "s"} · ranked by{" "}
         {BASIS_LABEL[basis].toLowerCase()} · hit rates from actual game logs ({sheet.covered} of {sheet.poolSize} props covered today)
@@ -275,6 +338,8 @@ export default function CheatsheetBuilder() {
             );
           })}
         </ul>
+      )}
+        </>
       )}
 
       {added.size > 0 && (
