@@ -180,7 +180,7 @@ export default function CheatsheetBuilder() {
 
       <p className="text-sm text-muted mb-4">
         <span className="text-paper font-bold">{legs.length}</span> leg{legs.length === 1 ? "" : "s"} · ranked by{" "}
-        {BASIS_LABEL[basis].toLowerCase()} · hit rates from actual game logs ({sheet.covered} of {sheet.poolSize} conf-3+ props covered today)
+        {BASIS_LABEL[basis].toLowerCase()} · hit rates from actual game logs ({sheet.covered} of {sheet.poolSize} props covered today)
       </p>
 
       {legs.length === 0 ? (
@@ -210,6 +210,11 @@ export default function CheatsheetBuilder() {
                       <span className="text-xs font-normal text-muted">
                         {leg.team} · {leg.marketLabel}
                       </span>
+                      {leg.confidence === 2 && (
+                        <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-muted border border-line rounded-full px-2 py-0.5">
+                          Conf 2 · thinner lean
+                        </span>
+                      )}
                       {leg.streak >= 3 && (
                         <span className="ml-2 text-xs font-bold text-gold">🔥 {leg.streak} straight</span>
                       )}

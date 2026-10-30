@@ -98,6 +98,7 @@ export type CheatLeg = {
   starts?: string;
   play: string; // original feed play text
   price: string; // original feed price (incl. book)
+  confidence: number; // feed confidence (2 or 3) — conf-2 legs are badged in the UI
   player: string; // resolved full name
   team: string; // player's team abbreviation
   direction: "over" | "under";
@@ -470,14 +471,14 @@ function splitOf(rows: CheatRow[]): Split {
 export async function buildCheatsheet(): Promise<CheatSheet | null> {
   const feed = await getPicksFeed();
   if (!feed) return null;
-  // Quality gate (user's call, 2026-10-30): the sheet builds ONLY from
-  // confidence-3-or-better props — the workhorse bar. (Props cap at conf-3
-  // under the algo, so in practice this means genuine published leans,
-  // never conf-2 filler.)
+  // Pool gate (user's calls, 2026-10-30): the sheet builds from published
+  // props at confidence 2 or above — conf-3 workhorse leans plus conf-2
+  // leans included for this surface only (conf-2 legs are badged as such
+  // in the UI). The main card's rules are untouched.
   const pool: FeedPick[] = [
     ...(feed.props || []),
     ...(feed.picks || []).filter((p) => p.market === "prop"),
-  ].filter((p) => (p.confidence ?? 0) >= 3);
+  ].filter((p) => (p.confidence ?? 0) >= 2);
   const dateET = feed.date;
 
   const poolHash = pool.map((p) => `${p.game}|${p.play}`).join(";;").length;
@@ -589,6 +590,7 @@ export async function buildCheatsheet(): Promise<CheatSheet | null> {
       starts: w.pick.starts,
       play: w.pick.play,
       price: w.pick.price,
+      confidence: w.pick.confidence ?? 0,
       player: a.name,
       team: a.teamAbbr,
       direction: w.parsed.direction,
