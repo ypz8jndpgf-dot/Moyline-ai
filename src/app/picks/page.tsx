@@ -373,7 +373,13 @@ function PaywallPreview({
   );
 }
 
-export default async function PicksPage() {
+export default async function PicksPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sort?: string }>;
+}) {
+  const { sort } = await searchParams;
+  const sortByTime = sort === "time";
   const session = await auth();
   const email = session?.user?.email || null;
   const sub = await getSubscription(email || "");
@@ -469,11 +475,13 @@ export default async function PicksPage() {
   const tails = email ? await readTails(email) : [];
   const tailedSet = new Set(tails.map((t) => `${t.game}|${t.play}`));
 
-  // All picks in one flat list, sorted by confidence then edge (highest first).
-  const sortedPicks = (feed?.picks || [])
+  // All picks in one flat list, ranked by confidence then edge (highest first).
+  // The rank is computed once and stays on the card badge in both views;
+  // ?sort=time only re-orders the display by start time (optimization #26).
+  const rankedPicks = (feed?.picks || [])
     .map((p) => {
       const mins = parseStart(p.starts);
-      return { p, status: statusFor(mins, nowMins), mins };
+      return { p, status: statusFor(mins, nowMins), mins, rank: 0 };
     })
     .sort((a, b) => {
       const confDiff = (b.p.confidence || 0) - (a.p.confidence || 0);
@@ -482,6 +490,14 @@ export default async function PicksPage() {
       if (edgeDiff !== 0) return edgeDiff;
       return (a.mins ?? 9999) - (b.mins ?? 9999);
     });
+  rankedPicks.forEach((r, i) => {
+    r.rank = i;
+  });
+  const sortedPicks = sortByTime
+    ? [...rankedPicks].sort(
+        (a, b) => (a.mins ?? 9999) - (b.mins ?? 9999) || a.rank - b.rank
+      )
+    : rankedPicks;
 
   return (
     <div>
@@ -595,17 +611,35 @@ export default async function PicksPage() {
             </div>
           )}
 
-          <p className="text-xs font-bold uppercase tracking-widest text-gold mb-3">
-            Ranked by confidence — #1 is our top play
-          </p>
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <p className="text-xs font-bold uppercase tracking-widest text-gold">
+              {sortByTime
+                ? "Ordered by start time — badges keep the confidence rank"
+                : "Ranked by confidence — #1 is our top play"}
+            </p>
+            <span className="flex items-center gap-1 text-xs font-bold">
+              <Link
+                href="/picks"
+                className={`px-2.5 py-1 rounded-full border ${sortByTime ? "border-line text-muted hover:text-gold" : "border-gold/60 bg-gold/10 text-gold"}`}
+              >
+                Confidence
+              </Link>
+              <Link
+                href="/picks?sort=time"
+                className={`px-2.5 py-1 rounded-full border ${sortByTime ? "border-gold/60 bg-gold/10 text-gold" : "border-line text-muted hover:text-gold"}`}
+              >
+                🕐 Start time
+              </Link>
+            </span>
+          </div>
           <div className="grid gap-4 md:grid-cols-2 mb-8">
-            {sortedPicks.map(({ p, status }, i) => {
+            {sortedPicks.map(({ p, status, rank }) => {
               const key = `${p.game}|${p.play}`;
               return (
                 <PickCard
                   key={key}
                   p={p}
-                  index={i}
+                  index={rank}
                   status={status}
                   best={bestByPick.get(key) || null}
                   movedNote={movedByPick.get(key) || null}

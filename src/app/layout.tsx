@@ -3,6 +3,7 @@ import Link from "next/link";
 import "./globals.css";
 import PwaRegister from "@/components/PwaRegister";
 import PushBell from "@/components/PushBell";
+import FeedbackForm from "@/components/FeedbackForm";
 import Providers from "@/components/Providers";
 import { auth } from "@/lib/auth";
 import { isFounder } from "@/lib/store";
@@ -122,6 +123,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <span className="gold-text font-display">MOYLINE AI</span> — live lines, steam alerts, pro picks.
               </span>
               <span>Analysis for entertainment purposes — not financial advice. <a href="mailto:support@moylineai.com" className="underline hover:text-gold">support@moylineai.com</a></span>
+            </div>
+            <div className="max-w-7xl mx-auto px-4 pb-6">
+              <FeedbackForm />
             </div>
           </footer>
         </div>
