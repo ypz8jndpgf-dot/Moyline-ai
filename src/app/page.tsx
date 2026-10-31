@@ -4,6 +4,8 @@ import { buildBoard } from "@/lib/board";
 import OddsBoard from "@/components/OddsBoard";
 import FeaturedPlays from "@/components/FeaturedPlays";
 import ProofStrip from "@/components/ProofStrip";
+import CapabilityTicker from "@/components/CapabilityTicker";
+import ReceiptsStrip from "@/components/ReceiptsStrip";
 import FeaturedRecord from "@/components/FeaturedRecord";
 import RecentResults from "@/components/RecentResults";
 import GoldenRun from "@/components/GoldenRun";
@@ -47,6 +49,7 @@ export default async function Home() {
     <div>
       {/* Hero */}
       <TrackTicker />
+      <CapabilityTicker />
 
       <div className="mb-8 text-center sm:text-left">
         <div className="inline-flex items-center gap-2 mb-3 px-3 py-1.5 rounded-full border border-gold/40 bg-gold/10 text-gold text-[11px] font-bold uppercase tracking-[0.2em]">
@@ -62,6 +65,9 @@ export default async function Home() {
           Data-driven picks across every major sport — every play graded and published,
           win or lose. Opening vs current lines side by side across DraftKings, FanDuel,
           BetMGM and Caesars, with steam alerts and best-price highlighting on every game.
+        </p>
+        <p className="text-sm font-bold text-paper mt-2">
+          A research desk, not a tout — <span className="gold-text">every answer ships with its receipts.</span>
         </p>
         <div className="mt-5 flex flex-wrap gap-3 justify-center sm:justify-start">
           <Link
@@ -81,6 +87,9 @@ export default async function Home() {
 
       {/* Social proof — the record, above the fold */}
       <ProofStrip />
+
+      {/* Receipts — operational proof, not claims */}
+      <ReceiptsStrip />
 
       {/* Promo video */}
       <PromoVideo />

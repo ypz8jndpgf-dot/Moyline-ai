@@ -122,7 +122,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span>
                 <span className="gold-text font-display">MOYLINE AI</span> — live lines, steam alerts, pro picks.
               </span>
-              <span>Analysis for entertainment purposes — not financial advice. <a href="mailto:support@moylineai.com" className="underline hover:text-gold">support@moylineai.com</a></span>
+              <span>Analysis for entertainment purposes — not financial advice. <a href="/guide" className="underline hover:text-gold">Game-day guide</a> · <a href="mailto:support@moylineai.com" className="underline hover:text-gold">support@moylineai.com</a></span>
             </div>
             <div className="max-w-7xl mx-auto px-4 pb-6">
               <FeedbackForm />
