@@ -8,6 +8,7 @@ import { findBoardGame, bestPriceForPick, badgeBeatsPlay, movedAgainstNote, line
 import { readTails } from "@/lib/tails";
 import TailButton from "./TailButton";
 import ShareButton from "./ShareButton";
+import LiveScore from "./LiveScore";
 import MarketingPaywall from "@/components/MarketingPaywall";
 import { getYesterdayGlance, getConfidenceCalibration, formatRecord, formatUnits } from "@/lib/records";
 import PushPrompt from "@/components/PushPrompt";
@@ -150,6 +151,7 @@ function PickCard({
           {p.starts}
         </p>
       )}
+      {status !== "upcoming" && <LiveScore game={p.game} />}
       <p className="text-lg font-bold text-goldsoft mb-1">
         {p.play} <span className="text-sm text-muted">{p.price}</span>
       </p>
