@@ -8,6 +8,7 @@ import { findBoardGame, bestPriceForPick, badgeBeatsPlay, movedAgainstNote, line
 import { readTails } from "@/lib/tails";
 import TailButton from "./TailButton";
 import ShareButton from "./ShareButton";
+import CopyCardButton from "./CopyCardButton";
 import LiveScore from "./LiveScore";
 import MarketingPaywall from "@/components/MarketingPaywall";
 import { getYesterdayGlance, getConfidenceCalibration, formatRecord, formatUnits } from "@/lib/records";
@@ -501,6 +502,17 @@ export default async function PicksPage({
       )
     : rankedPicks;
 
+  // Plain-text version of the whole grid for the copy-card button
+  // (optimization #33): ranked order, one line per pick.
+  const cardCopyText = [
+    `MoyLine AI — ${cardDate}`,
+    ...rankedPicks.map(
+      ({ p }) =>
+        `${p.star ? "★ " : ""}${p.game} · ${p.play}${p.price ? ` ${p.price}` : ""} (Conf ${p.confidence})`
+    ),
+    "Full card: moylineai.com/picks",
+  ].join("\n");
+
   return (
     <div>
       <h1 className="font-display text-4xl mb-1">
@@ -619,7 +631,9 @@ export default async function PicksPage({
                 ? "Ordered by start time — badges keep the confidence rank"
                 : "Ranked by confidence — #1 is our top play"}
             </p>
-            <span className="flex items-center gap-1 text-xs font-bold">
+            <span className="flex items-center gap-2 text-xs font-bold">
+              <CopyCardButton text={cardCopyText} />
+              <span className="flex items-center gap-1">
               <Link
                 href="/picks"
                 className={`px-2.5 py-1 rounded-full border ${sortByTime ? "border-line text-muted hover:text-gold" : "border-gold/60 bg-gold/10 text-gold"}`}
@@ -632,6 +646,7 @@ export default async function PicksPage({
               >
                 🕐 Start time
               </Link>
+              </span>
             </span>
           </div>
           <div className="grid gap-4 md:grid-cols-2 mb-8">

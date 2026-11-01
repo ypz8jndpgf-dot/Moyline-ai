@@ -2,6 +2,8 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { getSubscription, hasAccess, getTrackRecord } from "@/lib/store";
 import { readTails } from "@/lib/tails";
+import { pickUnits, formatUnits } from "@/lib/records";
+import type { TrackPick } from "@/lib/store";
 import TailAlertsToggle from "./TailAlertsToggle";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +14,7 @@ const norm = (s: string) =>
 /** Match a tailed pick to its graded track-record entry, if graded. */
 function gradeTail(
   tail: { game: string; play: string; date: string },
-  picks: { game: string; play: string; date: string; result: string; final?: string }[]
+  picks: { game: string; play: string; date: string; result: string; final?: string; line?: string }[]
 ) {
   const tg = norm(tail.game);
   const tp = norm(tail.play);
@@ -61,6 +63,29 @@ export default async function MyTailsPage() {
   const l = graded.filter((g) => g.result?.result === "Loss").length;
   const p = graded.filter((g) => g.result?.result === "Push").length;
   const pending = graded.length - w - l - p;
+  const gradedCount = w + l + p;
+  const winPct = w + l > 0 ? (w / (w + l)) * 100 : null;
+
+  // Units at the price the member tailed at (optimization #32): flat 1u
+  // risked per tail, same convention as the paper ledger, computed with the
+  // shared records.ts price math. The tail's own price string is the
+  // published price ("-110 (FanDuel)"); fall back to the graded record's
+  // line when a tail carries no parseable price. Units are quoted over the
+  // priced tails only, and the coverage is stated when it isn't complete.
+  let units = 0;
+  let priced = 0;
+  for (const { tail, result } of graded) {
+    if (!result) continue;
+    const american = (tail.price || "").match(/([+-]\d{2,4})/);
+    let u = american
+      ? pickUnits({ line: american[1], play: tail.play, result: result.result } as unknown as TrackPick)
+      : null;
+    if (u === null) u = pickUnits(result as unknown as TrackPick);
+    if (u !== null) {
+      priced++;
+      units += u;
+    }
+  }
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -69,6 +94,10 @@ export default async function MyTailsPage() {
       </h1>
       <p className="text-muted text-sm mb-6">
         {email} · {w}-{l}-{p}
+        {winPct !== null && <span> · {winPct.toFixed(1)}%</span>}
+        {gradedCount > 0 && priced > 0 && (
+          <span> · {formatUnits(units)}{priced < gradedCount && <span className="text-muted"> (on {priced} of {gradedCount} graded)</span>}</span>
+        )}
         {pending > 0 && <span className="text-muted"> · {pending} pending</span>}
       </p>
 

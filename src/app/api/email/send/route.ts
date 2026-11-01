@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { sendEmail } from "@/lib/email";
 import { unsubUrl, isUnsubscribed, isSnoozed } from "@/lib/unsub";
 import { briefSignInUrl } from "@/lib/brief-signin";
+import { replaceTailLinks } from "@/lib/tail-link";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,11 @@ export async function POST(req: Request) {
     // Per-recipient one-click sign-in link (single-use, 24h) — minted only
     // when the email actually carries the placeholder, exactly as send-bulk.
     finalHtml = finalHtml.replace(/\{\{SIGNIN_URL\}\}/g, await briefSignInUrl(to));
+  }
+  if (finalHtml.includes("{{TAIL_URL|")) {
+    // Per-pick "Tailed it" links (optimization #31) — signed per recipient,
+    // exactly as send-bulk.
+    finalHtml = replaceTailLinks(finalHtml, to);
   }
   const sent = await sendEmail(to, subject, finalHtml);
   return NextResponse.json({ ok: sent });

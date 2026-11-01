@@ -12,9 +12,12 @@ import { getAuthAdapter } from "@/lib/auth";
  * because it IS one — just delivered inside the brief instead of as a
  * separate email. Any failure falls back to the plain /picks URL.
  */
-export async function briefSignInUrl(email: string): Promise<string> {
+export async function briefSignInUrl(
+  email: string,
+  callbackUrl: string = "/picks"
+): Promise<string> {
   const base = (process.env.NEXTAUTH_URL || "https://moylineai.com").replace(/\/$/, "");
-  const fallback = `${base}/picks`;
+  const fallback = `${base}${callbackUrl}`;
   try {
     const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "";
     if (!secret) return fallback;
@@ -28,7 +31,7 @@ export async function briefSignInUrl(email: string): Promise<string> {
     if (!adapter?.createVerificationToken) return fallback;
     await adapter.createVerificationToken({ identifier, token: hashed, expires });
 
-    const qs = new URLSearchParams({ callbackUrl: "/picks", token, email: identifier });
+    const qs = new URLSearchParams({ callbackUrl, token, email: identifier });
     return `${base}/api/auth/callback/nodemailer?${qs.toString()}`;
   } catch (e) {
     console.error(
