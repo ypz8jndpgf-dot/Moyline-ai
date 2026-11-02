@@ -6,7 +6,7 @@ import { sendPushTo } from "@/lib/push";
 import { getPicksFeed, type FeedPick } from "@/lib/picks";
 import { getOdds, getOpenings } from "@/lib/odds";
 import { buildBoard } from "@/lib/board";
-import { findBoardGame, bestPriceForPick, movedAgainstNote } from "@/lib/card-utils";
+import { findBoardGame, bestPriceForPick, movedAgainstNote, movedInFavorNote } from "@/lib/card-utils";
 
 /**
  * Tailed-pick alerts (optimization #19, 2026-10-28).
@@ -16,6 +16,9 @@ import { findBoardGame, bestPriceForPick, movedAgainstNote } from "@/lib/card-ut
  * push per tail per kind:
  *  - "moved": the live board line for the tailed pick's own side moved
  *    against the published price (same test as the /picks warning note).
+ *  - "favorable": the live board line for the tailed pick's own side is
+ *    now a strictly better number to bet than the published one
+ *    (optimization #35, 2026-11-02 — e.g. an ML published -120 now -102).
  *  - "start": the game starts within the next 3 hours.
  * Dedupe marks are written only after a push is actually accepted.
  */
@@ -109,11 +112,24 @@ async function checkTailAlerts() {
 
           // Line moved against the tail (never after the game starts).
           if (!started) {
-            const note = movedAgainstNote(pick, bestPriceForPick(pick, bg));
+            const best = bestPriceForPick(pick, bg);
+            const note = movedAgainstNote(pick, best);
             if (note) {
               const sent = await sendOnce(redis, email, tail.date, "moved", tail.game, tail.play, {
                 title: `📉 Line moved against your tail`,
                 body: `${tail.game} — ${note}`,
+                url: "/my-tails",
+              });
+              if (sent) results.sent++;
+            }
+
+            // Line moved in the tail's favor: a better number than the
+            // card published is now on offer (optimization #35).
+            const favorNote = movedInFavorNote(pick, best);
+            if (favorNote) {
+              const sent = await sendOnce(redis, email, tail.date, "favorable", tail.game, tail.play, {
+                title: `📈 Line moved in your favor`,
+                body: `${tail.game} — ${favorNote}`,
                 url: "/my-tails",
               });
               if (sent) results.sent++;
@@ -155,7 +171,7 @@ async function sendOnce(
   redis: Redis,
   email: string,
   date: string,
-  kind: "moved" | "start",
+  kind: "moved" | "favorable" | "start",
   game: string,
   play: string,
   payload: { title: string; body: string; url?: string }

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { getSubscription, hasAccess, isFounder } from "@/lib/store";
-import { getPicksFeed, PicksFeed, FeedPick } from "@/lib/picks";
+import { getPicksFeed, PicksFeed, FeedPick, sportFromGame } from "@/lib/picks";
 import { getOdds, getOpenings } from "@/lib/odds";
 import { buildBoard, MoverVM } from "@/lib/board";
 import { findBoardGame, bestPriceForPick, badgeBeatsPlay, movedAgainstNote, lineStoryForPick, modelWinProb, bookPriceForPick, selectCardSteamMoves, BestPrice } from "@/lib/card-utils";
@@ -379,9 +379,9 @@ function PaywallPreview({
 export default async function PicksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ sort?: string }>;
+  searchParams: Promise<{ sort?: string; sport?: string }>;
 }) {
-  const { sort } = await searchParams;
+  const { sort, sport } = await searchParams;
   const sortByTime = sort === "time";
   const session = await auth();
   const email = session?.user?.email || null;
@@ -501,6 +501,27 @@ export default async function PicksPage({
         (a, b) => (a.mins ?? 9999) - (b.mins ?? 9999) || a.rank - b.rank
       )
     : rankedPicks;
+
+  // Sport filter (optimization #34): chips for the sports actually on
+  // today's card, derived from the league tag in each game string
+  // ("Thunder @ Cavaliers (NBA)"). ?sport=NBA filters the grid in place;
+  // rank badges, the copy-card text and the props strip stay whole-card.
+  // An unknown sport param falls back to All.
+  const cardSports = [...new Set(rankedPicks.map(({ p }) => sportFromGame(p.game)))];
+  const activeSport =
+    sport && cardSports.includes(sport.toUpperCase()) ? sport.toUpperCase() : null;
+  const displayPicks = activeSport
+    ? sortedPicks.filter(({ p }) => sportFromGame(p.game) === activeSport)
+    : sortedPicks;
+  const sportCount = (s: string) =>
+    rankedPicks.filter(({ p }) => sportFromGame(p.game) === s).length;
+  const picksHref = (sportVal: string | null, time: boolean) => {
+    const qs = new URLSearchParams();
+    if (time) qs.set("sort", "time");
+    if (sportVal) qs.set("sport", sportVal);
+    const s = qs.toString();
+    return s ? `/picks?${s}` : "/picks";
+  };
 
   // Plain-text version of the whole grid for the copy-card button
   // (optimization #33): ranked order, one line per pick.
@@ -625,23 +646,48 @@ export default async function PicksPage({
             </div>
           )}
 
+          {cardSports.length > 1 && (
+            <div className="flex flex-wrap items-center gap-1.5 mb-4">
+              <span className="text-[11px] font-bold uppercase tracking-widest text-muted mr-1">
+                Sport
+              </span>
+              <Link
+                href={picksHref(null, sortByTime)}
+                className={`text-xs font-bold px-3 py-1.5 rounded-full border ${!activeSport ? "border-gold/60 bg-gold/10 text-gold" : "border-line text-muted hover:text-gold"}`}
+              >
+                All ({rankedPicks.length})
+              </Link>
+              {cardSports.map((s) => (
+                <Link
+                  key={s}
+                  href={picksHref(s, sortByTime)}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-full border ${activeSport === s ? "border-gold/60 bg-gold/10 text-gold" : "border-line text-muted hover:text-gold"}`}
+                >
+                  {s} ({sportCount(s)})
+                </Link>
+              ))}
+            </div>
+          )}
           <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
             <p className="text-xs font-bold uppercase tracking-widest text-gold">
               {sortByTime
                 ? "Ordered by start time — badges keep the confidence rank"
                 : "Ranked by confidence — #1 is our top play"}
+              {activeSport && (
+                <> · {activeSport} only — {displayPicks.length} of {rankedPicks.length}</>
+              )}
             </p>
             <span className="flex items-center gap-2 text-xs font-bold">
               <CopyCardButton text={cardCopyText} />
               <span className="flex items-center gap-1">
               <Link
-                href="/picks"
+                href={picksHref(activeSport, false)}
                 className={`px-2.5 py-1 rounded-full border ${sortByTime ? "border-line text-muted hover:text-gold" : "border-gold/60 bg-gold/10 text-gold"}`}
               >
                 Confidence
               </Link>
               <Link
-                href="/picks?sort=time"
+                href={picksHref(activeSport, true)}
                 className={`px-2.5 py-1 rounded-full border ${sortByTime ? "border-gold/60 bg-gold/10 text-gold" : "border-line text-muted hover:text-gold"}`}
               >
                 🕐 Start time
@@ -649,8 +695,18 @@ export default async function PicksPage({
               </span>
             </span>
           </div>
+          {displayPicks.length === 0 ? (
+            <div className="card p-8 text-center mb-8">
+              <p className="text-lg mb-2">No {activeSport} picks on today&apos;s card.</p>
+              <p className="text-sm text-muted">
+                <Link href={picksHref(null, sortByTime)} className="underline hover:text-gold">
+                  View the whole card
+                </Link>
+              </p>
+            </div>
+          ) : (
           <div className="grid gap-4 md:grid-cols-2 mb-8">
-            {sortedPicks.map(({ p, status, rank }) => {
+            {displayPicks.map(({ p, status, rank }) => {
               const key = `${p.game}|${p.play}`;
               return (
                 <PickCard
@@ -669,6 +725,7 @@ export default async function PicksPage({
               );
             })}
           </div>
+          )}
 
           {feed.props && feed.props.length > 0 && (
             <div className="card p-5 mb-8">

@@ -188,6 +188,52 @@ export function movedAgainstNote(pick: FeedPick, best: BestPrice): string | null
 }
 
 /**
+ * "Line moved in your favor" note for a card pick (optimization #35,
+ * 2026-11-02): the exact mirror of movedAgainstNote, using the SAME
+ * signed test per market so a move is classified exactly one way —
+ * against, in favor, or neither — and the two notes can never both fire
+ * on the same move. Moneylines compare payout (published -120 → now
+ * -102 pays more per unit risked, so it is a better number on offer).
+ * Spreads/totals use the grader's CLV convention from movedAgainstNote
+ * (positive movement = the market moved toward the pick after
+ * publication: spread published − now; Over now − published; Under
+ * published − now), so a tailed position that is beating the current
+ * number reads as in your favor. On an unchanged point, a better price
+ * breaks the tie. Returns null when the move is against or neutral,
+ * unparseable, or the pick is a prop (no board market).
+ */
+export function movedInFavorNote(pick: FeedPick, best: BestPrice): string | null {
+  if (!best) return null;
+  const market = pickAlertMarket(pick);
+  if (!market) return null;
+  const pubPrice = parseAmerican(pick.price);
+  const nowPrice = parseAmerican(best.display);
+  if (pubPrice === null || nowPrice === null) return null;
+
+  if (market === "moneyline") {
+    if (payout(nowPrice) <= payout(pubPrice)) return null;
+    return `Line moved in your favor — published ${fmtAmerican(pubPrice)}, now ${fmtAmerican(nowPrice)} at ${best.book}`;
+  }
+
+  // Spread / total: same movement formula as movedAgainstNote, opposite sign.
+  const pubPoint = parsePoint(pick.line) ?? parsePoint(pick.play);
+  const nowPoint = parsePoint(best.display);
+  if (pubPoint === null || nowPoint === null) return null;
+  let movement: number;
+  if (market === "spread") {
+    movement = pubPoint - nowPoint;
+  } else {
+    const isOver = /\bover\b/i.test(pick.play || "");
+    movement = isOver ? nowPoint - pubPoint : pubPoint - nowPoint;
+  }
+  const favorable =
+    movement > 0 || (movement === 0 && payout(nowPrice) > payout(pubPrice));
+  if (!favorable) return null;
+  const pubDesc = `${pubPoint > 0 && market === "spread" ? "+" : ""}${pubPoint} (${fmtAmerican(pubPrice)})`;
+  return `Line moved in your favor — published ${pubDesc}, now ${best.display} at ${best.book}`;
+}
+
+/**
  * One-line line journey for a card pick (optimization #20, 2026-10-28):
  * "Opened +3 (-110) · card +3.5 (-110) · now +3 (-110) at FanDuel".
  * Open comes from the tracked opening on the same board cell that

@@ -37,11 +37,16 @@ export function AskClient({ suggestions }: { suggestions?: string[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Restore the conversation after a refresh (same tab session, same ET day
-  // only — yesterday's game context would resolve against a stale board).
+  // Restore the conversation when the member comes back (optimization
+  // #36): exchanges persist in localStorage — device-local, no backend —
+  // so leaving the page (or closing the tab) no longer wipes the thread.
+  // Same ET day only — yesterday's game context would resolve against a
+  // stale board. Threads saved by the earlier sessionStorage version are
+  // migrated on first read.
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
+      const raw =
+        localStorage.getItem(STORAGE_KEY) || sessionStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
         const stored = Array.isArray(parsed) ? parsed : parsed?.msgs;
@@ -53,9 +58,10 @@ export function AskClient({ suggestions }: { suggestions?: string[] }) {
               .slice(-40)
           );
         } else {
-          sessionStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(STORAGE_KEY);
         }
       }
+      sessionStorage.removeItem(STORAGE_KEY);
     } catch {
       /* storage unavailable — chat still works in-memory */
     }
@@ -65,7 +71,7 @@ export function AskClient({ suggestions }: { suggestions?: string[] }) {
   useEffect(() => {
     if (!hydrated) return;
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ date: todayET(), msgs: msgs.slice(-40) }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ date: todayET(), msgs: msgs.slice(-40) }));
     } catch {
       /* ignore quota errors */
     }
@@ -126,6 +132,7 @@ export function AskClient({ suggestions }: { suggestions?: string[] }) {
     setMsgs([GREETING]);
     setStaleMins(null);
     try {
+      localStorage.removeItem(STORAGE_KEY);
       sessionStorage.removeItem(STORAGE_KEY);
     } catch {
       /* ignore */
@@ -161,7 +168,8 @@ export function AskClient({ suggestions }: { suggestions?: string[] }) {
         </h1>
         <p className="text-muted mt-2 text-sm max-w-xl mx-auto">
           Real talk on the live board — lines, leans, today's card, and the record.
-          Ask a question, then keep asking. It remembers the conversation.
+          Ask a question, then keep asking. It remembers the conversation —
+          even if you leave and come back later today.
         </p>
       </div>
 

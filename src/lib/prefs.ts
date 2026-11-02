@@ -25,7 +25,7 @@ export type MemberPrefs = {
   sports: string[];
   /** Book label, e.g. "DraftKings". Empty = no primary book. */
   book: string;
-  /** Opt-in pushes for tailed picks: line moved against + start soon (optimization #19). */
+  /** Opt-in pushes for tailed picks: line moved against, line moved in your favor (#35), + start soon (optimization #19). */
   tailAlerts: boolean;
 };
 
