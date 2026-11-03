@@ -19,7 +19,9 @@ function cleanEnv(v: string | undefined): string {
 }
 
 /**
- * Scheduled refresh endpoint (Vercel Cron hits this 4x daily).
+ * Scheduled refresh endpoint (Vercel Cron hits this 4x daily: two full
+ * board pulls plus two majors-only pulls at ?scope=majors, which merge
+ * into the snapshot — sport tiers live in lib/odds.ts).
  * Protected by CRON_SECRET when set (Vercel sends it as a Bearer <redacted>
  *
  * After refreshing odds, checks for NEW steam moves on card games and
@@ -34,7 +36,9 @@ export async function GET(req: Request) {
     }
   }
   try {
-    const result = await refreshOdds(true);
+    const scope =
+      new URL(req.url).searchParams.get("scope") === "majors" ? "majors" : "full";
+    const result = await refreshOdds(true, scope);
 
     // CLV capture (fire-and-forget; never awaited, never fails or delays
     // the refresh). Upserts the just-fetched board line for every
@@ -86,6 +90,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       ok: true,
+      scope: result.scope || scope,
       fetchedAt: result.fetchedAt,
       sportsRefreshed: result.sportsRefreshed,
       gameCount: result.events.length,

@@ -96,6 +96,7 @@ export const SPORT_LABELS: Record<string, string> = {
   americanfootball_ncaaf: "CFB",
   icehockey_nhl: "NHL",
   basketball_nba: "NBA",
+  basketball_ncaab: "NCAAB",
   baseball_mlb: "MLB",
   basketball_wnba: "WNBA",
   soccer_usa_mls: "MLS",

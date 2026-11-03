@@ -1,6 +1,6 @@
 import { Redis } from "@upstash/redis";
 import { getPicksFeed, sportFromGame, type FeedPick } from "@/lib/picks";
-import { getOddsCached } from "@/lib/odds";
+import { getOddsCached, getQuotaState, QUOTA_CONSERVATIVE_PCT } from "@/lib/odds";
 import type { OddsEvent } from "@/lib/odds-shared";
 
 /**
@@ -529,6 +529,14 @@ async function fetchBoardProps(dateET: string): Promise<FeedPick[]> {
 
   const apiKey = (process.env.ODDS_API_KEY || "").trim().replace(/^["']+|["']+$/g, "").replace(/\s+/g, "");
   if (!apiKey) return [];
+
+  // Quota guard (user, 2026-11-02: never approach the limit): the prop
+  // board is the priciest Odds API consumer per run — per-event calls at
+  // 4-5 credits each — so it yields first. At or above the conservative
+  // threshold the sheet serves the brief pool only; the quota guard
+  // outranks the never-empty rule.
+  const quota = await getQuotaState().catch(() => null);
+  if (quota && quota.pct >= QUOTA_CONSERVATIVE_PCT) return [];
 
   let events: OddsEvent[] = [];
   try {

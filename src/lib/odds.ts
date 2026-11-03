@@ -17,38 +17,76 @@ import { Redis } from "@upstash/redis";
 
 const API_BASE = "https://api.the-odds-api.com/v4";
 
-const DEFAULT_SPORTS = [
+/**
+ * Sport tiers (user direction, 2026-11-02: "suppress lesser sports and
+ * more frequent pulls for majors" — and never approach the quota limit).
+ * - FULL_SPORTS: everything the board carries, pulled on the full
+ *   refreshes (2x daily). Lesser soccer (La Liga, Bundesliga, Ligue 1,
+ *   Brazil) was dropped entirely — MLS + EPL + UCL carry soccer.
+ * - MAJOR_SPORTS: the big leagues, pulled two extra times a day via
+ *   /api/refresh?scope=majors, merged into the snapshot (never replacing
+ *   the other sports). NCAAB joined the majors when its season opened.
+ * - SPORT_SEASONS keeps out-of-season leagues from burning credits on
+ *   empty pulls (MLB in November, WNBA in winter, ...).
+ */
+const FULL_SPORTS = [
   "americanfootball_nfl",
   "americanfootball_ncaaf",
-  "icehockey_nhl",
   "basketball_nba",
+  "basketball_ncaab",
+  "icehockey_nhl",
   "baseball_mlb",
+  "basketball_wnba",
   "soccer_usa_mls",
   "soccer_epl",
-  "soccer_spain_la_liga",
-  "soccer_germany_bundesliga",
-  "soccer_italy_serie_a",
-  "soccer_france_ligue_one",
-  "soccer_brazil_campeonato",
   "soccer_uefa_champs_league",
 ];
 
-const BOOKS = ["draftkings", "fanduel", "betmgm", "caesars"];
-
-// Conservative mode: when quota drops below 5000 remaining (15K used),
-// slash burn rate to protect the rest of the month.
-const CONSERVATIVE_SPORTS = [
+const MAJOR_SPORTS = [
   "americanfootball_nfl",
   "americanfootball_ncaaf",
-  "icehockey_nhl",
   "basketball_nba",
+  "basketball_ncaab",
+  "icehockey_nhl",
 ];
+
+/** ET months (1-12) in which a sport has games worth pulling. */
+const SPORT_SEASONS: Record<string, number[]> = {
+  americanfootball_nfl: [9, 10, 11, 12, 1, 2],
+  americanfootball_ncaaf: [8, 9, 10, 11, 12, 1],
+  basketball_nba: [10, 11, 12, 1, 2, 3, 4, 5, 6],
+  basketball_ncaab: [11, 12, 1, 2, 3, 4],
+  icehockey_nhl: [10, 11, 12, 1, 2, 3, 4, 5, 6],
+  baseball_mlb: [3, 4, 5, 6, 7, 8, 9, 10],
+  basketball_wnba: [5, 6, 7, 8, 9, 10],
+  soccer_usa_mls: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+  soccer_epl: [8, 9, 10, 11, 12, 1, 2, 3, 4, 5],
+  soccer_uefa_champs_league: [9, 10, 11, 12, 1, 2, 3, 4, 5, 6],
+};
+
+function currentETMonth(): number {
+  return Number(
+    new Date().toLocaleDateString("en-US", {
+      timeZone: "America/New_York",
+      month: "numeric",
+    })
+  );
+}
+
+function inSeason(sport: string, month = currentETMonth()): boolean {
+  const months = SPORT_SEASONS[sport];
+  return !months || months.includes(month);
+}
+
+const BOOKS = ["draftkings", "fanduel", "betmgm", "caesars"];
+
+// Conservative mode: at 75% of quota used, slash burn rate to the majors
+// at 2 books / 2 markets. Hard stop at 99% — serve cache, zero API calls.
+// Percentage-based so it adapts to any plan tier (20K, 100K, etc.)
+const CONSERVATIVE_SPORTS = MAJOR_SPORTS;
 const CONSERVATIVE_BOOKS = ["draftkings", "fanduel"];
 const CONSERVATIVE_MARKETS = "h2h,spreads";
-// Conservative mode: when 75% of quota is used, slash burn rate.
-// Hard stop at 99% — serve cache, make zero API calls.
-// Percentage-based so it adapts to any plan tier (20K, 100K, etc.)
-const QUOTA_CONSERVATIVE_PCT = 0.75;
+export const QUOTA_CONSERVATIVE_PCT = 0.75;
 const QUOTA_HARD_STOP_PCT = 0.99;
 
 function getConfig() {
@@ -57,12 +95,24 @@ function getConfig() {
   const apiKey = rawKey.trim().replace(/^["']+|["']+$/g, "").replace(/\s+/g, "");
   return {
     apiKey,
-    sports: (process.env.ODDS_SPORTS || DEFAULT_SPORTS.join(","))
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean),
+    // An explicit ODDS_SPORTS env wins as-is; otherwise the tiered
+    // default list, season-filtered so off-season leagues cost nothing.
+    sports: process.env.ODDS_SPORTS
+      ? process.env.ODDS_SPORTS.split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : FULL_SPORTS.filter((s) => inSeason(s)),
     ttlMin: Number(process.env.ODDS_CACHE_TTL_MIN || 15),
   };
+}
+
+/** Sports for a refresh scope: the full board list, or just the majors. */
+export function sportsForScope(scope: "full" | "majors"): string[] {
+  const { sports } = getConfig();
+  if (scope === "majors") {
+    return MAJOR_SPORTS.filter((s) => inSeason(s) && sports.includes(s));
+  }
+  return sports;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,6 +134,64 @@ let quotaRemaining: number | null = null;
 // ---------------------------------------------------------------------------
 const ODDS_CACHE_KEY = "moyline:odds:cache";
 const OPENINGS_KEY = "moyline:odds:openings";
+const QUOTA_KEY = "moyline:odds:quota";
+
+/**
+ * Quota state is shared through Redis (like the snapshot), not just
+ * module memory: serverless instances are per-request, so an in-memory
+ * quotaUsed leaves cold instances unable to enforce the guard until
+ * after their first fetch. Every API response refreshes the stored
+ * state; refreshOdds loads it before deciding anything.
+ */
+interface QuotaState {
+  used: number;
+  remaining: number;
+  at: number;
+}
+
+async function saveQuotaState(): Promise<void> {
+  if (quotaUsed === null || quotaRemaining === null) return;
+  try {
+    const redis = getRedis();
+    if (!redis) return;
+    const state: QuotaState = { used: quotaUsed, remaining: quotaRemaining, at: Date.now() };
+    await redis.set(QUOTA_KEY, JSON.stringify(state));
+  } catch {
+    /* best-effort */
+  }
+}
+
+async function loadQuotaState(): Promise<void> {
+  try {
+    const redis = getRedis();
+    if (!redis) return;
+    const raw = await redis.get<string>(QUOTA_KEY);
+    if (!raw) return;
+    const parsed = (typeof raw === "string" ? JSON.parse(raw) : raw) as QuotaState;
+    if (typeof parsed?.used === "number" && typeof parsed?.remaining === "number") {
+      quotaUsed = parsed.used;
+      quotaRemaining = parsed.remaining;
+    }
+  } catch {
+    /* best-effort */
+  }
+}
+
+/** Shared quota state for other Odds API consumers (e.g. Cheatsheet). */
+export async function getQuotaState(): Promise<{
+  used: number;
+  remaining: number;
+  pct: number;
+} | null> {
+  if (quotaUsed === null || quotaRemaining === null) await loadQuotaState();
+  if (quotaUsed === null || quotaRemaining === null) return null;
+  const total = quotaUsed + quotaRemaining;
+  return {
+    used: quotaUsed,
+    remaining: quotaRemaining,
+    pct: total > 0 ? quotaUsed / total : 0,
+  };
+}
 
 function getRedis(): Redis | null {
   try {
@@ -218,6 +326,7 @@ export interface RefreshResult {
   quotaRemaining: number | null;
   error?: string;
   conservativeMode?: boolean;
+  scope?: "full" | "majors";
 }
 
 async function fetchSport(
@@ -241,6 +350,8 @@ async function fetchSport(
   const usedHeader = res.headers.get("x-requests-used");
   const remaining = remainingHeader ? Number(remainingHeader) : null;
   if (usedHeader) quotaUsed = Number(usedHeader);
+  if (remaining !== null) quotaRemaining = remaining;
+  if (usedHeader || remaining !== null) void saveQuotaState();
   if (!res.ok) {
     throw new Error(`Odds API ${res.status} for ${sport}`);
   }
@@ -248,9 +359,16 @@ async function fetchSport(
   return { events, remaining };
 }
 
-export async function refreshOdds(force = false): Promise<RefreshResult> {
+export async function refreshOdds(
+  force = false,
+  scope: "full" | "majors" = "full"
+): Promise<RefreshResult> {
   const { apiKey, sports, ttlMin } = getConfig();
   const now = Date.now();
+
+  // Enforce the quota guard from the shared Redis state, so a cold
+  // instance that has never fetched still knows where the quota stands.
+  await loadQuotaState();
 
   if (!apiKey) {
     return {
@@ -286,8 +404,14 @@ export async function refreshOdds(force = false): Promise<RefreshResult> {
   }
 
   // Conservative mode: burn rate protection at 75% quota used.
+  // A majors-scope refresh pulls only the major leagues and MERGES them
+  // into the current snapshot; a full refresh replaces the board.
   const conservative = isConservative();
-  const activeSports = conservative ? CONSERVATIVE_SPORTS : sports;
+  const sportsToFetch = conservative
+    ? CONSERVATIVE_SPORTS.filter((s) => inSeason(s))
+    : scope === "majors"
+      ? sportsForScope("majors")
+      : sports;
   const fetchOpts = conservative
     ? { books: CONSERVATIVE_BOOKS, markets: CONSERVATIVE_MARKETS, daysFrom: "1" }
     : { daysFrom: "1" };
@@ -296,7 +420,7 @@ export async function refreshOdds(force = false): Promise<RefreshResult> {
   const refreshed: string[] = [];
   let lastError: string | undefined;
 
-  for (const sport of activeSports) {
+  for (const sport of sportsToFetch) {
     try {
       const { events, remaining } = await fetchSport(sport, apiKey, fetchOpts);
       if (remaining !== null) quotaRemaining = remaining;
@@ -309,20 +433,44 @@ export async function refreshOdds(force = false): Promise<RefreshResult> {
   }
 
   if (allEvents.length > 0) {
-    memCache = { fetchedAt: now, events: allEvents };
-    await writeJson(CACHE_FILE, allEvents);
-    await writeOddsSnapshot(now, allEvents);
-    await snapshotOpenings(allEvents);
+    let finalEvents = allEvents;
+    if (scope === "majors" && !conservative) {
+      // Merge: keep every non-major event from the current snapshot,
+      // replace the majors with the fresh pulls.
+      const snap = await readOddsSnapshot();
+      const base =
+        snap?.events || (await readJson<OddsEvent[]>(CACHE_FILE, []));
+      const fetchedKeys = new Set(refreshed);
+      finalEvents = [
+        ...base.filter((e) => !fetchedKeys.has(e.sport_key)),
+        ...allEvents,
+      ];
+    }
+    memCache = { fetchedAt: now, events: finalEvents };
+    await writeJson(CACHE_FILE, finalEvents);
+    await writeOddsSnapshot(now, finalEvents);
+    await snapshotOpenings(finalEvents);
+    return {
+      events: finalEvents,
+      fetchedAt: now,
+      fromCache: false,
+      sportsRefreshed: refreshed,
+      quotaRemaining,
+      error: lastError,
+      conservativeMode: conservative,
+      scope,
+    };
   }
 
   return {
-    events: allEvents.length > 0 ? allEvents : await readJson<OddsEvent[]>(CACHE_FILE, []),
+    events: await readJson<OddsEvent[]>(CACHE_FILE, []),
     fetchedAt: now,
     fromCache: false,
     sportsRefreshed: refreshed,
     quotaRemaining,
     error: lastError,
     conservativeMode: conservative,
+    scope,
   };
 }
 
