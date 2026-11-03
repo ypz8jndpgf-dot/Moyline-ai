@@ -767,7 +767,7 @@ export default async function PicksPage({
             </div>
           )}
 
-          <div className="grid gap-4 md:grid-cols-2 mt-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mt-4">
             <div className="card p-5">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold uppercase tracking-widest text-gold">
@@ -839,6 +839,39 @@ export default async function PicksPage({
                 </>
               ) : (
                 <p className="text-sm text-muted">No parlay today — nothing cleared the bar.</p>
+              )}
+            </div>
+            <div className="card p-5">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold uppercase tracking-widest text-gold">
+                  🎯 Longshot of the Day
+                </span>
+                <span className="text-xs text-muted">Ledger play · +300 or longer</span>
+              </div>
+              {feed.longshot ? (
+                <>
+                  <p className="text-lg font-bold text-goldsoft mb-2">
+                    {feed.longshot.play}{" "}
+                    <span className="text-gold">{feed.longshot.price}</span>
+                  </p>
+                  <p className="text-sm text-paper mb-2">{feed.longshot.game}</p>
+                  {feed.longshot.reasoning && (
+                    <p className="text-sm text-muted">{feed.longshot.reasoning}</p>
+                  )}
+                  <p className="mt-2 text-[11px] text-muted">
+                    High variance by design — tracked in the Longshot Ledger, never in the main record.
+                  </p>
+                  <div className="mt-3">
+                    <ShareButton
+                      game={feed.longshot.game}
+                      play={feed.longshot.play}
+                      price={feed.longshot.price}
+                      dateLabel={cardDate}
+                    />
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted">No longshot today — no +300 shot earned it.</p>
               )}
             </div>
           </div>

@@ -7,7 +7,7 @@ export const PAPER_STAKE = 10;
 
 export type PaperStatus = "open" | "win" | "loss" | "push";
 
-export type PaperSource = "card" | "backpage";
+export type PaperSource = "card" | "backpage" | "longshot";
 
 export interface PaperBet {
   id: string;
@@ -210,14 +210,16 @@ export async function settlePaperBets(
  *  misread as a placement outage for over a week (Oct 2026). */
 export async function countOpenBetsForDate(
   date: string
-): Promise<{ card: number; backpage: number }> {
+): Promise<{ card: number; backpage: number; longshot: number }> {
   const bets = await getBets();
   let card = 0;
   let backpage = 0;
+  let longshot = 0;
   for (const b of bets) {
     if (b.date !== date || b.status !== "open") continue;
     if (b.source === "backpage") backpage++;
+    else if (b.source === "longshot") longshot++;
     else card++;
   }
-  return { card, backpage };
+  return { card, backpage, longshot };
 }

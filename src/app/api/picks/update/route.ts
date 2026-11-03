@@ -71,6 +71,8 @@ type PicksFeed = {
   props?: FeedPick[];
   /** Backpage: conf-3 leans. Paywalled tab, paper-traded + graded privately for admin. */
   backpage?: FeedPick[];
+  /** Longshot of the Day: one +300-or-longer play, public Longshot Ledger. */
+  longshot?: { game: string; play: string; price: string; reasoning?: string } | null;
   teaser: Ticket | null;
   parlay: Ticket | null;
   /** Weekend lookaheads (Thu/Fri in-season briefs). Keyed by type so NFL and NCAAB coexist. */
@@ -213,6 +215,8 @@ export async function POST(req: Request) {
       // Latest non-null ticket wins; null never erases an earlier edition's ticket.
       teaser: body.teaser || existing?.teaser || null,
       parlay: body.parlay || existing?.parlay || null,
+      // Same rule for the longshot: first edition sets it, later nulls keep it.
+      longshot: body.longshot || existing?.longshot || null,
       // Weekend lookaheads: keyed by type so NFL teaser and NCAAB spotlight coexist.
       // Incoming single `lookahead` (from brief workers) routes to its type key; null never erases.
       // Backward compat: old single `lookahead` without a type field is treated as a teaser.
@@ -348,6 +352,7 @@ export async function POST(req: Request) {
     // backpage_bets_placed:0 even though the picks were live and unbet.
     let paperPlaced = 0;
     let backpagePlaced = 0;
+    let longshotPlaced = 0;
     try {
       const { placePaperBets } = await import("@/lib/paper");
       const placed = await placePaperBets(
@@ -362,6 +367,14 @@ export async function POST(req: Request) {
         "backpage"
       );
       backpagePlaced = bpPlaced.length;
+      if (merged.longshot) {
+        const lsPlaced = await placePaperBets(
+          [{ game: merged.longshot.game, play: merged.longshot.play, price: merged.longshot.price }],
+          body.date,
+          "longshot"
+        );
+        longshotPlaced = lsPlaced.length;
+      }
     } catch (e) {
       console.error("[paper] place failed:", e instanceof Error ? e.message : e);
     }
@@ -370,11 +383,13 @@ export async function POST(req: Request) {
     // re-push is visibly "already placed" rather than "never placed."
     let paperOpenToday = 0;
     let backpageOpenToday = 0;
+    let longshotOpenToday = 0;
     try {
       const { countOpenBetsForDate } = await import("@/lib/paper");
       const counts = await countOpenBetsForDate(body.date);
       paperOpenToday = counts.card;
       backpageOpenToday = counts.backpage;
+      longshotOpenToday = counts.longshot;
     } catch {
       /* informational only */
     }
@@ -389,8 +404,10 @@ export async function POST(req: Request) {
       merged_into_existing: !!existing,
       paper_bets_placed: paperPlaced,
       backpage_bets_placed: backpagePlaced,
+      longshot_bets_placed: longshotPlaced,
       paper_bets_open_today: paperOpenToday,
       backpage_bets_open_today: backpageOpenToday,
+      longshot_bets_open_today: longshotOpenToday,
     });
   } catch (e) {
     return NextResponse.json(

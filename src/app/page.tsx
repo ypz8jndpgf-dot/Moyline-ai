@@ -13,6 +13,7 @@ import TrackHighlights from "@/components/TrackHighlights";
 import TrackTicker from "@/components/TrackTicker";
 import { getTrendCards } from "@/lib/records";
 import PromoVideo from "@/components/PromoVideo";
+import LongshotStrip from "@/components/LongshotStrip";
 import { auth } from "@/lib/auth";
 import { getPrefs } from "@/lib/prefs";
 
@@ -101,6 +102,8 @@ export default async function Home() {
         )}
 
       <FeaturedPlays />
+
+      <LongshotStrip />
 
       <FeaturedRecord />
 

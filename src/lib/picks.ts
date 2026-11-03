@@ -55,6 +55,15 @@ export type PicksFeed = {
   props?: FeedPick[];
   /** Backpage: conf-3 leans. Separate paywalled tab, admin-only paper trading + grading. */
   backpage?: FeedPick[];
+  /** Longshot of the Day (2026-11-02, suggestion #37): one labeled
+   *  high-variance play at +300 or longer, with its own public Longshot
+   *  Ledger — never a grid pick, never in the combined record. */
+  longshot?: {
+    game: string;
+    play: string;
+    price: string;
+    reasoning?: string;
+  } | null;
   teaser: {
     legs: string[];
     points: number;
