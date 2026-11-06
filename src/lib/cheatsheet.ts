@@ -1,7 +1,8 @@
 import { Redis } from "@upstash/redis";
 import { getPicksFeed, sportFromGame, type FeedPick } from "@/lib/picks";
+import type { PropLiveQuote } from "@/lib/card-utils";
 import { getOddsCached, getQuotaState, QUOTA_CONSERVATIVE_PCT } from "@/lib/odds";
-import type { OddsEvent } from "@/lib/odds-shared";
+import { fmtAmerican, type OddsEvent } from "@/lib/odds-shared";
 
 /**
  * Cheatsheet engine — Linemate-style guided prop sheet, MoyLine rules:
@@ -474,8 +475,26 @@ async function getEventBox(sport: string, path: string, eventId: string, dateET:
  * Board legs are NOT MoyLine leans: they carry source "board", confidence 0,
  * and a badge in the UI. Fetched only when needed and cached 3h in Redis,
  * to keep Odds API credits in check.
+ *
+ * Ladder rungs (2026-11-05, user approved "a few credits", majors only):
+ * the same per-event fetch also pulls the *_alternate player markets in a
+ * SEPARATE request (failure-isolated: an unsupported alternate key can
+ * only cost the ladder its rungs, never the board) and caches every
+ * distinct priced line per player + market — best price + book per line —
+ * for the Prop Explorer ladder (#49). No new cadence: same runs, same
+ * events, wider market list on the alternate request only. Anytime-TD
+ * markets stay out (binary — there is no ladder to climb).
  */
-const BOARD_SPORTS: Record<string, { label: string; maxEvents: number; markets: Record<string, string> }> = {
+const BOARD_SPORTS: Record<
+  string,
+  {
+    label: string;
+    maxEvents: number;
+    markets: Record<string, string>;
+    /** Alternate market key -> the standard market key it ladders. */
+    altMarkets: Record<string, string>;
+  }
+> = {
   basketball_nba: {
     label: "NBA",
     maxEvents: 8,
@@ -484,6 +503,11 @@ const BOARD_SPORTS: Record<string, { label: string; maxEvents: number; markets: 
       player_rebounds: "rebounds",
       player_assists: "assists",
       player_threes: "three-pointers made",
+    },
+    altMarkets: {
+      player_points_alternate: "player_points",
+      player_rebounds_alternate: "player_rebounds",
+      player_assists_alternate: "player_assists",
     },
   },
   icehockey_nhl: {
@@ -495,6 +519,9 @@ const BOARD_SPORTS: Record<string, { label: string; maxEvents: number; markets: 
       player_assists: "assists",
       player_shots_on_goal: "shots on goal",
     },
+    altMarkets: {
+      player_points_alternate: "player_points",
+    },
   },
   americanfootball_nfl: {
     label: "NFL",
@@ -505,6 +532,11 @@ const BOARD_SPORTS: Record<string, { label: string; maxEvents: number; markets: 
       player_rush_yds: "rush yards",
       player_reception_yds: "receiving yards",
       player_receptions: "receptions",
+    },
+    altMarkets: {
+      player_pass_yds_alternate: "player_pass_yds",
+      player_rush_yds_alternate: "player_rush_yds",
+      player_reception_yds_alternate: "player_reception_yds",
     },
   },
 };
@@ -522,19 +554,59 @@ function formatStarts(iso: string): string {
   return `${t.toLowerCase().replace(/\s+/g, "")} ET`;
 }
 
+export type BoardRungSide = { price: number; book: string };
+
+/**
+ * Every distinct priced line for one player + market from one board
+ * fetch (standard + alternate markets merged), best price + book per
+ * line and side. Consumed by buildLadder; the board fallback itself
+ * only ever reads `picks`.
+ */
+export type BoardPlayerRungs = {
+  game: string; // same label as the board picks, "Away @ Home (NBA)"
+  player: string; // book description name
+  market: string; // parsed internal market key (parseProp), e.g. "points"
+  lines: { line: number; over?: BoardRungSide; under?: BoardRungSide }[];
+};
+
+type BoardPropsCache = { picks: FeedPick[]; rungs: BoardPlayerRungs[] };
+
+const BOARD_CACHE_TTL_S = 3 * 3600;
+
+function boardCacheKey(dateET: string): string {
+  return `moyline:cheatsheet:boardprops:v2:${dateET}`;
+}
+
+/**
+ * Board cache read with backward compatibility: v2 entries carry picks
+ * + ladder rungs; pre-ladder entries under the legacy key are a plain
+ * FeedPick[] and keep serving the board fallback until they expire
+ * (≤3h) — they simply carry no rungs.
+ */
+async function readBoardCache(dateET: string): Promise<BoardPropsCache | null> {
+  const v2 = await cacheGet<BoardPropsCache>(boardCacheKey(dateET));
+  if (v2 && Array.isArray(v2.picks)) {
+    return { picks: v2.picks, rungs: Array.isArray(v2.rungs) ? v2.rungs : [] };
+  }
+  const legacy = await cacheGet<FeedPick[]>(`moyline:cheatsheet:boardprops:${dateET}`);
+  if (Array.isArray(legacy)) return { picks: legacy, rungs: [] };
+  return null;
+}
+
 async function fetchBoardProps(dateET: string): Promise<FeedPick[]> {
-  const cacheKey = `moyline:cheatsheet:boardprops:${dateET}`;
-  const cached = await cacheGet<FeedPick[]>(cacheKey);
-  if (cached) return cached;
+  const cachedBoard = await readBoardCache(dateET);
+  if (cachedBoard) return cachedBoard.picks;
 
   const apiKey = (process.env.ODDS_API_KEY || "").trim().replace(/^["']+|["']+$/g, "").replace(/\s+/g, "");
   if (!apiKey) return [];
 
   // Quota guard (user, 2026-11-02: never approach the limit): the prop
   // board is the priciest Odds API consumer per run — per-event calls at
-  // 4-5 credits each — so it yields first. At or above the conservative
-  // threshold the sheet serves the brief pool only; the quota guard
-  // outranks the never-empty rule.
+  // 5-8 credits each (4-5 standard markets, plus the separate alternate
+  // request at NBA +3 / NHL +1 / NFL +3 since 2026-11-05; Odds API cost
+  // is markets × regions) — so it yields first. At or above the
+  // conservative threshold the sheet serves the brief pool only; the
+  // quota guard outranks the never-empty rule.
   const quota = await getQuotaState().catch(() => null);
   if (quota && quota.pct >= QUOTA_CONSERVATIVE_PCT) return [];
 
@@ -563,6 +635,7 @@ async function fetchBoardProps(dateET: string): Promise<FeedPick[]> {
   if (selected.length === 0) return [];
 
   const picks: FeedPick[] = [];
+  const allRungs: BoardPlayerRungs[] = [];
   await mapLimit(selected, 4, async (ev) => {
     const cfg = BOARD_SPORTS[ev.sport_key];
     const marketKeys = Object.keys(cfg.markets).join(",");
@@ -573,6 +646,44 @@ async function fetchBoardProps(dateET: string): Promise<FeedPick[]> {
     const game = `${ev.away_team} @ ${ev.home_team} (${cfg.label})`;
     const starts = formatStarts(ev.commence_time);
     type Side = { price: number; book: string };
+    // Ladder rungs for this event: every distinct priced line per
+    // player + market (standard AND alternate markets), best price per
+    // line and side. Kept apart from the consensus `table` below, whose
+    // book-count logic decides the board legs and must not change.
+    type RungCell = { over?: Side; under?: Side };
+    const rungTable = new Map<string, Map<number, RungCell>>();
+    const collectRungs = (payload: any, baseKeyFor: (mk: string) => string | undefined) => {
+      for (const bm of payload?.bookmakers || []) {
+        for (const mk of bm.markets || []) {
+          const baseKey = baseKeyFor(mk.key);
+          if (!baseKey) continue;
+          for (const oc of mk.outcomes || []) {
+            const player = String(oc.description || "").trim();
+            if (!player || typeof oc.point !== "number") continue;
+            if (oc.name !== "Over" && oc.name !== "Under") continue;
+            const key = `${player}|${baseKey}`;
+            if (!rungTable.has(key)) rungTable.set(key, new Map());
+            const byPoint = rungTable.get(key)!;
+            if (!byPoint.has(oc.point)) byPoint.set(oc.point, {});
+            const cell = byPoint.get(oc.point)!;
+            const side: Side = { price: oc.price, book: String(bm.title || bm.key || "Book") };
+            if (oc.name === "Over" && (!cell.over || oc.price > cell.over.price)) cell.over = side;
+            if (oc.name === "Under" && (!cell.under || oc.price > cell.under.price)) cell.under = side;
+          }
+        }
+      }
+    };
+    collectRungs(data, (k) => (cfg.markets[k] ? k : undefined));
+    // Alternate lines (#49 ladder): a separate request, so a rejected
+    // or unsupported alternate key loses only rungs — the standard
+    // board above is already safe. Same events, same cadence.
+    const altKeys = Object.keys(cfg.altMarkets);
+    if (altKeys.length > 0) {
+      const altData = await fetchJson(
+        `https://api.the-odds-api.com/v4/sports/${ev.sport_key}/events/${ev.id}/odds?apiKey=${apiKey}&regions=us&markets=${altKeys.join(",")}&oddsFormat=american`
+      );
+      if (altData?.bookmakers) collectRungs(altData, (k) => cfg.altMarkets[k]);
+    }
     const table = new Map<string, Map<number, { over?: Side; under?: Side; books: number }>>();
     for (const bm of data.bookmakers) {
       for (const mk of bm.markets || []) {
@@ -616,9 +727,25 @@ async function fetchBoardProps(dateET: string): Promise<FeedPick[]> {
         starts,
       });
     }
+    // Flatten this event's rungs for the ladder cache. The parsed
+    // market key comes from parseProp on the same play text shape the
+    // board legs use, so fetch and ladder can never drift apart.
+    for (const [key, byPoint] of rungTable) {
+      const [player, baseKey] = key.split("|");
+      const phrase = cfg.markets[baseKey];
+      if (!phrase) continue;
+      const parsed = parseProp(`${player} Over 0.5 ${phrase}`);
+      if (!parsed) continue;
+      const lines = [...byPoint.entries()]
+        .map(([line, cell]) => ({ line, over: cell.over, under: cell.under }))
+        .filter((l) => l.over || l.under)
+        .sort((a, b) => a.line - b.line);
+      if (lines.length === 0) continue;
+      allRungs.push({ game, player, market: parsed.market, lines });
+    }
   });
 
-  await cacheSet(cacheKey, picks, 3 * 3600);
+  await cacheSet(boardCacheKey(dateET), { picks, rungs: allRungs }, BOARD_CACHE_TTL_S);
   return picks;
 }
 
@@ -807,4 +934,241 @@ export async function buildCheatsheet(): Promise<CheatSheet | null> {
   const sheet: CheatSheet = { date: dateET, legs, poolSize: pool.length + boardCandidates, covered: legs.length };
   await cacheSet(sheetKey, sheet, 30 * 60);
   return sheet;
+}
+
+/* --------------------------- prop ladder --------------------------- */
+
+/**
+ * Prop Explorer ladder (optimization #49, Rithmm-style milestone ladder
+ * under MoyLine honesty rules): for one sheet leg, the alternate lines
+ * ("rungs") for the same player + market, each with the best real price
+ * we already hold in cache and the player's REAL hit rate at that rung
+ * from the same ESPN game logs the sheet was built from (leg.rows).
+ * Nothing is modeled and nothing new is pulled:
+ * - Prices come only from (a) the leg's own published price tag,
+ *   (b) the board-props Redis cache fetchBoardProps already writes —
+ *   the main book line at the board's consensus point, best across
+ *   books — and (c) that same cache's ladder rungs: since 2026-11-05
+ *   the board fetch also pulls the *_alternate player markets (majors
+ *   only, separate failure-isolated request) and caches every distinct
+ *   priced line per player + market, best price + book per line. The
+ *   cached game-odds snapshot carries h2h/spreads/totals only (no
+ *   player props at all), and no Odds API call is made here. A rung
+ *   exists only when a real cached price exists for it.
+ * - Hit rates use the milestone rule: an Over rung is reached when the
+ *   logged stat is >= the rung, an Under rung when it is <= the rung
+ *   (a 24.5 over and a stat of 25 are the same event; landing exactly on
+ *   a whole-number rung counts as reaching it). Rates are suppressed
+ *   entirely below 3 logged games, same floor as the sheet itself.
+ */
+
+export type LadderRung = {
+  line: number;
+  lineLabel: string;
+  price: number | null; // american, for the leg's side
+  priceLabel: string; // "+100" / "-110" (raw tag when unparseable)
+  book: string | null;
+  isLean: boolean; // the published leg's own line
+  l10: Split | null;
+  l5: Split | null;
+};
+
+export type CheatLadder = {
+  id: string;
+  player: string;
+  marketLabel: string;
+  direction: "over" | "under";
+  line: number;
+  loggedGames: number;
+  rungs: LadderRung[];
+};
+
+/** Hit split at an arbitrary rung from raw game-log values (most recent first). */
+export function ladderSplit(
+  values: number[],
+  line: number,
+  direction: "over" | "under",
+  window: number
+): Split {
+  const w = values.slice(0, window);
+  const hits = w.filter((v) => (direction === "over" ? v >= line : v <= line)).length;
+  return { hits, n: w.length };
+}
+
+/** Parse a "-110 (DraftKings)" / "+120 (Caesars)" price tag. */
+function parsePriceTag(raw: string): { price: number; book: string } | null {
+  const m = (raw || "").match(/([+-]?\d+)\s*\(([^)]+)\)/);
+  if (!m) return null;
+  const price = parseInt(m[1], 10);
+  if (!Number.isFinite(price) || price === 0) return null;
+  return { price, book: m[2].trim() };
+}
+
+function normalizeName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[.'’]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Board-cache player names are book descriptions; the leg's player is
+ * the ESPN-resolved name. Exact normalized match, else surname + first
+ * initial — conservative on purpose (a missed rung beats a wrong one). */
+function playerNameMatches(boardName: string, legName: string): boolean {
+  const a = normalizeName(boardName);
+  const b = normalizeName(legName);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const at = a.split(" ");
+  const bt = b.split(" ");
+  return (
+    at[at.length - 1] === bt[bt.length - 1] &&
+    at[0].charAt(0) === bt[0].charAt(0) &&
+    // Suffixes ("jr", "sr", "ii") ride along as the last token on both
+    // sides or neither; a one-sided suffix means a different player.
+    at.length === bt.length
+  );
+}
+
+function fmtRungLine(line: number): string {
+  return line % 1 === 0 ? String(Math.round(line)) : String(line);
+}
+
+export async function buildLadder(leg: CheatLeg, dateET: string): Promise<CheatLadder> {
+  type Cand = { price: number; book: string };
+  const byPoint = new Map<number, Cand>();
+  // Higher american number always pays more (+120 > +100, -110 > -120) —
+  // the same "best price" rule the board fetch applies.
+  const offer = (point: number, cand: Cand) => {
+    const cur = byPoint.get(point);
+    if (!cur || cand.price > cur.price) byPoint.set(point, cand);
+  };
+
+  // (b) Board-props cache: best book prices at the board's consensus
+  // point for this player + market + side — an extra rung when that
+  // point differs from the published line, a better price when it lands
+  // on it. Cache-only: this key exists only on days the sheet topped up
+  // from the board, and reading it costs no Odds API credits.
+  const boardCache = await readBoardCache(dateET);
+  const board = boardCache?.picks || [];
+  for (const pick of board) {
+    if (sportFromGame(pick.game) !== leg.sport) continue;
+    const parsed = parseProp(pick.play);
+    if (!parsed || parsed.market !== leg.market || parsed.direction !== leg.direction) continue;
+    if (!playerNameMatches(parsed.playerQuery, leg.player)) continue;
+    const tag = parsePriceTag(pick.price);
+    if (tag) offer(parsed.line, tag);
+  }
+
+  // (c) Ladder rungs from the same board fetch: every distinct priced
+  // line for this player + market across the standard and alternate
+  // markets, best price per line for the leg's side. Pure cache —
+  // pre-ladder (legacy) cache entries carry no rungs and simply skip.
+  for (const entry of boardCache?.rungs || []) {
+    if (sportFromGame(entry.game) !== leg.sport) continue;
+    if (entry.market !== leg.market) continue;
+    if (!playerNameMatches(entry.player, leg.player)) continue;
+    for (const ln of entry.lines) {
+      const side = leg.direction === "over" ? ln.over : ln.under;
+      if (side) offer(ln.line, { price: side.price, book: side.book });
+    }
+  }
+
+  // (a) The leg's own published price — always a real price for the
+  // main line, for brief leans and board legs alike.
+  const own = parsePriceTag(leg.price);
+  if (own) offer(leg.line, own);
+
+  const points = [...byPoint.keys()];
+  if (!points.some((p) => Math.abs(p - leg.line) < 1e-9)) points.push(leg.line);
+  points.sort((a, b) => a - b);
+
+  const values = leg.rows.map((r) => r.value);
+  const rated = leg.rows.length >= 3; // sheet floor — never rate a thinner log
+  const rungs: LadderRung[] = points.map((point) => {
+    const isLean = Math.abs(point - leg.line) < 1e-9;
+    const cand = byPoint.get(point);
+    return {
+      line: point,
+      lineLabel: isLean ? leg.lineLabel : fmtRungLine(point),
+      price: cand ? cand.price : null,
+      priceLabel: cand ? fmtAmerican(cand.price) : isLean ? leg.price : "—",
+      book: cand ? cand.book : null,
+      isLean,
+      l10: rated ? ladderSplit(values, point, leg.direction, 10) : null,
+      l5: rated ? ladderSplit(values, point, leg.direction, 5) : null,
+    };
+  });
+
+  return {
+    id: leg.id,
+    player: leg.player,
+    marketLabel: leg.marketLabel,
+    direction: leg.direction,
+    line: leg.line,
+    loggedGames: leg.rows.length,
+    rungs,
+  };
+}
+
+/**
+ * Live quote for one feed prop pick (optimization #52, the /picks
+ * edge-gone badge), from the board-props cache ONLY — the same sources
+ * buildLadder reads: (b) the cache's consensus board picks (the board's
+ * current main line for the player + market, best price across books)
+ * and (c) its ladder rungs (every distinct priced line, best price per
+ * line for the pick's side). Cache-only: this reads the key
+ * fetchBoardProps already writes and never triggers a fetch, so on
+ * days the sheet never topped up from the board there is simply no
+ * quote and the caller shows nothing. Matching is buildLadder's: same
+ * sport, same parsed market + direction, conservative player-name
+ * match (a missed quote beats a wrong one).
+ */
+export async function livePropQuote(
+  pick: FeedPick,
+  dateET: string
+): Promise<PropLiveQuote | null> {
+  const parsed = parseProp(pick.play);
+  if (!parsed) return null;
+  const boardCache = await readBoardCache(dateET);
+  if (!boardCache) return null;
+  const sport = sportFromGame(pick.game);
+
+  let mainLine: number | null = null;
+  let mainPrice: number | null = null;
+  const byLine = new Map<number, number>();
+  const offer = (line: number, price: number) => {
+    const cur = byLine.get(line);
+    if (cur === undefined || price > cur) byLine.set(line, price);
+  };
+
+  for (const bp of boardCache.picks) {
+    if (sportFromGame(bp.game) !== sport) continue;
+    const bpParsed = parseProp(bp.play);
+    if (!bpParsed || bpParsed.market !== parsed.market || bpParsed.direction !== parsed.direction) continue;
+    if (!playerNameMatches(bpParsed.playerQuery, parsed.playerQuery)) continue;
+    const tag = parsePriceTag(bp.price);
+    if (!tag) continue;
+    if (mainLine === null) {
+      mainLine = bpParsed.line;
+      mainPrice = tag.price;
+    }
+    offer(bpParsed.line, tag.price);
+  }
+
+  for (const entry of boardCache.rungs) {
+    if (sportFromGame(entry.game) !== sport) continue;
+    if (entry.market !== parsed.market) continue;
+    if (!playerNameMatches(entry.player, parsed.playerQuery)) continue;
+    for (const ln of entry.lines) {
+      const side = parsed.direction === "over" ? ln.over : ln.under;
+      if (side) offer(ln.line, side.price);
+    }
+  }
+
+  if (mainLine === null && byLine.size === 0) return null;
+  const priceByLine: Record<number, number> = {};
+  for (const [line, price] of byLine) priceByLine[line] = price;
+  return { mainLine, mainPrice, priceByLine };
 }

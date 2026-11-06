@@ -28,7 +28,15 @@ function collectSegments(picks: TrackPick[]): Segment[] {
     arr.push(p);
     bySport.set(p.sport, arr);
   }
+  // Pulled by user decision 2026-11-05: the daily showcase audit flagged
+  // the NBA segment below the showcase floors (12-12, 50.0%, -1.1u —
+  // neither ≥55% win% nor positive units). Pulled from the ticker only;
+  // NBA picks stay fully visible on /track-record. Reinstate only on the
+  // user's approval.
+  const PULLED_SPORTS = new Set(["NBA"]);
+
   for (const [sport, list] of bySport) {
+    if (PULLED_SPORTS.has(sport.toUpperCase())) continue;
     const [w, l] = tally(list);
     if (w + l >= 15 && w / (w + l) >= 0.5)
       segments.push({ label: sport.toUpperCase(), w, l });

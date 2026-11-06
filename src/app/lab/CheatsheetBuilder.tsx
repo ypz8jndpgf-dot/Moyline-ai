@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { CheatLeg, CheatSheet, Split } from "@/lib/cheatsheet";
+import PropLadder from "./PropLadder";
 
 type Basis = "l10" | "l5" | "vsOpp" | "venue";
 
@@ -319,6 +320,7 @@ export default function CheatsheetBuilder() {
                         <span>{leg.rows[0] && leg.splits.venue ? "Home/Away" : ""} split <b className="text-paper">{leg.splits.venue.hits}/{leg.splits.venue.n}</b></span>
                       )}
                     </div>
+                    <PropLadder legId={leg.id} />
                     <ul className="text-sm space-y-1">
                       {leg.rows.map((r, i) => (
                         <li key={i} className="flex items-center gap-3">

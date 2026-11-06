@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { TrackPick, TrackRecord } from "@/lib/store";
-import type { RecordAnalytics, SegmentRow } from "@/lib/records";
+import type { DaySummary, RecordAnalytics, SegmentRow } from "@/lib/records";
 import type { ClvMovement } from "@/lib/clv";
 
 type Tab = "all" | "opt";
@@ -297,6 +297,186 @@ function TrajectoryChart({ analytics }: { analytics: RecordAnalytics }) {
   );
 }
 
+/* ----- Daily results calendar (optimization #47) --------------------- */
+/* Month grid shaded by each day's units. Every number comes from the   */
+/* server-computed DaySummary rows (lib/records: same tally/unitsFor    */
+/* as the trajectory above) and the day detail lists the page's own     */
+/* graded picks — nothing is recomputed here.                           */
+
+const CAL_MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+function fmtDayLabel(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d, 12));
+  return dt.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "America/New_York",
+  });
+}
+
+function ResultsCalendar({
+  days,
+  picks,
+}: {
+  days: DaySummary[];
+  picks: TrackPick[];
+}) {
+  const byDate = new Map(days.map((d) => [d.date, d]));
+  const lastDate = days.length > 0 ? days[days.length - 1].date : "";
+  const [cursor, setCursor] = useState(() => {
+    const [y, m] = (lastDate || "2026-01-01").split("-").map(Number);
+    return { y, m };
+  });
+  const [selected, setSelected] = useState<string>(lastDate);
+
+  if (days.length === 0) return null;
+  const first = days[0];
+  const last = days[days.length - 1];
+
+  const minKey = first.date.slice(0, 7);
+  const maxKey = last.date.slice(0, 7);
+  const cursorKey = `${cursor.y}-${String(cursor.m).padStart(2, "0")}`;
+  const stepMonth = (dir: 1 | -1) => {
+    setCursor((c) => {
+      const d = new Date(Date.UTC(c.y, c.m - 1 + dir, 1));
+      return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1 };
+    });
+  };
+
+  const firstWeekday = new Date(Date.UTC(cursor.y, cursor.m - 1, 1)).getUTCDay();
+  const daysInMonth = new Date(Date.UTC(cursor.y, cursor.m, 0)).getUTCDate();
+  const cells: (string | null)[] = [
+    ...Array<null>(firstWeekday).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) =>
+      `${cursor.y}-${String(cursor.m).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`
+    ),
+  ];
+
+  const selDay = byDate.get(selected);
+  const selPicks = picks.filter((p) => p.date === selected);
+
+  const cellCls = (d: DaySummary): string => {
+    if (d.priced === 0 || d.units === 0)
+      return "bg-white/[0.03] border-line text-zinc-300";
+    return d.units > 0
+      ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300"
+      : "bg-red-500/15 border-red-500/30 text-red-300";
+  };
+
+  return (
+    <div className="mb-8">
+      <p className="text-xs font-bold uppercase tracking-[0.3em] text-gold mb-3">
+        Daily results · calendar
+      </p>
+      <div className="card p-4 sm:p-5">
+        <div className="flex items-center justify-between mb-3">
+          <button
+            onClick={() => stepMonth(-1)}
+            disabled={cursorKey <= minKey}
+            className="px-3 py-1.5 rounded-full border border-line text-sm font-bold text-muted hover:text-gold disabled:opacity-30 disabled:hover:text-muted"
+            aria-label="Previous month"
+          >
+            ←
+          </button>
+          <span className="font-display text-lg">
+            {CAL_MONTHS[cursor.m - 1]} {cursor.y}
+          </span>
+          <button
+            onClick={() => stepMonth(1)}
+            disabled={cursorKey >= maxKey}
+            className="px-3 py-1.5 rounded-full border border-line text-sm font-bold text-muted hover:text-gold disabled:opacity-30 disabled:hover:text-muted"
+            aria-label="Next month"
+          >
+            →
+          </button>
+        </div>
+        <div className="grid grid-cols-7 gap-1.5">
+          {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+            <div key={i} className="text-center text-[10px] font-bold uppercase tracking-widest text-muted pb-1">
+              {d}
+            </div>
+          ))}
+          {cells.map((dateStr, i) => {
+            if (dateStr === null) return <div key={`blank-${i}`} />;
+            const dayNum = Number(dateStr.slice(8));
+            const d = byDate.get(dateStr);
+            if (!d) {
+              return (
+                <div key={dateStr} className="rounded-lg border border-transparent px-1 py-1.5 text-center">
+                  <span className="text-xs text-muted/50">{dayNum}</span>
+                </div>
+              );
+            }
+            return (
+              <button
+                key={dateStr}
+                onClick={() => setSelected(dateStr)}
+                className={`rounded-lg border px-1 py-1.5 text-center transition-all hover:border-gold/50 ${cellCls(d)} ${
+                  selected === dateStr ? "ring-1 ring-gold border-gold/60" : ""
+                }`}
+              >
+                <span className="block text-xs font-bold">{dayNum}</span>
+                <span className="block text-[10px] font-bold whitespace-nowrap">
+                  {d.w}–{d.l}
+                  {d.p > 0 ? `–${d.p}` : ""}
+                </span>
+                {d.priced > 0 && (
+                  <span className="block text-[10px] whitespace-nowrap">{fmtUnits(d.units)}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        {selDay && (
+          <div className="mt-4 border-t border-line pt-4">
+            <p className="text-sm font-bold mb-2">
+              {fmtDayLabel(selected)}{" "}
+              <span className="text-muted font-normal">
+                · {selDay.w}–{selDay.l}
+                {selDay.p > 0 ? `–${selDay.p}` : ""}
+                {selDay.priced > 0 && <> · {fmtUnits(selDay.units)}</>}
+                {selDay.priced < selDay.graded && (
+                  <> · units on {selDay.priced} of {selDay.graded} priced picks</>
+                )}
+              </span>
+            </p>
+            {selPicks.length === 0 ? (
+              <p className="text-xs text-muted">No graded picks on this day.</p>
+            ) : (
+              <ul className="space-y-2">
+                {selPicks.map((pick) => (
+                  <li key={pick.id} className="flex items-center gap-3 text-sm">
+                    <ResultBadge result={pick.result} />
+                    <span className="font-bold">
+                      {pick.star && <span className="text-gold mr-1.5">★</span>}
+                      {pick.game}{" "}
+                      <span className="text-muted font-normal text-xs">· {pick.sport}</span>
+                    </span>
+                    <span className="whitespace-nowrap">
+                      {pick.play}{" "}
+                      <span className="text-muted text-xs">{pick.line} · {pick.book}</span>
+                    </span>
+                    <span className="text-muted text-xs ml-auto text-right">{pick.final}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+        <p className="text-xs text-muted mt-3">
+          Shaded by the day&apos;s units at published prices — the same per-day tallies as the
+          table below. Tap a day for its picks.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function SegmentTable({ title, rows }: { title: string; rows: SegmentRow[] }) {
   if (rows.length === 0) return null;
   return (
@@ -451,6 +631,7 @@ export default function RecordTabs({
 
       <UnitsBand analytics={analytics} />
       <TrajectoryChart analytics={analytics} />
+      <ResultsCalendar days={analytics.days} picks={allPicks} />
 
       <div className="mb-8 max-w-2xl">
         <StatCards t={t} />

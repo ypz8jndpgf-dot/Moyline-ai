@@ -127,11 +127,30 @@ async function sendAlertPush(
   }
 }
 
-export async function GET() {
+/** Fail-closed CRON_SECRET guard (Vercel Cron / /api/refresh callers). */
+function cronGuard(req: Request): NextResponse | null {
+  const secret = cleanEnv(process.env.CRON_SECRET);
+  if (!secret) {
+    return NextResponse.json(
+      { ok: false, error: "CRON_SECRET not configured" },
+      { status: 500 }
+    );
+  }
+  if (req.headers.get("authorization") !== `Bearer ${secret}`) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+  return null;
+}
+
+export async function GET(req: Request) {
+  const denied = cronGuard(req);
+  if (denied) return denied;
   return checkAlerts();
 }
 
-export async function POST() {
+export async function POST(req: Request) {
+  const denied = cronGuard(req);
+  if (denied) return denied;
   return checkAlerts();
 }
 

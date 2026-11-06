@@ -12,6 +12,12 @@ export const dynamic = "force-dynamic";
 
 const RESULTS_PREFIX = "moyline:results:";
 
+// MEMBER EMAIL PAUSE (user directive 2026-11-04, until he lifts it):
+// disable the daily-results recap EMAIL only. The rest of this cron
+// (results read, settled-card push below) continues unchanged.
+// To lift the pause, set this back to false.
+const MEMBER_EMAIL_PAUSED = true;
+
 function cleanEnv(v: string | undefined): string {
   let s = (v || "").trim();
   const eq = s.indexOf("=");
@@ -22,11 +28,17 @@ function cleanEnv(v: string | undefined): string {
 /**
  * Daily results email (Vercel Cron, ~7:30am ET).
  * Reads yesterday's graded results (posted by the 6:30am grader) and
- * emails every member a short recap. Protected by CRON_SECRET.
+ * emails every member a short recap. Protected by CRON_SECRET, fail-closed.
  */
 export async function GET(req: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (secret && req.headers.get("authorization") !== `Bearer ${secret}`) {
+  const secret = cleanEnv(process.env.CRON_SECRET);
+  if (!secret) {
+    return NextResponse.json(
+      { ok: false, error: "CRON_SECRET not configured" },
+      { status: 500 }
+    );
+  }
+  if (req.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -90,11 +102,13 @@ export async function GET(req: Request) {
   </table>`;
 
   let sent = 0;
-  for (const to of members) {
-    const perHtml = html
-      .replace(/\{\{SIGNIN_URL\}\}/g, await briefSignInUrl(to))
-      .replace(/\{\{UNSUB_URL\}\}/g, unsubUrl(to));
-    if (await sendEmail(to, `MoyLine AI: ${headline}`, perHtml)) sent++;
+  if (!MEMBER_EMAIL_PAUSED) {
+    for (const to of members) {
+      const perHtml = html
+        .replace(/\{\{SIGNIN_URL\}\}/g, await briefSignInUrl(to))
+        .replace(/\{\{UNSUB_URL\}\}/g, unsubUrl(to));
+      if (await sendEmail(to, `MoyLine AI: ${headline}`, perHtml)) sent++;
+    }
   }
 
   // Settled-card push: one notification to opted-in members, after the
@@ -135,5 +149,5 @@ export async function GET(req: Request) {
     console.error("[daily-results] settled-card push failed:", e instanceof Error ? e.message : e);
   }
 
-  return NextResponse.json({ ok: true, sent, pushSent, date: yesterday, headline });
+  return NextResponse.json({ ok: true, sent, pushSent, date: yesterday, headline, emailPaused: MEMBER_EMAIL_PAUSED });
 }

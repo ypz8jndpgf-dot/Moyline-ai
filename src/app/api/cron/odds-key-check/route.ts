@@ -5,7 +5,8 @@ import { Redis } from "@upstash/redis";
  * Odds API key health check.
  * Hits the Odds API with the configured key; on 401/403, alerts the admin
  * via web push so the key can be re-pasted before visitors see stale lines.
- * Called by Vercel Cron daily. Also safe to hit manually.
+ * Called by Vercel Cron daily. Protected by CRON_SECRET, fail-closed —
+ * each call costs an Odds API credit, so anonymous hits are refused.
  */
 export const dynamic = "force-dynamic";
 
@@ -13,9 +14,19 @@ function cleanEnv(v: string | undefined): string {
   return (v || "").trim().replace(/^["']+|["']+$/g, "");
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const apiKey = cleanEnv(process.env.ODDS_API_KEY);
   const cronSecret = cleanEnv(process.env.CRON_SECRET);
+
+  if (!cronSecret) {
+    return NextResponse.json(
+      { ok: false, error: "CRON_SECRET not configured" },
+      { status: 500 }
+    );
+  }
+  if (req.headers.get("authorization") !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
 
   if (!apiKey) {
     return NextResponse.json({ ok: false, error: "ODDS_API_KEY not set" }, { status: 500 });

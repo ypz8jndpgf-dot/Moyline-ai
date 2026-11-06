@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { lookup } from "dns/promises";
 import { Socket } from "net";
 
@@ -40,6 +41,16 @@ async function tcpCheck(host: string, port: number): Promise<{ ok: boolean; deta
 }
 
 export async function GET() {
+  // Admin-only: this endpoint reports email-infra details and masked
+  // secret hints, so it is gated behind the admin session (same pattern
+  // as /api/push/send).
+  const session = await auth();
+  const email = session?.user?.email?.toLowerCase() || "";
+  const admin = (process.env.ADMIN_EMAIL || "").toLowerCase();
+  if (!admin || email !== admin) {
+    return NextResponse.json({ ok: false, error: "Admin only" }, { status: 403 });
+  }
+
   const out: Record<string, unknown> = {};
   const server = process.env.EMAIL_SERVER || "";
   const from = process.env.EMAIL_FROM || "";

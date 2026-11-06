@@ -162,8 +162,16 @@ export async function getTrendCards(): Promise<TrendCard[]> {
     },
   ];
 
+  // Pulled by user decision 2026-11-05: the daily showcase audit flagged
+  // "NHL moneylines" below the showcase floors (33-28, 54.1%, ≈-1.7u —
+  // neither ≥55% win% nor positive units). Pulled from this marketing
+  // surface only; the segment stays fully visible on /track-record.
+  // Reinstate only on the user's approval.
+  const PULLED_LABELS = new Set(["NHL moneylines"]);
+
   const cards: (TrendCard & { exact: number; decisions: number })[] = [];
   for (const d of defs) {
+    if (PULLED_LABELS.has(d.label)) continue;
     const s = tally(graded.filter(d.keep));
     const decisions = s.w + s.l;
     if (decisions < 8 || s.pct === null || s.pct < 50) continue;
@@ -623,6 +631,23 @@ export async function getFeaturedMetrics(): Promise<FeaturedMetrics> {
 /* cumulative-units trajectory, and every segment (win or lose).       */
 /* ------------------------------------------------------------------ */
 
+/** One day's graded record — the per-day tallies behind the results
+ *  calendar (optimization #47). Units come from unitsFor(), the exact
+ *  function the trajectory chart's per-date aggregation and the /picks
+ *  yesterday glance use, so a calendar cell can never drift from them. */
+export interface DaySummary {
+  date: string; // YYYY-MM-DD
+  w: number;
+  l: number;
+  p: number;
+  /** Units profit on the day's priced graded picks (unpriced excluded). */
+  units: number;
+  /** Graded picks that day carrying a recorded price. */
+  priced: number;
+  /** All graded picks that day, priced or not. */
+  graded: number;
+}
+
 export interface RecordAnalytics {
   recalDate: string;
   allTime: StatWithUnits;
@@ -630,6 +655,8 @@ export interface RecordAnalytics {
   postRecal: StatWithUnits;
   /** Cumulative units after each date that has graded picks, ascending. */
   trajectory: { date: string; cumUnits: number }[];
+  /** Per-day graded tallies, ascending by date (results calendar). */
+  days: DaySummary[];
   bySport: SegmentRow[];
   byType: SegmentRow[];
   propMarkets: SegmentRow[];
@@ -657,6 +684,29 @@ export async function getRecordAnalytics(): Promise<RecordAnalytics> {
     trajectory.push({ date, cumUnits: Math.round(cum * 100) / 100 });
   }
 
+  // Per-day summaries for the results calendar — same graded set, same
+  // tally/unitsFor helpers as every other surface on the page.
+  const byDayPicks = new Map<string, TrackPick[]>();
+  for (const p of graded) {
+    const arr = byDayPicks.get(p.date);
+    if (arr) arr.push(p);
+    else byDayPicks.set(p.date, [p]);
+  }
+  const days: DaySummary[] = [...byDayPicks.keys()].sort().map((date) => {
+    const ps = byDayPicks.get(date)!;
+    const t = tally(ps);
+    const u = unitsFor(ps);
+    return {
+      date,
+      w: t.w,
+      l: t.l,
+      p: t.p,
+      units: Math.round(u.units * 100) / 100,
+      priced: u.priced,
+      graded: u.graded,
+    };
+  });
+
   const bySport = segmentRows(graded, (p) => sportLabel(p.sport));
   const byType = segmentRows(graded, (p) => pickTypeLabel(classifyPick(p)));
   const propMarkets = segmentRows(
@@ -670,6 +720,7 @@ export async function getRecordAnalytics(): Promise<RecordAnalytics> {
     preRecal,
     postRecal,
     trajectory,
+    days,
     bySport,
     byType,
     propMarkets,

@@ -11,6 +11,12 @@ export const dynamic = "force-dynamic";
 
 const STEAM_PREFIX = "moyline:steam:alerted:";
 
+// MEMBER EMAIL PAUSE (user directive 2026-11-04, until he lifts it):
+// disable the steam-digest member EMAIL only. The rest of /api/refresh
+// (odds refresh, CLV capture, push alerts) continues unchanged.
+// To lift the pause, set this back to false.
+const MEMBER_EMAIL_PAUSED = true;
+
 function cleanEnv(v: string | undefined): string {
   let s = (v || "").trim();
   const eq = s.indexOf("=");
@@ -28,12 +34,15 @@ function cleanEnv(v: string | undefined): string {
  * emails members a digest (each distinct move alerts once per 24h).
  */
 export async function GET(req: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const authHeader = req.headers.get("authorization");
-    if (authHeader !== `Bearer ${secret}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  const secret = cleanEnv(process.env.CRON_SECRET);
+  if (!secret) {
+    return NextResponse.json(
+      { ok: false, error: "CRON_SECRET not configured" },
+      { status: 500 }
+    );
+  }
+  if (req.headers.get("authorization") !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {
     const scope =
@@ -62,7 +71,10 @@ export async function GET(req: Request) {
       const base = (process.env.NEXTAUTH_URL || "https://www.moylineai.com").trim();
       const res = await fetch(`${base}/api/cron/check-alerts`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${secret}`,
+        },
       });
       if (res.ok) {
         const data = await res.json();
@@ -78,7 +90,10 @@ export async function GET(req: Request) {
       const base = (process.env.NEXTAUTH_URL || "https://www.moylineai.com").trim();
       const res = await fetch(`${base}/api/cron/tail-alerts`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${secret}`,
+        },
       });
       if (res.ok) {
         const data = await res.json();
@@ -96,6 +111,7 @@ export async function GET(req: Request) {
       gameCount: result.events.length,
       quotaRemaining: getQuotaRemaining(),
       steamAlerts,
+      steamEmailPaused: MEMBER_EMAIL_PAUSED,
       lineAlerts,
       tailAlerts,
       error: result.error || null,
@@ -187,8 +203,10 @@ async function alertCardSteam(): Promise<number> {
     </div>`;
 
   let sent = 0;
-  for (const to of members) {
-    if (await sendEmail(to, `🔥 Steam alert: ${fresh.length} line move${fresh.length > 1 ? "s" : ""} on your card`, html)) sent++;
+  if (!MEMBER_EMAIL_PAUSED) {
+    for (const to of members) {
+      if (await sendEmail(to, `🔥 Steam alert: ${fresh.length} line move${fresh.length > 1 ? "s" : ""} on your card`, html)) sent++;
+    }
   }
   return sent;
 }

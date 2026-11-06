@@ -4,12 +4,15 @@ import { getSubscription, hasAccess, isFounder } from "@/lib/store";
 import { getPicksFeed, PicksFeed, FeedPick, sportFromGame } from "@/lib/picks";
 import { getOdds, getOpenings } from "@/lib/odds";
 import { buildBoard, MoverVM } from "@/lib/board";
-import { findBoardGame, bestPriceForPick, badgeBeatsPlay, movedAgainstNote, lineStoryForPick, modelWinProb, bookPriceForPick, selectCardSteamMoves, BestPrice } from "@/lib/card-utils";
+import { findBoardGame, bestPriceForPick, badgeBeatsPlay, movedAgainstNote, edgeGoneNote, propEdgeGoneNote, lineStoryForPick, modelWinProb, bookPriceForPick, selectCardSteamMoves, BestPrice } from "@/lib/card-utils";
+import { parseProp, livePropQuote } from "@/lib/cheatsheet";
 import { readTails } from "@/lib/tails";
 import TailButton from "./TailButton";
 import ShareButton from "./ShareButton";
 import CopyCardButton from "./CopyCardButton";
 import LiveScore from "./LiveScore";
+import StartsIn from "./StartsIn";
+import PropHitRate from "./PropHitRate";
 import MarketingPaywall from "@/components/MarketingPaywall";
 import { getYesterdayGlance, getConfidenceCalibration, formatRecord, formatUnits } from "@/lib/records";
 import PushPrompt from "@/components/PushPrompt";
@@ -27,6 +30,39 @@ const SLOT_LABEL: Record<string, string> = {
   sat2pm: "Saturday",
   cfbdeepdive: "Deep Dive",
 };
+
+/** Slot-style key ("7am", "6pm") for an ISO timestamp's ET hour — the same
+ *  key shape SLOT_LABEL is keyed by, so a label derived from a timestamp
+ *  resolves through the exact lookup the card header uses for its edition
+ *  list. Null when the timestamp is missing or unparseable. */
+function slotKeyForTimeET(iso?: string): string | null {
+  if (!iso) return null;
+  const dt = new Date(iso);
+  if (isNaN(dt.getTime())) return null;
+  const hourStr = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "numeric",
+    hour12: true,
+  }).format(dt); // e.g. "6 PM"
+  const m = hourStr.match(/(\d{1,2})\s*(AM|PM)/i);
+  if (!m) return null;
+  return `${parseInt(m[1], 10)}${m[2].toLowerCase()}`;
+}
+
+/** "NEW · added 6pm" badge label (optimization #43) for a pick that arrived
+ *  in a later edition, else null. The picks/update merge stamps one shared
+ *  `now` as added_at for every pick in a push, so the card's earliest
+ *  added_at is the first edition's batch: any pick stamped strictly later
+ *  came from a later edition. A missing added_at earns no badge — never
+ *  guessed. The edition label reuses the header's SLOT_LABEL lookup. */
+function newPickLabel(p: FeedPick, firstAddedAt: number | null): string | null {
+  if (!p.added_at || firstAddedAt === null) return null;
+  const t = Date.parse(p.added_at);
+  if (isNaN(t) || t <= firstAddedAt) return null;
+  const key = slotKeyForTimeET(p.added_at);
+  if (!key) return null;
+  return `NEW · added ${SLOT_LABEL[key] || key}`;
+}
 
 /** Parse "7:00pm ET" / "2:45pm ET" -> minutes after midnight ET. Null if unparseable. */
 function parseStart(starts?: string): number | null {
@@ -108,22 +144,30 @@ function PickCard({
   status,
   best,
   movedNote,
+  edgeGone,
   lineStory,
   winProb,
   yourBook,
   initiallyTailed,
   cardDate,
+  feedDate,
+  newLabel,
 }: {
   p: FeedPick;
   index: number;
   status: Status;
   best: BestPrice;
   movedNote?: string | null;
+  edgeGone?: string | null;
   lineStory?: string | null;
   winProb?: number | null;
   yourBook?: BestPrice;
   initiallyTailed: boolean;
   cardDate: string;
+  /** Raw feed date ("YYYY-MM-DD") — the countdown's anchor (optimization #48). */
+  feedDate?: string;
+  /** "NEW · added 6pm" for later-edition picks (optimization #43), else null. */
+  newLabel?: string | null;
 }) {
   const gameShort = (p.game || "").split("(")[0].trim();
   const askQuestions = [
@@ -139,6 +183,11 @@ function PickCard({
             #{index + 1}
           </span>
           {p.star && <span className="text-gold text-sm leading-none">★</span>}
+          {newLabel && (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-up/40 bg-up/10 text-up text-xs font-bold tracking-widest">
+              {newLabel}
+            </span>
+          )}
         </span>
         <span className="flex items-center gap-2">
           <StatusBadge status={status} />
@@ -151,6 +200,9 @@ function PickCard({
           🕐 {cardDate ? `${cardDate} · ` : ""}
           {p.starts}
         </p>
+      )}
+      {status === "upcoming" && p.starts && (
+        <StartsIn starts={p.starts} date={feedDate} />
       )}
       {status !== "upcoming" && <LiveScore game={p.game} />}
       <p className="text-lg font-bold text-goldsoft mb-1">
@@ -188,6 +240,13 @@ function PickCard({
         <p className="text-xs mb-2">
           <span className="inline-block bg-red-500/10 text-red-200/80 px-2 py-0.5 rounded">
             ⚠ {movedNote}
+          </span>
+        </p>
+      )}
+      {edgeGone && (
+        <p className="text-xs mb-2">
+          <span className="inline-block bg-red-500/15 text-red-100 px-2 py-0.5 rounded border border-red-400/40 font-bold">
+            🚫 {edgeGone}
           </span>
         </p>
       )}
@@ -406,10 +465,20 @@ export default async function PicksPage({
     );
   }
 
-  const editions = (feed?.editions || (feed?.slot ? [feed.slot] : []))
-    .map((s) => SLOT_LABEL[s] || s)
-    .join(" · ");
+  const editionSlots = feed?.editions || (feed?.slot ? [feed.slot] : []);
+  const editions = editionSlots.map((s) => SLOT_LABEL[s] || s).join(" · ");
   const cardDate = formatCardDate(feed?.date);
+  // Later-edition "NEW" badges (optimization #43): only on multi-edition
+  // days, and only for picks stamped after the first edition's batch (the
+  // merge stamps one shared added_at per push). Computed over the whole
+  // card, so sport filtering and time sorting never change a pick's badge.
+  const multiEdition = editionSlots.length > 1;
+  const firstAddedAt = (feed?.picks || []).reduce<number | null>((min, p) => {
+    if (!p.added_at) return min;
+    const t = Date.parse(p.added_at);
+    if (isNaN(t)) return min;
+    return min === null || t < min ? t : min;
+  }, null);
   const nowMins = nowETMinutes();
 
   // Odds board for best-price badges + steam detection (cached read, no API burn).
@@ -429,6 +498,7 @@ export default async function PicksPage({
 
   const bestByPick = new Map<string, BestPrice>();
   const movedByPick = new Map<string, string | null>();
+  const edgeGoneByPick = new Map<string, string | null>();
   const storyByPick = new Map<string, string | null>();
   const yourBookByPick = new Map<string, BestPrice>();
   for (const p of feed?.picks || []) {
@@ -449,6 +519,46 @@ export default async function PicksPage({
       } else {
         bestByPick.set(key, null);
         movedByPick.set(key, movedAgainstNote(p, bp));
+      }
+      // Edge-gone badge (optimization #52): the stronger claim beyond the
+      // moved-against note — the live number has eaten the whole published
+      // edge, with the cutoff a tailer must beat. Upcoming games only (a
+      // tail decision exists only pre-game). Prop picks are priced from
+      // the board-props cache in the block below, never the game board.
+      if (
+        statusFor(parseStart(p.starts), nowMins) === "upcoming" &&
+        (p.market || "").toLowerCase() !== "prop"
+      ) {
+        edgeGoneByPick.set(key, edgeGoneNote(p, bp));
+      }
+    }
+  }
+
+  // Edge-gone for prop picks (optimization #52): the game board carries
+  // no player props, so the live quote comes from the cheatsheet
+  // board-props cache — a read-only cache read that never triggers an
+  // Odds API fetch. No cache match → no badge, by design.
+  if (feed?.date) {
+    const propPicks = (feed.picks || []).filter(
+      (p) =>
+        (p.market || "").toLowerCase() === "prop" &&
+        statusFor(parseStart(p.starts), nowMins) === "upcoming"
+    );
+    if (propPicks.length > 0) {
+      try {
+        const quotes = await Promise.all(
+          propPicks.map((p) => livePropQuote(p, feed.date))
+        );
+        propPicks.forEach((p, i) => {
+          const parsed = parseProp(p.play);
+          if (!parsed) return;
+          edgeGoneByPick.set(
+            `${p.game}|${p.play}`,
+            propEdgeGoneNote(p, parsed, quotes[i])
+          );
+        });
+      } catch {
+        /* board-props cache unavailable — props render without the badge */
       }
     }
   }
@@ -716,11 +826,14 @@ export default async function PicksPage({
                   status={status}
                   best={bestByPick.get(key) || null}
                   movedNote={movedByPick.get(key) || null}
+                  edgeGone={edgeGoneByPick.get(key) || null}
                   lineStory={storyByPick.get(key) || null}
                   winProb={modelWinProb(p)}
                   yourBook={yourBookByPick.get(key) || null}
                   initiallyTailed={tailedSet.has(key)}
                   cardDate={cardDate}
+                  feedDate={feed?.date}
+                  newLabel={multiEdition ? newPickLabel(p, firstAddedAt) : null}
                 />
               );
             })}
@@ -753,6 +866,7 @@ export default async function PicksPage({
                         {prop.reasoning && (
                           <p className="text-xs text-muted mt-1">{prop.reasoning}</p>
                         )}
+                        <PropHitRate game={prop.game} play={prop.play} />
                       </div>
                       <TailButton
                         game={prop.game}

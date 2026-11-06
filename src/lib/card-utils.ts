@@ -42,8 +42,22 @@ export type BestPrice = { book: string; display: string } | null;
  */
 type CellKey = "spreadAway" | "spreadHome" | "totalOver" | "totalUnder" | "mlAway" | "mlHome";
 
+/**
+ * True when the pick is a player prop — the same test pickAlertMarket
+ * gates on (the feed's market field, lowercased). The game board
+ * carries no prop markets, so a prop must never resolve to a board
+ * cell: without this gate a prop play like "Embiid Over 7.5 rebounds"
+ * hits the over/under test below and inherits the GAME TOTAL's cell,
+ * and its best-price badge / your-book line would show the total's
+ * price as if it were the prop's.
+ */
+function isPropPick(pick: FeedPick): boolean {
+  return (pick.market || "").toLowerCase() === "prop";
+}
+
 /** Board cell holding this pick's market+side (shared by best/book price lookups). */
 function cellKeyForPick(pick: FeedPick): CellKey | null {
+  if (isPropPick(pick)) return null;
   const teams = parseGameTeams(pick.game);
   const market = pick.market;
   const play = (pick.play || "").toLowerCase();
@@ -126,14 +140,24 @@ export function badgeBeatsPlay(pick: FeedPick, best: BestPrice): boolean {
  * invented. Returns a whole percent, or null without a usable edge.
  */
 export function modelWinProb(pick: FeedPick): number | null {
+  const fair = fairPriceForPick(pick);
+  if (fair === null) return null;
+  const prob =
+    fair > 0 ? 100 / (fair + 100) : Math.abs(fair) / (Math.abs(fair) + 100);
+  return Math.round(prob * 100);
+}
+
+/**
+ * The card's fair price for a pick: published − edge, the convention
+ * modelWinProb documents. Null without a usable quantified edge — a pick
+ * with no edge on the card can never have its edge "gone" either.
+ */
+export function fairPriceForPick(pick: FeedPick): number | null {
   const price = parseAmerican(pick.price);
   const edge = pick.edge_cents;
   if (price === null || edge == null || edge <= 0) return null;
   const fair = price - edge;
-  if (fair === 0) return null;
-  const prob =
-    fair > 0 ? 100 / (fair + 100) : Math.abs(fair) / (Math.abs(fair) + 100);
-  return Math.round(prob * 100);
+  return fair === 0 ? null : fair;
 }
 
 /** First point value in a display string: "-3.5 (-110)" → -3.5, "(+108)" → null. */
@@ -233,6 +257,172 @@ export function movedInFavorNote(pick: FeedPick, best: BestPrice): string | null
   return `Line moved in your favor — published ${pubDesc}, now ${best.display} at ${best.book}`;
 }
 
+/* ------------------------------------------------------------------ */
+/* Edge-gone badge (optimization #52, 2026-11-06).                     */
+/*                                                                     */
+/* movedAgainstNote says the line moved; this says whether anything   */
+/* is left of the edge the card published. The math is the card's own */
+/* fair-value math (modelWinProb): fair = published − edge_cents, and */
+/* the remaining edge at a live price P on the SAME line is P − fair  */
+/* in American space (higher American = better payout, monotonically, */
+/* so the sign is exact for favorites and dogs alike). The badge      */
+/* fires when the remaining edge is ≤ 0 and names the cutoff — the    */
+/* worst live value at which the edge is still positive: fair + 1 for */
+/* prices (American odds are integers), the published line's grid for */
+/* prop line moves. No quantified edge, no live match, or no clean    */
+/* cutoff → null. No badge is always better than a wrong badge.       */
+/* ------------------------------------------------------------------ */
+
+/** American price inside a board cell display: "-3.5 (-110)" → -110. */
+function parseCellPrice(display: string | undefined): number | null {
+  if (!display) return null;
+  const m = display.match(/\(([+-]?\d+)\)/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+function fmtPoint(v: number): string {
+  return v % 1 === 0 ? String(Math.round(v)) : String(v);
+}
+
+/**
+ * Edge-gone note for a game-market card pick (spread / total / ML),
+ * from the same live best price movedAgainstNote reads. Price moves
+ * only: when a spread/total POINT has moved, the live board cannot
+ * price the point delta (books set every point ~50/50 no-vig; the
+ * per-point slope lives in alternate ladders the game board doesn't
+ * carry), so there is no clean cutoff and this returns null — the
+ * moved-against note still tells that story. Props return null here
+ * (pickAlertMarket) and go through propEdgeGoneNote instead.
+ */
+export function edgeGoneNote(pick: FeedPick, best: BestPrice): string | null {
+  if (!best) return null;
+  const market = pickAlertMarket(pick);
+  if (!market) return null;
+  const fair = fairPriceForPick(pick);
+  if (fair === null) return null;
+  // Worst integer price whose edge is still strictly positive.
+  const cutoff = fmtAmerican(fair + 1);
+
+  if (market === "moneyline") {
+    const live = parseCellPrice(best.display) ?? parseAmerican(best.display);
+    if (live === null) return null;
+    return live <= fair
+      ? `Edge gone at this price — tail only at ${cutoff} or better`
+      : null;
+  }
+
+  // Spread / total: the price prong applies only at the published point.
+  const pubPoint = parsePoint(pick.line) ?? parsePoint(pick.play);
+  const livePoint = parsePoint(best.display);
+  const livePrice = parseCellPrice(best.display);
+  if (pubPoint === null || livePoint === null || livePrice === null) return null;
+  if (livePoint !== pubPoint) return null; // point moved — no clean cutoff
+  return livePrice <= fair
+    ? `Edge gone at this price — tail only at ${cutoff} or better`
+    : null;
+}
+
+/**
+ * Live quote for a prop pick, built by livePropQuote in cheatsheet.ts
+ * from the board-props cache (the only place live prop lines exist —
+ * the game board carries no player props). mainLine/mainPrice are the
+ * board's consensus line for the player + market; priceByLine is the
+ * best cached price at each distinct line for the pick's side.
+ */
+export type PropLiveQuote = {
+  mainLine: number | null;
+  mainPrice: number | null;
+  priceByLine: Record<number, number>;
+};
+
+export type ParsedPropLike = { direction: "over" | "under"; line: number };
+
+/**
+ * The desk's stated projection for a prop, parsed from the brief's own
+ * templated phrasing ("Projection 9.1 rebs vs line 7.5", "Optimal
+ * projection 35.4 vs line 34.5", "model projects 9.1 rebounds").
+ * First match across reasoning → writeup → deep dive; null when the
+ * brief stated none — and then a prop line move gets no badge, because
+ * without the projection there is no honest way to price the move.
+ */
+export function parseProjection(pick: FeedPick): number | null {
+  for (const text of [pick.reasoning, pick.writeup, pick.deep_dive]) {
+    if (!text) continue;
+    const m = text.match(/project(?:ion|ed|s)?\b[^0-9]{0,24}(\d+(?:\.\d+)?)/i);
+    if (m) {
+      const v = parseFloat(m[1]);
+      if (Number.isFinite(v) && v > 0) return v;
+    }
+  }
+  return null;
+}
+
+/**
+ * Worst line on the published line's grid that still leaves a positive
+ * projection cushion. Prop lines step 1.0 between adjacent quoted lines
+ * (24.5 → 25.5), anchored at the published line's fraction. Null when
+ * even the published line has no cushion (inconsistent data).
+ */
+function propLineCutoff(
+  pubLine: number,
+  proj: number,
+  direction: "over" | "under"
+): number | null {
+  const cushion = direction === "over" ? proj - pubLine : pubLine - proj;
+  const steps = Math.floor(cushion - 1e-9);
+  if (steps < 0) return null;
+  return direction === "over" ? pubLine + steps : pubLine - steps;
+}
+
+/**
+ * Edge-gone note for a prop card pick, from its live board-props quote.
+ * Two prongs, mirroring how prop edges actually die:
+ * - Line moved (the Booker case: Over 24.5, projection 25.2, live line
+ *   25.5): the published edge WAS the projection cushion, so the edge
+ *   is gone once the live line reaches the projection. The cutoff is
+ *   the last quoted line that still leaves cushion (≤24.5 there).
+ * - Same line, worse price: the fair-price prong, identical math to
+ *   edgeGoneNote — remaining edge = live − fair ≤ 0.
+ * A line move with no stated projection, or a quote that doesn't cover
+ * the published line, yields null rather than a guess.
+ */
+export function propEdgeGoneNote(
+  pick: FeedPick,
+  parsed: ParsedPropLike,
+  quote: PropLiveQuote | null
+): string | null {
+  if (!quote) return null;
+  const fair = fairPriceForPick(pick);
+  if (fair === null) return null;
+  const pubLine = parsed.line;
+
+  if (quote.mainLine !== null && quote.mainLine !== pubLine) {
+    const proj = parseProjection(pick);
+    if (proj === null) return null;
+    if (parsed.direction === "over" && quote.mainLine > pubLine && quote.mainLine >= proj) {
+      const cutoff = propLineCutoff(pubLine, proj, "over");
+      return cutoff !== null
+        ? `Edge gone at this price — tail only at ≤${fmtPoint(cutoff)}`
+        : null;
+    }
+    if (parsed.direction === "under" && quote.mainLine < pubLine && quote.mainLine <= proj) {
+      const cutoff = propLineCutoff(pubLine, proj, "under");
+      return cutoff !== null
+        ? `Edge gone at this price — tail only at ≥${fmtPoint(cutoff)}`
+        : null;
+    }
+    return null; // moved in favor, or not past the projection — edge lives
+  }
+
+  const livePrice =
+    quote.priceByLine[pubLine] ??
+    (quote.mainLine === pubLine ? quote.mainPrice : null);
+  if (livePrice === null || livePrice === undefined) return null;
+  return livePrice <= fair
+    ? `Edge gone at this price — tail only at ${fmtAmerican(fair + 1)} or better`
+    : null;
+}
+
 /**
  * One-line line journey for a card pick (optimization #20, 2026-10-28):
  * "Opened +3 (-110) · card +3.5 (-110) · now +3 (-110) at FanDuel".
@@ -322,7 +512,7 @@ type AlertMarket = "total" | "moneyline" | "spread";
  */
 function pickAlertMarket(pick: FeedPick): AlertMarket | null {
   const market = (pick.market || "").toLowerCase();
-  if (market === "prop") return null;
+  if (isPropPick(pick)) return null;
   const play = (pick.play || "").toLowerCase();
   if (market === "total" || /\bover\b|\bunder\b/.test(play)) return "total";
   if (market === "ml" || /\bml\b/.test(play)) return "moneyline";
