@@ -4,6 +4,9 @@ import { getAllTails } from "@/lib/tails";
 import { getPrefs } from "@/lib/prefs";
 import { sendPushTo } from "@/lib/push";
 import { getPicksFeed, type FeedPick } from "@/lib/picks";
+import { getTrackRecord } from "@/lib/store";
+import { gradeTail, tailUnits } from "@/lib/tail-results";
+import { formatUnits } from "@/lib/records";
 import { getOdds, getOpenings } from "@/lib/odds";
 import { buildBoard } from "@/lib/board";
 import { findBoardGame, bestPriceForPick, movedAgainstNote, movedInFavorNote } from "@/lib/card-utils";
@@ -20,6 +23,11 @@ import { findBoardGame, bestPriceForPick, movedAgainstNote, movedInFavorNote } f
  *    now a strictly better number to bet than the published one
  *    (optimization #35, 2026-11-02 — e.g. an ML published -120 now -102).
  *  - "start": the game starts within the next 3 hours.
+ *  - "settled": the tailed pick has been graded (win / loss / push) —
+ *    checked against the track record for yesterday's and today's
+ *    tails, so the first refresh after the 6:30am grading sends it
+ *    (optimization #57). Settled pushes need no board, so they are
+ *    checked before the odds-board early return.
  * Dedupe marks are written only after a push is actually accepted.
  */
 export const dynamic = "force-dynamic";
@@ -44,6 +52,13 @@ function getRedis(): Redis | null {
 
 function todayET(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+}
+
+/** ET date `daysAgo` days before today (noon-UTC anchored, DST-safe). */
+function etDateDaysAgo(daysAgo: number): string {
+  const d = new Date(`${todayET()}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - daysAgo);
+  return d.toISOString().slice(0, 10);
 }
 
 function formatStartET(iso: string): string {
@@ -106,16 +121,72 @@ async function checkTailAlerts() {
 
     const [oddsResult, openings] = await Promise.all([getOdds(), getOpenings()]);
     const { games } = buildBoard(oddsResult.events, openings);
-    if (games.length === 0) return NextResponse.json({ ok: true, ...results, message: "No odds data" });
 
     const today = todayET();
     const now = Date.now();
 
+    // Settled-tail pushes (#57) read the graded record, not the board.
+    // Window: yesterday + today ET — the grader settles yesterday's
+    // card at 6:30am and this check runs at the next odds refresh.
+    const settledDates = new Set([etDateDaysAgo(1), today]);
+    let trackPicks: Awaited<ReturnType<typeof getTrackRecord>>["picks"] = [];
+    try {
+      trackPicks = (await getTrackRecord()).picks;
+    } catch {
+      trackPicks = [];
+    }
+
     for (const { email, tails } of all) {
       const todays = tails.filter((t) => t.date === today);
-      if (todays.length === 0) continue;
+      const settledCandidates = tails.filter((t) => settledDates.has(t.date));
+      if (todays.length === 0 && settledCandidates.length === 0) continue;
       const prefs = await getPrefs(email);
       if (!prefs.tailAlerts) continue;
+
+      // Settled: one push per graded tailed pick, with the member's
+      // units at the price they tailed at (the /my-tails convention).
+      for (const tail of settledCandidates) {
+        results.checked++;
+        try {
+          const graded = gradeTail(tail, trackPicks);
+          if (!graded || graded.result === "Pending") continue;
+          const units = tailUnits(tail, graded);
+          const unitsText = units !== null ? `, ${formatUnits(units)}` : "";
+          const payload =
+            graded.result === "Win"
+              ? {
+                  title: "✅ Your tail won",
+                  body: `${tail.game} — ${tail.play} cashed${unitsText}`,
+                  url: "/my-tails",
+                }
+              : graded.result === "Loss"
+                ? {
+                    title: "❌ Your tail lost",
+                    body: `${tail.game} — ${tail.play} didn't cash${unitsText}`,
+                    url: "/my-tails",
+                  }
+                : {
+                    title: "↩️ Your tail pushed",
+                    body: `${tail.game} — ${tail.play} pushed${unitsText}`,
+                    url: "/my-tails",
+                  };
+          const sent = await sendOnce(
+            redis,
+            email,
+            tail.date,
+            "settled",
+            tail.game,
+            tail.play,
+            payload,
+            90 * 24 * 3600
+          );
+          if (sent) results.sent++;
+        } catch (e) {
+          results.errors.push(
+            `${email} ${tail.game}: ${e instanceof Error ? e.message : String(e)}`
+          );
+        }
+      }
 
       for (const tail of todays) {
         results.checked++;
@@ -190,16 +261,17 @@ async function sendOnce(
   redis: Redis,
   email: string,
   date: string,
-  kind: "moved" | "favorable" | "start",
+  kind: "moved" | "favorable" | "start" | "settled",
   game: string,
   play: string,
-  payload: { title: string; body: string; url?: string }
+  payload: { title: string; body: string; url?: string },
+  ttlSeconds = 36 * 3600
 ): Promise<boolean> {
   const id = Buffer.from(`${email}|${date}|${kind}|${game}|${play}`).toString("base64url").slice(0, 120);
   const key = SENT_PREFIX + id;
   if (await redis.get(key)) return false;
   const ok = await sendPushTo(email, payload);
   if (!ok) return false;
-  await redis.set(key, "1", { ex: 36 * 3600 });
+  await redis.set(key, "1", { ex: ttlSeconds });
   return true;
 }

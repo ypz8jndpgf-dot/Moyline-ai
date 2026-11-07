@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
-import { getAllAlerts, markTriggered, type LineAlert } from "@/lib/alerts";
+import {
+  getAllAlerts,
+  markTriggered,
+  alertHitsTarget,
+  bestMoneylinePrice,
+  type LineAlert,
+} from "@/lib/alerts";
 import { getSubscription } from "@/lib/push";
 import { getOdds } from "@/lib/odds";
-import type { OddsEvent } from "@/lib/odds-shared";
+import { fmtAmerican, type OddsEvent } from "@/lib/odds-shared";
 import webpush from "web-push";
 
 /**
@@ -48,7 +54,7 @@ function findEvent(events: OddsEvent[], gameKey: string): OddsEvent | null {
   return null;
 }
 
-/** Get the best (most favorable) line for a market/side across books. */
+/** Get the best (most favorable) line for a spread/total across books. */
 function getBestLine(
   event: OddsEvent,
   market: "spread" | "total",
@@ -91,15 +97,6 @@ function getBestLine(
   return best;
 }
 
-/** Check if the current line hits the target (at-or-better for the user). */
-function hitsTarget(alert: LineAlert, current: number): boolean {
-  // For spreads: user wants a specific number (e.g., "Chiefs -3").
-  // "At-or-better" means the line is at the target or moved in user's favor.
-  // We simplify: trigger when current === target (line hits the number).
-  // For totals: same — trigger when the total hits the target number.
-  return Math.abs(current - alert.target) < 0.01;
-}
-
 async function sendAlertPush(
   email: string,
   alert: LineAlert,
@@ -109,10 +106,12 @@ async function sendAlertPush(
   const sub = await getSubscription(email);
   if (!sub) return false;
 
-  const marketLabel = alert.market === "spread" ? "spread" : "total";
+  const isMoneyline = alert.market === "moneyline";
+  const currentLabel = isMoneyline ? fmtAmerican(Math.round(currentLine)) : `${currentLine}`;
+  const targetLabel = isMoneyline ? fmtAmerican(Math.round(alert.target)) : `${alert.target}`;
   const payload = JSON.stringify({
     title: `🎯 Line alert hit: ${alert.gameLabel}`,
-    body: `${alert.side} is now ${currentLine} (your target: ${alert.target})`,
+    body: `${alert.side} ${alert.market} is now ${currentLabel} (your target: ${targetLabel})`,
     url: "/",
   });
 
@@ -179,10 +178,13 @@ async function checkAlerts() {
           const event = findEvent(events, alert.game);
           if (!event) continue;
 
-          const current = getBestLine(event, alert.market, alert.side);
+          const current =
+            alert.market === "moneyline"
+              ? bestMoneylinePrice(event, alert.side)
+              : getBestLine(event, alert.market, alert.side);
           if (current === null) continue;
 
-          if (hitsTarget(alert, current)) {
+          if (alertHitsTarget(alert, current)) {
             const sent = await sendAlertPush(email, alert, current);
             if (sent) {
               await markTriggered(email, alert.id);

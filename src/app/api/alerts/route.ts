@@ -30,8 +30,17 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  if (market !== "spread" && market !== "total") {
-    return NextResponse.json({ ok: false, error: "Market must be spread or total" }, { status: 400 });
+  if (market !== "spread" && market !== "total" && market !== "moneyline") {
+    return NextResponse.json(
+      { ok: false, error: "Market must be spread, total, or moneyline" },
+      { status: 400 }
+    );
+  }
+  if (market === "moneyline" && (!Number.isInteger(target) || target === 0 || Math.abs(target) < 100)) {
+    return NextResponse.json(
+      { ok: false, error: "Moneyline target must be an American price (e.g. -120 or +130)" },
+      { status: 400 }
+    );
   }
   // Cap at 20 active alerts per user.
   const existing = await getAlerts(email);

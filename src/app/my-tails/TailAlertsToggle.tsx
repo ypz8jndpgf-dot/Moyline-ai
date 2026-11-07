@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 
 /**
  * Opt-in for tailed-pick alerts (optimization #19; favorable moves added
- * as #35): a push when a line moves against a pick you tailed, when it
- * moves in your favor, and a heads-up before it starts.
+ * as #35, settled results as #57): a push when a line moves against a
+ * pick you tailed, when it moves in your favor, a heads-up before it
+ * starts, and the final result when the pick settles.
  * Alerts are checked at each odds refresh (morning + evening) and need
  * push notifications enabled on this device. Saved via /api/prefs.
  */
@@ -50,9 +51,10 @@ export default function TailAlertsToggle() {
         <p className="text-sm font-bold">🔔 Tail alerts</p>
         <p className="text-xs text-muted mt-1">
           Get a push when a line moves against a pick you tailed, when it
-          moves in your favor to a better number, and a heads-up before it
-          starts. Checked at each odds refresh (morning + evening) — push
-          notifications must be on for this device.
+          moves in your favor to a better number, a heads-up before it
+          starts, and the result when your pick settles. Checked at each
+          odds refresh (morning + evening) — push notifications must be
+          on for this device.
         </p>
       </div>
       <button

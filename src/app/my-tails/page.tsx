@@ -2,33 +2,22 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { getSubscription, hasAccess, getTrackRecord } from "@/lib/store";
 import { readTails } from "@/lib/tails";
-import { pickUnits, formatUnits } from "@/lib/records";
-import type { TrackPick } from "@/lib/store";
+import { formatUnits } from "@/lib/records";
+import { getPicksFeed, type FeedPick } from "@/lib/picks";
+import { getOdds, getOpenings } from "@/lib/odds";
+import { buildBoard } from "@/lib/board";
+import { findBoardGame, bestPriceForPick, type BestPrice } from "@/lib/card-utils";
+import { parseProp } from "@/lib/cheatsheet";
+import { gradeTail, tailUnits } from "@/lib/tail-results";
 import TailAlertsToggle from "./TailAlertsToggle";
 
 export const dynamic = "force-dynamic";
 
-const norm = (s: string) =>
-  s.toLowerCase().replace(/\s*\([^)]*\)\s*/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
-
-/** Match a tailed pick to its graded track-record entry, if graded. */
-function gradeTail(
-  tail: { game: string; play: string; date: string },
-  picks: { game: string; play: string; date: string; result: string; final?: string; line?: string }[]
-) {
-  const tg = norm(tail.game);
-  const tp = norm(tail.play);
-  return (
-    picks.find((p) => {
-      if (p.date !== tail.date) return false;
-      if (norm(p.play) !== tp) return false;
-      const pg = norm(p.game);
-      // every word of the tail's game must appear in the record's game (or vice versa)
-      const tw = tg.split(" ").filter((w) => w.length > 2);
-      const pw = pg.split(" ").filter((w) => w.length > 2);
-      return tw.every((w) => pg.includes(w)) || pw.every((w) => tg.includes(w));
-    }) || null
-  );
+/** Board ML cells render as "(+120)" — show the bare price in the now-line. */
+function livePriceLabel(display: string): string {
+  return display.startsWith("(") && display.endsWith(")")
+    ? display.slice(1, -1)
+    : display;
 }
 
 export default async function MyTailsPage() {
@@ -57,7 +46,52 @@ export default async function MyTailsPage() {
 
   const tails = await readTails(email!);
   const rec = await getTrackRecord();
-  const graded = tails.map((t) => ({ tail: t, result: gradeTail(t, rec.picks as never[]) }));
+  const graded = tails.map((t) => ({ tail: t, result: gradeTail(t, rec.picks) }));
+
+  // Live prices for still-pending tails (optimization #55): the same
+  // cached board + best-price lookup the card uses, so a member can see
+  // whether the number they tailed still holds or has drifted. Pregame
+  // only — a started game's in-play price is not the same market — and
+  // game markets only: props have no cell on the game board.
+  const liveByTail = new Map<number, BestPrice>();
+  try {
+    const [feed, oddsResult, openings] = await Promise.all([
+      getPicksFeed(),
+      getOdds(),
+      getOpenings(),
+    ]);
+    const { games } = buildBoard(oddsResult.events, openings);
+    const feedMap = new Map<string, FeedPick>();
+    for (const p of [
+      ...(feed?.picks || []),
+      ...(feed?.props || []),
+      ...(feed?.backpage || []),
+    ]) {
+      feedMap.set(`${p.game}|${p.play}`, p);
+    }
+    const now = Date.now();
+    tails.forEach((tail, i) => {
+      const result = graded[i].result;
+      if (result && result.result !== "Pending") return;
+      const pick: FeedPick =
+        feedMap.get(`${tail.game}|${tail.play}`) ||
+        ({ game: tail.game, play: tail.play, price: tail.price, confidence: 0 } as FeedPick);
+      if ((pick.market || "").toLowerCase() === "prop") return;
+      // A pick the feed no longer carries could still be a prop; never
+      // let a prop's Over/Under inherit the game total's board cell.
+      if (!feedMap.has(`${tail.game}|${tail.play}`) && parseProp(tail.play)) return;
+      const bg = findBoardGame(pick, games);
+      if (!bg || Date.parse(bg.commence) <= now) return;
+      const best = bestPriceForPick(pick, bg);
+      if (best) liveByTail.set(i, best);
+    });
+  } catch {
+    /* odds unavailable — tails render without live prices */
+  }
+  const gradedWithLive = graded.map((g, i) => ({
+    ...g,
+    live: liveByTail.get(i) ?? null,
+  }));
 
   const w = graded.filter((g) => g.result?.result === "Win").length;
   const l = graded.filter((g) => g.result?.result === "Loss").length;
@@ -75,12 +109,7 @@ export default async function MyTailsPage() {
   let units = 0;
   let priced = 0;
   for (const { tail, result } of graded) {
-    if (!result) continue;
-    const american = (tail.price || "").match(/([+-]\d{2,4})/);
-    let u = american
-      ? pickUnits({ line: american[1], play: tail.play, result: result.result } as unknown as TrackPick)
-      : null;
-    if (u === null) u = pickUnits(result as unknown as TrackPick);
+    const u = tailUnits(tail, result);
     if (u !== null) {
       priced++;
       units += u;
@@ -115,16 +144,26 @@ export default async function MyTailsPage() {
         </div>
       ) : (
         <div className="grid gap-3">
-          {graded
+          {gradedWithLive
             .slice()
             .reverse()
-            .map(({ tail, result }, i) => (
+            .map(({ tail, result, live }, i) => (
               <div key={i} className="card p-4 flex items-center justify-between gap-3">
                 <div>
                   <p className="font-bold">{tail.game}</p>
                   <p className="text-sm text-goldsoft">
                     {tail.play} <span className="text-muted">{tail.price}</span>
                   </p>
+                  {live && (
+                    <p className="text-xs mt-1">
+                      <span className="text-muted">Tailed {tail.price}</span>
+                      <span className="text-muted"> · </span>
+                      <span className="text-paper font-semibold">
+                        Now {livePriceLabel(live.display)}
+                      </span>
+                      <span className="text-muted"> at {live.book}</span>
+                    </p>
+                  )}
                   <p className="text-xs text-muted">{tail.date}</p>
                   {result?.final && <p className="text-xs text-muted mt-1">{result.final}</p>}
                 </div>

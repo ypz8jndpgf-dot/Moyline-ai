@@ -57,6 +57,21 @@ function openForRow(game: GameVM, get: (b: BookVM) => CellVM | null): string {
   return "—";
 }
 
+/** Best current moneyline price for one side, from the board's cells. */
+function bestMoneylinePrice(game: GameVM, side: "away" | "home"): number | null {
+  let best: number | null = null;
+  for (const b of game.books) {
+    const cell = side === "away" ? b.mlAway : b.mlHome;
+    if (!cell) continue;
+    const m = cell.display.match(/\(([+-]?\d+)\)/);
+    if (!m) continue;
+    const price = parseInt(m[1], 10);
+    if (cell.best) return price;
+    if (best === null || price > best) best = price;
+  }
+  return best;
+}
+
 const SHORT_BOOK: Record<string, string> = {
   DraftKings: "DK",
   FanDuel: "FD",
@@ -143,6 +158,31 @@ function GameCard({ game }: { game: GameVM }) {
             ))}
           </tbody>
         </table>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line/60 pt-3">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-muted">
+          Moneyline alerts
+        </span>
+        <span className="inline-flex items-center gap-1.5 text-xs">
+          {game.away}
+          <LineAlertButton
+            game={`${game.away} @ ${game.home}`}
+            gameLabel={`${game.away} @ ${game.home}`}
+            market="moneyline"
+            side={game.away}
+            currentLine={bestMoneylinePrice(game, "away")}
+          />
+        </span>
+        <span className="inline-flex items-center gap-1.5 text-xs">
+          {game.home}
+          <LineAlertButton
+            game={`${game.away} @ ${game.home}`}
+            gameLabel={`${game.away} @ ${game.home}`}
+            market="moneyline"
+            side={game.home}
+            currentLine={bestMoneylinePrice(game, "home")}
+          />
+        </span>
       </div>
     </div>
   );

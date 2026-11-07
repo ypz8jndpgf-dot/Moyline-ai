@@ -1,4 +1,5 @@
 import { Redis } from "@upstash/redis";
+import type { OddsEvent } from "@/lib/odds-shared";
 
 /**
  * Target-line alerts ("limit orders" for betting).
@@ -10,9 +11,9 @@ export type LineAlert = {
   id: string;
   game: string; // normalized game key
   gameLabel: string; // display label
-  market: "spread" | "total";
-  side: string; // e.g. "Chiefs -3" or "Over 47.5"
-  target: number; // the line value to hit
+  market: "spread" | "total" | "moneyline";
+  side: string; // e.g. "Chiefs -3", "Over 47.5", or the team name for a moneyline
+  target: number; // spread/total: the line to hit; moneyline: the American price to reach or beat
   direction: "at-or-better"; // line reaches target or better for the user
   created_at: string;
   triggered_at: string | null;
@@ -23,6 +24,41 @@ function getRedis(): Redis | null {
   const token = (process.env.UPSTASH_REDIS_REST_TOKEN || "").trim();
   if (!url || !token) return null;
   return new Redis({ url, token });
+}
+
+function payout(american: number): number {
+  return american > 0 ? american / 100 : 100 / Math.abs(american);
+}
+
+/**
+ * Whether the current best line hits an alert's target. Moneylines are
+ * true at-or-better: American prices order by payout, so reaching the
+ * target price — or any better one — fires. Spreads and totals keep the
+ * checker's long-standing exact-hit behavior.
+ */
+export function alertHitsTarget(
+  alert: Pick<LineAlert, "market" | "target">,
+  current: number
+): boolean {
+  if (alert.market === "moneyline") return current >= alert.target;
+  return Math.abs(current - alert.target) < 0.01;
+}
+
+/** Best (highest-payout) current moneyline price for a team across every book. */
+export function bestMoneylinePrice(event: OddsEvent, side: string): number | null {
+  const normSide = side.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  let best: number | null = null;
+  for (const book of event.bookmakers || []) {
+    for (const mkt of book.markets || []) {
+      if (mkt.key !== "h2h") continue;
+      for (const out of mkt.outcomes || []) {
+        const name = out.name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+        if (name !== normSide) continue;
+        if (best === null || payout(out.price) > payout(best)) best = out.price;
+      }
+    }
+  }
+  return best;
 }
 
 const keyFor = (email: string) => `moyline:alerts:${email.toLowerCase()}`;

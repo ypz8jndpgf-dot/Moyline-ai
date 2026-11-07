@@ -5,10 +5,15 @@ import { useState } from "react";
 type Props = {
   game: string; // normalized game key for matching
   gameLabel: string; // display label
-  market: "spread" | "total";
+  market: "spread" | "total" | "moneyline";
   side: string; // e.g. "Chiefs" or "Over"
   currentLine: number | null;
 };
+
+function fmtTarget(market: Props["market"], v: number): string {
+  if (market === "moneyline") return v > 0 ? `+${v}` : `${v}`;
+  return `${v}`;
+}
 
 /**
  * "Set line alert" button for odds board game cards.
@@ -20,10 +25,16 @@ export default function LineAlertButton({ game, gameLabel, market, side, current
   const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [error, setError] = useState("");
 
+  const isMoneyline = market === "moneyline";
+
   const submit = async () => {
-    const t = parseFloat(target);
-    if (isNaN(t)) {
-      setError("Enter a valid number");
+    const t = isMoneyline ? parseInt(target, 10) : parseFloat(target);
+    if (isNaN(t) || (isMoneyline && (t === 0 || Math.abs(t) < 100))) {
+      setError(
+        isMoneyline
+          ? "Enter an American price (e.g. -120 or +130)"
+          : "Enter a valid number"
+      );
       return;
     }
     setStatus("saving");
@@ -66,15 +77,26 @@ export default function LineAlertButton({ game, gameLabel, market, side, current
           <p className="text-xs font-bold mb-1">Line alert</p>
           <p className="text-[11px] text-muted mb-3">
             {gameLabel} · {side} {market}
-            {currentLine !== null && <span className="block mt-1">Current: {currentLine}</span>}
+            {currentLine !== null && (
+              <span className="block mt-1">
+                Current: {fmtTarget(market, currentLine)}
+              </span>
+            )}
+            {isMoneyline && (
+              <span className="block mt-1">
+                Fires when the best price reaches your target or better.
+              </span>
+            )}
           </p>
           <div className="flex gap-2">
             <input
               type="number"
-              step="0.5"
+              step={isMoneyline ? "1" : "0.5"}
               value={target}
               onChange={(e) => setTarget(e.target.value)}
-              placeholder={market === "spread" ? "e.g. -3" : "e.g. 47.5"}
+              placeholder={
+                isMoneyline ? "e.g. +130" : market === "spread" ? "e.g. -3" : "e.g. 47.5"
+              }
               className="flex-1 bg-white/5 border border-line rounded px-3 py-2 text-sm focus:border-gold focus:outline-none"
             />
             <button
