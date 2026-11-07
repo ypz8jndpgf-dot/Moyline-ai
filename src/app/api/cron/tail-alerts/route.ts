@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Redis } from "@upstash/redis";
 import { getAllTails } from "@/lib/tails";
 import { getPrefs } from "@/lib/prefs";
-import { sendPushTo } from "@/lib/push";
+import { sendPushTo, broadcastPush } from "@/lib/push";
 import { getPicksFeed, type FeedPick } from "@/lib/picks";
 import { getTrackRecord } from "@/lib/store";
 import { gradeTail, tailUnits } from "@/lib/tail-results";
@@ -28,6 +28,9 @@ import { findBoardGame, bestPriceForPick, movedAgainstNote, movedInFavorNote } f
  *    tails, so the first refresh after the 6:30am grading sends it
  *    (optimization #57). Settled pushes need no board, so they are
  *    checked before the odds-board early return.
+ * Also on this route (it runs on every odds refresh): the once-a-day
+ * card-locks broadcast (optimization #53) — one push when the card's
+ * first game is within two hours of starting, deduped per date.
  * Dedupe marks are written only after a push is actually accepted.
  */
 export const dynamic = "force-dynamic";
@@ -105,13 +108,12 @@ export async function POST(req: Request) {
 }
 
 async function checkTailAlerts() {
-  const results = { checked: 0, sent: 0, errors: [] as string[] };
+  const results = { checked: 0, sent: 0, cardLocks: 0, errors: [] as string[] };
   try {
     const redis = getRedis();
     if (!redis) return NextResponse.json({ ok: true, ...results, message: "No storage" });
 
     const all = await getAllTails();
-    if (all.length === 0) return NextResponse.json({ ok: true, ...results, message: "No tails" });
 
     const feed = await getPicksFeed();
     const feedMap = new Map<string, FeedPick>();
@@ -124,6 +126,52 @@ async function checkTailAlerts() {
 
     const today = todayET();
     const now = Date.now();
+
+    // CARD-LOCKS PUSH (optimization #53): the per-tail alerts only reach
+    // members who already tailed something. Once a day, when the card's
+    // first game is close to locking, broadcast one nudge to every push
+    // subscriber. This runs on the odds-refresh cadence (not a precise
+    // timer), so the window is generous — first check landing within
+    // two hours of the earliest start fires it, the copy quotes the
+    // actual minutes, and a per-date NX claim keeps it to exactly one.
+    try {
+      if (feed && feed.date === today && (feed.picks || []).length > 0) {
+        const openStarts: number[] = [];
+        for (const p of feed.picks) {
+          const bg = findBoardGame(p, games);
+          if (!bg) continue;
+          const t = Date.parse(bg.commence);
+          if (!isNaN(t) && t > now) openStarts.push(t);
+        }
+        if (openStarts.length > 0) {
+          const mins = (Math.min(...openStarts) - now) / 60000;
+          if (mins > 0 && mins <= 120) {
+            const claimKey = `moyline:cardlocks-push:${today}`;
+            const claimed = await redis.set(claimKey, "1", { nx: true, ex: 48 * 3600 });
+            if (claimed) {
+              const rounded = Math.max(5, Math.round(mins / 5) * 5);
+              const push = await broadcastPush({
+                title: "⏰ Card locks soon",
+                body: `First game starts in ~${rounded} min — ${openStarts.length} play${openStarts.length > 1 ? "s" : ""} still open. Tail before they lock →`,
+                url: "/picks",
+              });
+              if (push.vapid) {
+                results.cardLocks = push.sent;
+              } else {
+                // Push not configured — release the claim so a later check can send.
+                await redis.del(claimKey);
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      results.errors.push(
+        `card-locks: ${e instanceof Error ? e.message : String(e)}`
+      );
+    }
+
+    if (all.length === 0) return NextResponse.json({ ok: true, ...results, message: "No tails" });
 
     // Settled-tail pushes (#57) read the graded record, not the board.
     // Window: yesterday + today ET — the grader settles yesterday's

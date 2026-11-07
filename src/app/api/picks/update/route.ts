@@ -197,7 +197,7 @@ export async function POST(req: Request) {
       existing = null;
     }
 
-    const { merged: mergedPicks } = mergePicks(existing?.picks || [], body.picks);
+    const { merged: mergedPicks, added: addedPicks } = mergePicks(existing?.picks || [], body.picks);
     const { merged: mergedProps } = mergePicks(existing?.props || [], body.props || []);
     const { merged: mergedBackpage } = mergePicks(existing?.backpage || [], (body as PicksFeed).backpage || []);
     const merged: PicksFeed = {
@@ -276,6 +276,44 @@ export async function POST(req: Request) {
       }
     } catch (e) {
       console.error("[card-live] push failed:", e instanceof Error ? e.message : e);
+    }
+
+    // NEW-PICKS PUSH (optimization #21): when a LATER edition grows an
+    // existing card, members who ignore email otherwise never hear about
+    // the additions — the card-live push only fires on the day's first
+    // push. One push per distinct set of additions: the dedupe key
+    // hashes the added picks' merge keys, so an identical re-push never
+    // re-fires, while a genuinely new batch later the same day still
+    // can. Best-effort: a push failure never fails the feed update.
+    let newPicksPush = 0;
+    try {
+      if (existing && addedPicks.length > 0) {
+        const addedKeys = addedPicks.map((p) => pickKey(p)).sort();
+        let hash = 0;
+        const joined = addedKeys.join("|");
+        for (let i = 0; i < joined.length; i++) {
+          hash = (hash * 31 + joined.charCodeAt(i)) | 0;
+        }
+        const claimKey = `moyline:newpicks-push:${body.date}:${(hash >>> 0).toString(36)}`;
+        const claimed = await redis.set(claimKey, "1", { nx: true, ex: 48 * 3600 });
+        if (claimed) {
+          const { broadcastPush } = await import("@/lib/push");
+          const first = addedPicks[0];
+          const push = await broadcastPush({
+            title: "MoyLine AI · New picks added",
+            body: `${addedPicks.length} new pick${addedPicks.length > 1 ? "s" : ""} added to today's card — ${first.game} · ${first.play}${addedPicks.length > 1 ? ` (+${addedPicks.length - 1} more)` : ""}`,
+            url: "/picks",
+          });
+          if (push.vapid) {
+            newPicksPush = push.sent;
+          } else {
+            // Push not configured — release the claim so a later push can send.
+            await redis.del(claimKey);
+          }
+        }
+      }
+    } catch (e) {
+      console.error("[new-picks] push failed:", e instanceof Error ? e.message : e);
     }
 
     // 5-STAR ALARM: if any incoming pick has confidence 5 (never awarded before),
@@ -398,6 +436,7 @@ export async function POST(req: Request) {
       ok: true,
       picks: merged.picks.length,
       card_live_push: cardLivePush,
+      new_picks_push: newPicksPush,
       backpage: mergedBackpage.length,
       slot: merged.slot,
       editions: merged.editions,

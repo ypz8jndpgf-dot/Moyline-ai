@@ -8,6 +8,7 @@ import { findBoardGame, bestPriceForPick, badgeBeatsPlay, movedAgainstNote, edge
 import { parseProp, livePropQuote } from "@/lib/cheatsheet";
 import { readTails } from "@/lib/tails";
 import TailButton from "./TailButton";
+import TailAllButton from "./TailAllButton";
 import ShareButton from "./ShareButton";
 import CopyCardButton from "./CopyCardButton";
 import LiveScore from "./LiveScore";
@@ -633,6 +634,22 @@ export default async function PicksPage({
     return s ? `/picks?${s}` : "/picks";
   };
 
+  // "Tail the whole card" (optimization #22): the upcoming grid picks
+  // the member hasn't already tailed — the button hides itself when
+  // there's nothing left to add. Props stay a per-pick choice.
+  const tailAllPicks = rankedPicks
+    .filter(
+      ({ p, status }) =>
+        status === "upcoming" && !tailedSet.has(`${p.game}|${p.play}`)
+    )
+    .map(({ p }) => ({ game: p.game, play: p.play, price: p.price }));
+
+  // Thin-card note (optimization #54): a 1–2 pick card says nothing
+  // about why today, and can read as "they gave up". One honest line —
+  // the gates are the reason, and the leans that didn't clear were
+  // never going to be padding.
+  const thinCard = rankedPicks.length >= 1 && rankedPicks.length <= 2;
+
   // Plain-text version of the whole grid for the copy-card button
   // (optimization #33): ranked order, one line per pick.
   const cardCopyText = [
@@ -756,6 +773,16 @@ export default async function PicksPage({
             </div>
           )}
 
+          {thinCard && (
+            <p className="text-sm text-muted border border-line rounded-xl px-4 py-3 mb-4">
+              <span className="text-gold font-bold">Thin card by design.</span>{" "}
+              Every play has to clear the full gate set — a quantified edge and a
+              confirmed driver — and today only {rankedPicks.length}{" "}
+              {rankedPicks.length === 1 ? "play" : "plays"} did. The leans that
+              didn&apos;t clear are in the brief; the card is never padded.
+            </p>
+          )}
+
           {cardSports.length > 1 && (
             <div className="flex flex-wrap items-center gap-1.5 mb-4">
               <span className="text-[11px] font-bold uppercase tracking-widest text-muted mr-1">
@@ -788,6 +815,7 @@ export default async function PicksPage({
               )}
             </p>
             <span className="flex items-center gap-2 text-xs font-bold">
+              <TailAllButton picks={tailAllPicks} date={feed?.date} />
               <CopyCardButton text={cardCopyText} />
               <span className="flex items-center gap-1">
               <Link

@@ -42,17 +42,57 @@ export type BestPrice = { book: string; display: string } | null;
  */
 type CellKey = "spreadAway" | "spreadHome" | "totalOver" | "totalUnder" | "mlAway" | "mlHome";
 
+const PROP_MARKETS = new Set([
+  "prop",
+  "props",
+  "player_prop",
+  "player prop",
+  "player-prop",
+  "player props",
+]);
+
+/**
+ * Stat nouns that only ever appear in player-prop play text — game
+ * totals are bare ("Over 6.5"), spreads and MLs name teams, so a stat
+ * noun in the play is a reliable prop signature when the market field
+ * can't be trusted.
+ */
+const PROP_STAT_RE =
+  /\b(points?|rebounds?|assists?|passing|pass yards?|rushing|rush yards?|receiving|receptions?|completions?|attempts?|carries|targets?|yards?|yds|goals?|shots?|saves?|strikeouts?|steals?|blocks?|threes?|touchdowns?|hits?|aces?)\b/i;
+
+/**
+ * Prop detection from play text alone, for picks whose market field is
+ * missing — the tail-alerts cron rebuilds picks from tail records
+ * ({game, play, price}, no market), and a market-less "Nikola Jokic
+ * Over 9.5 assists" would otherwise fall into the total branch below
+ * and inherit the game total's board cell (the exact bug the market
+ * gate fixed on /picks, still live on the synthetic-pick path).
+ */
+function looksLikePropPlay(play: string): boolean {
+  const t = (play || "").trim();
+  if (!t) return false;
+  if (/anytime/i.test(t)) return true;
+  if (/\b(over|under)\b/i.test(t)) return PROP_STAT_RE.test(t);
+  // Threshold style: "Pollard 40+ rush yards".
+  return /\d\s*\+/.test(t) && PROP_STAT_RE.test(t);
+}
+
 /**
  * True when the pick is a player prop — the same test pickAlertMarket
- * gates on (the feed's market field, lowercased). The game board
- * carries no prop markets, so a prop must never resolve to a board
- * cell: without this gate a prop play like "Embiid Over 7.5 rebounds"
- * hits the over/under test below and inherits the GAME TOTAL's cell,
- * and its best-price badge / your-book line would show the total's
- * price as if it were the prop's.
+ * gates on. The game board carries no prop markets, so a prop must
+ * never resolve to a board cell: without this gate a prop play like
+ * "Embiid Over 7.5 rebounds" hits the over/under test below and
+ * inherits the GAME TOTAL's cell, and its best-price badge / your-book
+ * line would show the total's price as if it were the prop's.
+ * An explicit game market (spread/total/ml) is trusted as-is; the
+ * play-text heuristic only speaks when the market field is absent or
+ * already prop-shaped.
  */
 function isPropPick(pick: FeedPick): boolean {
-  return (pick.market || "").toLowerCase() === "prop";
+  const market = (pick.market || "").toLowerCase().trim();
+  if (PROP_MARKETS.has(market)) return true;
+  if (market) return false;
+  return looksLikePropPlay(pick.play || "");
 }
 
 /** Board cell holding this pick's market+side (shared by best/book price lookups). */
