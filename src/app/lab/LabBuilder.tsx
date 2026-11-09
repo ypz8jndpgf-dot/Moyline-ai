@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { FeedPick } from "@/lib/picks";
+import { combinedWinProb } from "@/lib/winprob";
 
 /* ---------- odds math ---------- */
 
@@ -137,9 +138,11 @@ export default function LabBuilder({
         return { error: "No plays on today's card to build from — check back after the next brief." };
       }
       const odds = parlayOdds(legs);
-      // Ticket confidence: floor of average leg confidence, capped 1-5.
+      // Ticket strength as a combined win probability (product of the
+      // legs' model win probs) — members see this, never the internal
+      // 1–5 confidence. avgConf still drives the below-bar warning.
       const avgConf = legs.reduce((s, l) => s + l.confidence, 0) / legs.length;
-      const ticketConf = Math.max(1, Math.min(5, Math.floor(avgConf)));
+      const combinedProb = combinedWinProb(legs);
       // Warning when below the bar: fewer legs than requested, or weak average confidence.
       const warnings: string[] = [];
       if (legs.length < legCount) {
@@ -151,7 +154,7 @@ export default function LabBuilder({
       return {
         legs,
         combined: odds,
-        ticketConf,
+        combinedProb,
         warnings,
         note: odds
           ? `Combined ${odds} via standard parlay math. Shop the best price per leg.`
@@ -172,8 +175,6 @@ export default function LabBuilder({
     }
     const legs = eligible.slice(0, Math.max(2, Math.min(legCount, eligible.length)));
     const pts = legs[0].points;
-    const avgConf = legs.reduce((s, l) => s + l.confidence, 0) / legs.length;
-    const ticketConf = Math.max(1, Math.min(5, Math.floor(avgConf)));
     const warnings: string[] = [];
     if (legs.length < legCount) {
       warnings.push(`Only ${legs.length} Wong-eligible legs available — showing the best ${legs.length}.`);
@@ -182,7 +183,11 @@ export default function LabBuilder({
       legs,
       combined: null,
       teaserPoints: pts,
-      ticketConf,
+      // No combined win prob for teasers: a teased leg's own price/edge
+      // describes the UNTEASED line, so a product of leg probs would
+      // misstate the teased ticket's true hit rate. The note below
+      // carries the teaser's actual price instead.
+      combinedProb: null as number | null,
       warnings,
       note: `Standard ${pts}-pt ${legs.length}-team teaser pays around -110 — shop for the best number.`,
     };
@@ -245,9 +250,9 @@ export default function LabBuilder({
               Best {betType === "parlay" ? "parlay" : `${result.teaserPoints}-pt teaser`}
             </span>
             <div className="flex items-center gap-3">
-              {result.ticketConf && (
+              {result.combinedProb != null && (
                 <span className="text-sm font-bold text-muted">
-                  Confidence <span className="text-gold">{result.ticketConf}/5</span>
+                  Win prob <span className="text-gold">~{result.combinedProb}%</span>
                 </span>
               )}
               {result.combined && (

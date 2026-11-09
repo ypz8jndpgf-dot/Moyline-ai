@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FeedPick } from "@/lib/picks";
+import { winEdgeInfo, formatWinEdge, winProbFraction } from "@/lib/winprob";
 
 /* ---------- odds math ---------- */
 
@@ -31,7 +32,8 @@ function extractLeague(game: string): string {
 type Leg = FeedPick & { uid: string };
 
 type Rating = {
-  score: number; // 1-5
+  score: number; // 1-5 — internal only; the UI shows winProb instead
+  winProb: number; // combined model win probability, whole %
   fairOdds: string;
   offeredOdds: string;
   edgeVerdict: string;
@@ -60,22 +62,23 @@ function rateTicket(legs: Leg[], pool: FeedPick[]): Rating {
 
   for (const leg of legs) {
     const odds = parseOdds(leg.price);
-    if (odds === null) {
+    // Per-leg model win prob from the shared helper: the feed's win_prob
+    // when present, else the fair-price probability (price − edge), else
+    // the price's own implied probability for unrated legs.
+    const fairProb = winProbFraction(leg);
+    if (odds === null || fairProb === null) {
       unratedCount++;
       continue;
     }
     offeredDec *= americanToDecimal(odds);
-    const implied = americanToProb(odds);
     const edge = leg.edge_cents ?? null;
     if (edge === null) {
       unratedCount++;
-      // No edge data: assume fair (no edge either way)
-      combinedFairProb *= implied;
+      // No edge data: the leg counts at its implied/model probability.
+      combinedFairProb *= fairProb;
     } else {
       ratedLegs++;
       totalEdge += edge;
-      // Edge in cents ≈ probability points of edge at these odds
-      const fairProb = Math.min(0.95, Math.max(0.05, implied + edge / 10000));
       combinedFairProb *= fairProb;
       if (edge < weakestEdge) {
         weakestEdge = edge;
@@ -146,7 +149,8 @@ function rateTicket(legs: Leg[], pool: FeedPick[]): Rating {
     }
   }
 
-  return { score, fairOdds, offeredOdds, edgeVerdict, feedback, suggestion, unratedCount };
+  const winProb = Math.round(combinedFairProb * 100);
+  return { score, winProb, fairOdds, offeredOdds, edgeVerdict, feedback, suggestion, unratedCount };
 }
 
 const ALL_SPORTS = ["NFL", "CFB", "NBA", "NHL", "MLB", "MLS", "EPL", "La Liga", "Bundesliga", "Serie A", "Ligue 1", "Brasileirão", "UCL"];
@@ -434,9 +438,8 @@ export default function TicketBuilder({
                 {p.play} <span className="text-goldsoft">{p.price}</span>
               </p>
               <div className="flex gap-2 mt-1">
-                <span className="text-xs text-muted">Conf {p.confidence}/5</span>
-                {p.edge_cents != null && p.edge_cents > 0 && (
-                  <span className="text-xs text-up">+{p.edge_cents}¢ edge</span>
+                {formatWinEdge(winEdgeInfo(p)) && (
+                  <span className="text-xs text-muted">{formatWinEdge(winEdgeInfo(p))}</span>
                 )}
               </div>
             </button>
@@ -476,17 +479,10 @@ export default function TicketBuilder({
                 <div className="border-t border-white/10 pt-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-bold">AI VERDICT</span>
-                    <div className="flex gap-1">
-                      {[1, 2, 3, 4, 5].map((i) => (
-                        <div
-                          key={i}
-                          className={`w-6 h-2.5 rounded-full ${i <= rating.score ? "bg-gold" : "bg-white/10"}`}
-                        />
-                      ))}
-                    </div>
+                    <span className="text-xs text-muted">model win prob</span>
                   </div>
                   <p className="text-2xl font-display mb-1">
-                    {rating.score}/5
+                    ~{rating.winProb}% <span className="text-sm text-muted">to cash</span>
                   </p>
                   <p className="text-sm text-muted mb-2">{rating.edgeVerdict}</p>
                   <p className="text-xs text-muted mb-3">

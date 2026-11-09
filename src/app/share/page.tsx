@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { winEdgeInfo, formatWinEdge } from "@/lib/winprob";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ function pick(params: Params, key: string, max = 140): string {
 
 function cardImagePath(params: Params): string {
   const qs = new URLSearchParams();
-  for (const k of ["g", "p", "pr", "c", "s", "d", "t"]) {
+  for (const k of ["g", "p", "pr", "w", "e", "s", "d", "t"]) {
     const v = pick(params, k);
     if (v) qs.set(k, v);
   }
@@ -60,7 +61,18 @@ export default async function SharePage({
   const game = pick(params, "g") || "MoyLine AI";
   const play = pick(params, "p") || "Today's card";
   const price = pick(params, "pr", 40);
-  const conf = pick(params, "c", 1);
+  // Win% + edge badge (w/e params from ShareButton). Legacy links that
+  // only carry a price fall back to the price's implied % — the internal
+  // confidence grade is never rendered.
+  const wRaw = pick(params, "w", 3);
+  const eRaw = pick(params, "e", 5);
+  const badge = formatWinEdge(
+    winEdgeInfo({
+      price,
+      edge_cents: eRaw ? Number(eRaw) : null,
+      win_prob: wRaw ? Number(wRaw) : null,
+    })
+  );
   const star = pick(params, "s", 1) === "1";
   const dateLabel = pick(params, "d", 40);
   const starts = pick(params, "t", 40);
@@ -72,7 +84,7 @@ export default async function SharePage({
           <span className="text-xs font-bold uppercase tracking-widest text-gold">
             {star ? "★ Featured play" : "MoyLine AI pick"}
           </span>
-          {conf && <span className="text-xs text-muted">Conf {conf}/5</span>}
+          {badge && <span className="text-xs text-muted">{badge}</span>}
         </div>
         <h1 className="font-display text-2xl mb-1">{game}</h1>
         {(dateLabel || starts) && (

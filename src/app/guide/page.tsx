@@ -18,7 +18,7 @@ const STEPS: {
     n: "1",
     title: "Find",
     when: "7:00am ET — the card lands",
-    body: "Start with Today's Picks: the full card ranked by confidence and edge, best price and book named on every play. The ★ is the day's single strongest edge. Second-tier leans with a real edge live on the Undercard — same grading, lower bar. Later editions (11am / 3pm weekends, 6pm daily) only add new games; the 7am card is the anchor.",
+    body: "Start with Today's Picks: every play on the card is stamped with two numbers — its model win% and its edge. The win% is the probability our fair price gives the play of cashing; the edge is how far the book's price sits from that fair price, in cents (+35¢ edge means the book is offering 35¢ better than fair). Best price and book are named on every play, and the ★ is the day's single strongest edge. Second-tier leans with a real edge live on the Undercard — same grading, lower bar. Later editions (11am / 3pm weekends, 6pm daily) only add new games; the 7am card is the anchor.",
     link: { href: "/picks", label: "Today's Picks" },
   },
   {

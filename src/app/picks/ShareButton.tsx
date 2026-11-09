@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { winEdgeInfo } from "@/lib/winprob";
 
 /**
  * Share a pick as a branded card link (/share renders the card; its OG
@@ -14,7 +15,8 @@ export default function ShareButton({
   game,
   play,
   price,
-  confidence,
+  edgeCents,
+  winProb,
   star = false,
   dateLabel,
   starts,
@@ -22,7 +24,8 @@ export default function ShareButton({
   game: string;
   play: string;
   price?: string;
-  confidence?: number;
+  edgeCents?: number | null;
+  winProb?: number | null;
   star?: boolean;
   dateLabel?: string;
   starts?: string;
@@ -34,7 +37,14 @@ export default function ShareButton({
     params.set("g", game);
     params.set("p", play);
     if (price) params.set("pr", price);
-    if (typeof confidence === "number") params.set("c", String(confidence));
+    // Members see win% + edge, never the internal 1–5 confidence:
+    // w = model win prob (whole %), e = edge in cents.
+    const info = winEdgeInfo({ price, edge_cents: edgeCents, win_prob: winProb });
+    if (info) {
+      params.set("w", String(info.winProb));
+      if (info.edgeCents !== null && info.edgeCents !== 0)
+        params.set("e", String(info.edgeCents));
+    }
     if (star) params.set("s", "1");
     if (dateLabel) params.set("d", dateLabel);
     if (starts) params.set("t", starts);

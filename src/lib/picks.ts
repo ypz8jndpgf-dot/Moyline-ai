@@ -30,6 +30,9 @@ export type FeedPick = {
   deep_dive?: string;
   /** Quantified edge in cents, e.g. 30 = ~30c edge vs fair price. Optional. */
   edge_cents?: number;
+  /** Model win probability (0-100) from the brief's fair price. Optional —
+   *  display surfaces prefer it over deriving from price − edge_cents. */
+  win_prob?: number;
   /** One-line risk note: what most likely kills this bet (steal #3). Optional. */
   risk?: string;
   /** Market type for ticket construction. Optional. */
@@ -68,6 +71,7 @@ export type PicksFeed = {
     legs: string[];
     points: number;
     confidence: number;
+    win_prob?: number;
     reasoning?: string;
   } | null;
   parlay: {
@@ -75,6 +79,7 @@ export type PicksFeed = {
     odds: string;
     book: string;
     confidence: number;
+    win_prob?: number;
     reasoning?: string;
   } | null;
   /** Weekend lookaheads (Thu/Fri in-season briefs). Keyed by type so NFL and NCAAB coexist. */
@@ -84,6 +89,7 @@ export type PicksFeed = {
       legs: string[];
       points: number;
       confidence: number;
+      win_prob?: number;
       reasoning?: string;
       target_date: string;
     } | null;
@@ -96,6 +102,7 @@ export type PicksFeed = {
         confidence: number;
         reasoning?: string;
         edge_cents?: number;
+        win_prob?: number;
         market?: string;
         line?: string;
       }[];

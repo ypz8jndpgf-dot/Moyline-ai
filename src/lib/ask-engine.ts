@@ -9,6 +9,8 @@
  * cover something the reply says so plainly. Nothing is invented.
  */
 
+import { winEdgeInfo, formatWinEdge } from "./winprob";
+
 /** Coarse question category, for privacy-clean usage stats (counts only). */
 export type AskIntent =
   | "matchup"
@@ -36,6 +38,7 @@ export type AskPick = {
   reasoning?: string;
   writeup?: string;
   edge_cents?: number;
+  win_prob?: number;
   starts?: string;
 };
 
@@ -56,13 +59,14 @@ export type AskData = {
   openings: Record<string, any>;
   card: AskPick[];
   props: AskPick[];
-  teaser: { legs: string[]; points: number; confidence: number } | null;
-  parlay: { legs: string[]; odds?: string; confidence: number } | null;
+  teaser: { legs: string[]; points: number; confidence: number; win_prob?: number } | null;
+  parlay: { legs: string[]; odds?: string; confidence: number; win_prob?: number } | null;
   /** Weekend lookahead teaser from the feed (Thu/Fri briefs), if posted. */
   lookaheadTeaser?: {
     legs: string[];
     points: number;
     confidence: number;
+    win_prob?: number;
     target_date?: string;
   } | null;
   records: AskRecords | null;
@@ -738,6 +742,25 @@ function playWithPrice(p: AskPick): string {
   return p.play.includes(p.price) ? p.play : `${p.play} ${p.price}`;
 }
 
+/**
+ * Member-facing strength for a card pick: "58% · +35¢ edge" from the
+ * shared winprob helper (the internal 1–5 confidence is never quoted).
+ * Null when the pick has no usable price.
+ */
+function probBadge(p: AskPick): string | null {
+  return formatWinEdge(winEdgeInfo(p));
+}
+
+/** Just the model win% for a card pick, for sentences that state the edge separately. */
+function winPct(p: AskPick): number | null {
+  return winEdgeInfo(p)?.winProb ?? null;
+}
+
+/** Win% badge for a teaser/parlay ticket (feed win_prob, else implied by the parlay odds). */
+function ticketBadge(t: { odds?: string; win_prob?: number }): string | null {
+  return formatWinEdge(winEdgeInfo({ price: t.odds, win_prob: t.win_prob }));
+}
+
 /** One compact sentence with the game's headline numbers. */
 function linesSentence(g: Game): string {
   const bits: string[] = [];
@@ -784,8 +807,9 @@ function describeGame(g: Game, data: AskData): string {
   ];
 
   if (cardPick) {
+    const pct = winPct(cardPick);
     parts.push(
-      `That one's actually on today's card: we're on ${playWithPrice(cardPick)}, confidence ${cardPick.confidence} of 5${cardPick.star ? " — it's our ★ play" : ""}.`
+      `That one's actually on today's card: we're on ${playWithPrice(cardPick)}${pct !== null ? ` — model win prob ~${pct}%` : ""}${cardPick.star ? " — it's our ★ play" : ""}.`
     );
     const why = cardPick.reasoning || cardPick.writeup;
     if (why) parts.push(why.split(/(?<=[.!?])\s+/).slice(0, 2).join(" "));
@@ -803,7 +827,7 @@ function describeGame(g: Game, data: AskData): string {
   }
   if (a.lean !== "No clear lean") {
     parts.push(
-      `If I had to lean, I'd take ${a.lean} — call it a ${CONF_WORDS[a.confidence] || "mild"} read (${a.confidence}/5). That's board-only, though: lines and movement, no injury or matchup deep-dive behind it, and it's not on today's card.`
+      `If I had to lean, I'd take ${a.lean} — call it a ${CONF_WORDS[a.confidence] || "mild"} read. That's board-only, though: lines and movement, no injury or matchup deep-dive behind it, and it's not on today's card.`
     );
   } else {
     parts.push(
@@ -837,7 +861,8 @@ function answerTotal(g: Game, data: AskData): string {
   const cardPick = findCardPick(g, data.card);
   let s = `The total for ${g.away} at ${g.home} is ${g.total.line}.`;
   if (cardPick && /over|under/i.test(cardPick.play)) {
-    s += ` And that's a live one for us — the card has ${playWithPrice(cardPick)} (confidence ${cardPick.confidence}/5).`;
+    const badge = probBadge(cardPick);
+    s += ` And that's a live one for us — the card has ${playWithPrice(cardPick)}${badge ? ` (${badge})` : ""}.`;
   } else {
     s += " I don't have a strong over/under lean on it beyond the number — no total play on today's card for this game.";
   }
@@ -854,7 +879,10 @@ function answerSpread(g: Game, data: AskData): string {
     s += ` It's moved ${Math.abs(a.spreadMove).toFixed(1)} points toward ${toward} since the open.`;
   }
   const cardPick = findCardPick(g, data.card);
-  if (cardPick) s += ` The card's play here is ${playWithPrice(cardPick)} (confidence ${cardPick.confidence}/5).`;
+  if (cardPick) {
+    const badge = probBadge(cardPick);
+    s += ` The card's play here is ${playWithPrice(cardPick)}${badge ? ` (${badge})` : ""}.`;
+  }
   return s;
 }
 
@@ -869,7 +897,8 @@ function answerML(g: Game, data: AskData): string {
   let s = `${fav} is favored on the moneyline at ${fmtOdds(favPrice)}; ${dog} is ${fmtOdds(dogPrice)}. (${g.away} ${fmtOdds(g.ml.away)} / ${g.home} ${fmtOdds(g.ml.home)}.)`;
   const cardPick = findCardPick(g, data.card);
   if (cardPick) {
-    s += ` We're on this game today — ${playWithPrice(cardPick)}, confidence ${cardPick.confidence}/5.`;
+    const badge = probBadge(cardPick);
+    s += ` We're on this game today — ${playWithPrice(cardPick)}${badge ? ` (${badge})` : ""}.`;
   }
   return s;
 }
@@ -879,7 +908,8 @@ function answerWhy(g: Game, data: AskData): string {
   if (cardPick) {
     const why = cardPick.reasoning || cardPick.writeup;
     if (why) return `On ${cardPick.play}: ${why.split(/(?<=[.!?])\s+/).slice(0, 3).join(" ")}`;
-    return `The card has ${playWithPrice(cardPick)} (confidence ${cardPick.confidence}/5) — the full reasoning is in the writeup on the Picks tab.`;
+    const badge = probBadge(cardPick);
+    return `The card has ${playWithPrice(cardPick)}${badge ? ` (${badge})` : ""} — the full reasoning is in the writeup on the Picks tab.`;
   }
   const a = analyze(g, data.openings);
   if (a.lean === "No clear lean")
@@ -890,12 +920,17 @@ function answerWhy(g: Game, data: AskData): string {
 
 function answerConfidence(g: Game, data: AskData): string {
   const cardPick = findCardPick(g, data.card);
-  if (cardPick)
-    return `${cardPick.play} is a confidence ${cardPick.confidence} of 5 on today's card${cardPick.star ? " — a ★ play, the strongest grade we give" : ""}.`;
+  if (cardPick) {
+    const pct = winPct(cardPick);
+    const edgeBit = cardPick.edge_cents
+      ? ` with about a ${cardPick.edge_cents}¢ edge at the published price`
+      : "";
+    return `${cardPick.play} is on today's card${pct !== null ? ` at a model win probability of ~${pct}%` : ""}${edgeBit}${cardPick.star ? " — it's a ★ play, the strongest edge we give" : ""}.`;
+  }
   const a = analyze(g, data.openings);
   if (a.lean === "No clear lean")
-    return `Low — I don't have a lean on ${g.away} at ${g.home} at all, so call it a 1 of 5. It's not close to the card.`;
-  return `I'd put the board lean (${a.lean}) at a ${a.confidence} of 5 — a ${CONF_WORDS[a.confidence]} read. Card plays are the ones we actually stand behind; this isn't one.`;
+    return `Low — I don't have a lean on ${g.away} at ${g.home} at all. It's not close to the card.`;
+  return `I'd call the board lean (${a.lean}) a ${CONF_WORDS[a.confidence]} read — board-only leans don't carry a model win probability; the card plays are the ones with numbers behind them, and this isn't one.`;
 }
 
 function answerProps(question: string, contextGames: Game[], data: AskData): string {
@@ -910,7 +945,8 @@ function answerProps(question: string, contextGames: Game[], data: AskData): str
     );
   });
   if (hit) {
-    return `From the brief's notable props: ${playWithPrice(hit)} (confidence ${hit.confidence}/5) — that's in ${hit.game}. The full props list lives on the Picks tab.`;
+    const badge = probBadge(hit);
+    return `From the brief's notable props: ${playWithPrice(hit)}${badge ? ` (${badge})` : ""} — that's in ${hit.game}. The full props list lives on the Picks tab.`;
   }
   if (!data.props.length) {
     return "No player props in today's feed — the brief didn't flag any notable props today, and props aren't on my live board (I only see spreads, totals, and moneylines here). If the brief posts props, they'll be on the Picks tab.";
@@ -935,13 +971,22 @@ function answerCard(data: AskData): { reply: string; gameIds: string[] } {
       reply: "Nothing's posted on today's card yet — when the brief drops, the plays land on the Picks tab and I can walk you through them here.",
       gameIds: [],
     };
-  const lines = data.card.map(
-    (p) => `${p.star ? "★ " : ""}${playWithPrice(p)} · conf ${p.confidence}/5 — ${p.game}${p.starts ? `, ${p.starts}` : ""}`
-  );
+  const lines = data.card.map((p) => {
+    const badge = probBadge(p);
+    return `${p.star ? "★ " : ""}${playWithPrice(p)}${badge ? ` · ${badge}` : ""} — ${p.game}${p.starts ? `, ${p.starts}` : ""}`;
+  });
   let s = `Today's card has ${data.card.length} play${data.card.length === 1 ? "" : "s"}:\n${lines.join("\n")}`;
-  if (data.teaser) s += `\nTeaser of the day: ${data.teaser.legs.join(" + ")} (${data.teaser.points} pts, conf ${data.teaser.confidence}/5).`;
-  else if (data.lookaheadTeaser) s += `\nNo same-day teaser, but this week's lookahead teaser is on the board: ${data.lookaheadTeaser.legs.join(" + ")} (${data.lookaheadTeaser.points} pts, conf ${data.lookaheadTeaser.confidence}/5).`;
-  if (data.parlay) s += `\nParlay of the day: ${data.parlay.legs.join(" + ")}${data.parlay.odds ? ` at ${data.parlay.odds}` : ""} (conf ${data.parlay.confidence}/5).`;
+  if (data.teaser) {
+    const badge = ticketBadge(data.teaser);
+    s += `\nTeaser of the day: ${data.teaser.legs.join(" + ")} (${data.teaser.points} pts${badge ? ` · ${badge}` : ""}).`;
+  } else if (data.lookaheadTeaser) {
+    const badge = ticketBadge(data.lookaheadTeaser);
+    s += `\nNo same-day teaser, but this week's lookahead teaser is on the board: ${data.lookaheadTeaser.legs.join(" + ")} (${data.lookaheadTeaser.points} pts${badge ? ` · ${badge}` : ""}).`;
+  }
+  if (data.parlay) {
+    const badge = ticketBadge(data.parlay);
+    s += `\nParlay of the day: ${data.parlay.legs.join(" + ")}${data.parlay.odds ? ` at ${data.parlay.odds}` : ""}${badge ? ` (${badge})` : ""}.`;
+  }
   s += "\nAsk me about any of them and I'll give you the reasoning.";
   return { reply: s, gameIds: cardGameIds(data) };
 }
@@ -951,10 +996,12 @@ function answerStar(data: AskData): string {
   if (!stars.length) {
     if (!data.card.length) return "No ★ play today — the card isn't posted yet. Star plays only go up when a pick clears the top bar.";
     const top = [...data.card].sort((a, b) => b.confidence - a.confidence)[0];
-    return `No ★ play on today's card — nothing cleared the top bar. The strongest play we do have is ${playWithPrice(top)} (confidence ${top.confidence}/5) in ${top.game}.`;
+    const badge = probBadge(top);
+    return `No ★ play on today's card — nothing cleared the top bar. The strongest play we do have is ${playWithPrice(top)}${badge ? ` (${badge})` : ""} in ${top.game}.`;
   }
   const parts = stars.map((p) => {
-    let s = `Today's ★ play: ${playWithPrice(p)} — ${p.game}, confidence ${p.confidence} of 5.`;
+    const pct = winPct(p);
+    let s = `Today's ★ play: ${playWithPrice(p)} — ${p.game}${pct !== null ? `, model win prob ~${pct}%` : ""}.`;
     const why = p.reasoning || p.writeup;
     if (why) s += ` ${why.split(/(?<=[.!?])\s+/).slice(0, 2).join(" ")}`;
     if (p.edge_cents) s += ` The model has it at about a ${p.edge_cents}¢ edge.`;
@@ -964,20 +1011,25 @@ function answerStar(data: AskData): string {
 }
 
 function answerTeaser(data: AskData): string {
-  if (data.teaser)
-    return `Today's teaser: ${data.teaser.legs.join(" + ")} — a ${data.teaser.points}-point teaser at confidence ${data.teaser.confidence}/5. It's on the Picks tab with the full card.`;
+  if (data.teaser) {
+    const badge = ticketBadge(data.teaser);
+    return `Today's teaser: ${data.teaser.legs.join(" + ")} — a ${data.teaser.points}-point teaser${badge ? `, model win prob ${badge}` : ""}. It's on the Picks tab with the full card.`;
+  }
   if (data.lookaheadTeaser) {
     const when = data.lookaheadTeaser.target_date
       ? ` It settles on ${weekdayNameET(data.lookaheadTeaser.target_date)}.`
       : "";
-    return `No same-day teaser today, but there IS a lookahead teaser posted for the weekend: ${data.lookaheadTeaser.legs.join(" + ")} (${data.lookaheadTeaser.points} pts, confidence ${data.lookaheadTeaser.confidence}/5).${when}`;
+    const badge = ticketBadge(data.lookaheadTeaser);
+    return `No same-day teaser today, but there IS a lookahead teaser posted for the weekend: ${data.lookaheadTeaser.legs.join(" + ")} (${data.lookaheadTeaser.points} pts${badge ? ` · ${badge}` : ""}).${when}`;
   }
   return "No teaser today — nothing met the bar for one. The standing rule is we never force a teaser; if nothing qualifies, the card just goes without.";
 }
 
 function answerParlay(data: AskData): string {
-  if (data.parlay)
-    return `Today's parlay: ${data.parlay.legs.join(" + ")}${data.parlay.odds ? ` at ${data.parlay.odds}` : ""}, confidence ${data.parlay.confidence}/5. Full details on the Picks tab.`;
+  if (data.parlay) {
+    const badge = ticketBadge(data.parlay);
+    return `Today's parlay: ${data.parlay.legs.join(" + ")}${data.parlay.odds ? ` at ${data.parlay.odds}` : ""}${badge ? ` (${badge})` : ""}. Full details on the Picks tab.`;
+  }
   return "No parlay today — nothing met the bar. Same rule as the teaser: we never force one, so a thin day just goes without.";
 }
 
@@ -987,7 +1039,8 @@ function answerFreePick(data: AskData): string {
   const top = [...data.card].sort(
     (a, b) => b.confidence - a.confidence || (b.edge_cents || 0) - (a.edge_cents || 0)
   )[0];
-  return `There's no separate free-pick slot in my feed, but the headline play on today's card is ${top.star ? "★ " : ""}${playWithPrice(top)} (confidence ${top.confidence}/5) in ${top.game}. The full card's on the Picks tab.`;
+  const badge = probBadge(top);
+  return `There's no separate free-pick slot in my feed, but the headline play on today's card is ${top.star ? "★ " : ""}${playWithPrice(top)}${badge ? ` (${badge})` : ""} in ${top.game}. The full card's on the Picks tab.`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1091,7 +1144,8 @@ function answerSport(
   if (cardPicks.length) {
     const lead = cardPicks
       .map((p) => {
-        let s = `${p.star ? "★ " : ""}${playWithPrice(p)} (confidence ${p.confidence}/5) in ${p.game}`;
+        const badge = probBadge(p);
+        let s = `${p.star ? "★ " : ""}${playWithPrice(p)}${badge ? ` (${badge})` : ""} in ${p.game}`;
         const why = p.reasoning || p.writeup;
         if (why) s += ` — ${why.split(/(?<=[.!?])\s+/).slice(0, 2).join(" ")}`;
         if (p.edge_cents) s += ` The model sees about a ${p.edge_cents}¢ edge.`;
@@ -1141,8 +1195,9 @@ function answerSport(
     parts.push("That game's already underway or done, so it's off the live list above — the pick above is what we published pregame.");
   }
   if (teaserHit && data.lookaheadTeaser) {
+    const badge = ticketBadge(data.lookaheadTeaser);
     parts.push(
-      `Also relevant: this week's lookahead teaser includes a ${sport.label} leg — ${data.lookaheadTeaser.legs.join(" + ")} (${data.lookaheadTeaser.points} pts, conf ${data.lookaheadTeaser.confidence}/5).`
+      `Also relevant: this week's lookahead teaser includes a ${sport.label} leg — ${data.lookaheadTeaser.legs.join(" + ")} (${data.lookaheadTeaser.points} pts${badge ? ` · ${badge}` : ""}).`
     );
   }
 

@@ -71,16 +71,17 @@ export async function POST(req: NextRequest) {
       card: feed?.picks || [],
       props: feed?.props || [],
       teaser: feed?.teaser
-        ? { legs: feed.teaser.legs, points: feed.teaser.points, confidence: feed.teaser.confidence }
+        ? { legs: feed.teaser.legs, points: feed.teaser.points, confidence: feed.teaser.confidence, win_prob: feed.teaser.win_prob }
         : null,
       parlay: feed?.parlay
-        ? { legs: feed.parlay.legs, odds: (feed.parlay as any).odds, confidence: feed.parlay.confidence }
+        ? { legs: feed.parlay.legs, odds: (feed.parlay as any).odds, confidence: feed.parlay.confidence, win_prob: feed.parlay.win_prob }
         : null,
       lookaheadTeaser: feed?.lookaheads?.teaser
         ? {
             legs: feed.lookaheads.teaser.legs,
             points: feed.lookaheads.teaser.points,
             confidence: feed.lookaheads.teaser.confidence,
+            win_prob: feed.lookaheads.teaser.win_prob,
             target_date: feed.lookaheads.teaser.target_date,
           }
         : null,

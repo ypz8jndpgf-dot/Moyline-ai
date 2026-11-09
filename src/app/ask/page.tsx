@@ -73,7 +73,7 @@ export default async function AskPage() {
           ASK <span className="gold-text">MOYAI</span>
         </h1>
         <p className="text-muted mb-6">
-          Sign in to ask about any matchup — lines, leans, and confidence ratings.
+          Sign in to ask about any matchup — lines, leans, model win probabilities and edges.
         </p>
         <Link href="/signin" className="btn-gold px-8 py-3 inline-block">
           Sign in

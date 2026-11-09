@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { winEdgeInfo, formatWinEdge } from "@/lib/winprob";
 
 export const dynamic = "force-dynamic";
 
@@ -6,9 +7,9 @@ export const dynamic = "force-dynamic";
  * Branded 1200×630 card image for a member-shared pick (the OG image
  * behind /share links, so a shared pick unfurls as a MoyLine AI card in
  * Messages/WhatsApp/X). Params are the same short keys ShareButton sends:
- * g=game, p=play, pr=price, c=confidence, s=star, d=date, t=starts.
- * Values are capped so the route can't be used to render arbitrary
- * billboards; Satori escapes text by construction.
+ * g=game, p=play, pr=price, w=model win prob %, e=edge cents, s=star,
+ * d=date, t=starts. Values are capped so the route can't be used to
+ * render arbitrary billboards; Satori escapes text by construction.
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -16,7 +17,15 @@ export async function GET(req: Request) {
   const game = get("g") || "MoyLine AI";
   const play = get("p") || "Today's card";
   const price = get("pr", 40);
-  const conf = get("c", 1);
+  const wRaw = get("w", 3);
+  const eRaw = get("e", 5);
+  const badge = formatWinEdge(
+    winEdgeInfo({
+      price,
+      edge_cents: eRaw ? Number(eRaw) : null,
+      win_prob: wRaw ? Number(wRaw) : null,
+    })
+  );
   const star = get("s", 1) === "1";
   const dateLabel = get("d", 40);
   const starts = get("t", 40);
@@ -108,9 +117,9 @@ export async function GET(req: Request) {
               </div>
             ) : null}
           </div>
-          {conf ? (
+          {badge ? (
             <div style={{ display: "flex", fontSize: "24px", color: "#999999", marginTop: "18px" }}>
-              Confidence {conf}/5 · Graded &amp; published after the game
+              {badge} · Graded &amp; published after the game
             </div>
           ) : null}
         </div>

@@ -2,16 +2,22 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { getSubscription, hasAccess } from "@/lib/store";
 import { getPicksFeed, type FeedPick } from "@/lib/picks";
+import { pickWinEdge } from "@/lib/winprob";
 
 export const dynamic = "force-dynamic";
 
 function BackpageCard({ p }: { p: FeedPick }) {
+  const winEdge = pickWinEdge(p);
   return (
     <div className="card p-4">
       <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-bold uppercase tracking-widest text-muted">
-          Conf {p.confidence}/5
-        </span>
+        {winEdge ? (
+          <span className="text-xs font-bold uppercase tracking-widest text-muted">
+            {winEdge}
+          </span>
+        ) : (
+          <span />
+        )}
         {p.starts && <span className="text-xs text-muted">{p.starts}</span>}
       </div>
       <h3 className="font-display text-lg">{p.game}</h3>
@@ -19,9 +25,6 @@ function BackpageCard({ p }: { p: FeedPick }) {
         {p.play} <span className="text-sm text-muted">{p.price}</span>
       </p>
       {p.reasoning && <p className="text-sm text-muted mt-2">{p.reasoning}</p>}
-      {p.edge_cents != null && (
-        <p className="text-xs text-muted mt-1">Edge: ~{p.edge_cents}¢ vs fair</p>
-      )}
     </div>
   );
 }
@@ -45,8 +48,8 @@ export default async function Backpage() {
             ? `Signed in as ${email} — no active subscription.`
             : "Sign in to see if you have access."}
           <br />
-          The next tier of plays — confidence-3 leans with real edge that didn't
-          clear the main card's bar.
+          The next tier of plays — genuine-edge leans that didn't clear the
+          main card's bar.
         </p>
         <Link
           href="/signin"
@@ -74,14 +77,14 @@ export default async function Backpage() {
         Pro members only{email ? ` · ${email}` : ""}
       </p>
       <p className="text-xs text-muted mb-6">
-        The next tier — confidence-3 leans with genuine edge that didn't clear
-        the main card's conf-4 bar. Never forced; thin days run short.
+        The next tier — leans with genuine edge that didn't clear the main
+        card's bar. Never forced; thin days run short.
       </p>
 
       {backpage.length === 0 ? (
         <div className="card p-8 text-center">
           <p className="text-muted text-sm">
-            No backpage leans today — nothing at confidence 3 cleared the edge bar.
+            No backpage leans today — nothing cleared the edge bar.
           </p>
         </div>
       ) : (

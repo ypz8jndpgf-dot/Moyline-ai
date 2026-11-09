@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { PicksFeed } from "@/lib/picks";
 import { getTrackRecord } from "@/lib/store";
+import { pickWinEdge } from "@/lib/winprob";
 
 /**
  * Marketing paywall page for non-members.
@@ -100,7 +101,7 @@ export default async function MarketingPaywall({
       {/* What members get */}
       <div className="grid sm:grid-cols-2 gap-4 mb-8">
         {[
-          ["🎯 Daily card", "Every play that clears our edge bar, ranked by confidence. Never padded."],
+          ["🎯 Daily card", "Every play that clears our edge bar, stamped with its model win% and edge. Never padded."],
           ["🎁 Teaser + Parlay", "Wong-rule teaser and quantified parlay of the day, every day."],
           ["🧪 Parlay Lab", "Build your own tickets from today's edges — we find the best combos."],
           ["🔨 Ticket Builder", "DIY parlay builder with AI verdict on your ticket's true edge."],
@@ -125,7 +126,7 @@ export default async function MarketingPaywall({
               <span className="text-xs font-bold uppercase tracking-widest text-gold">
                 Free {freePick.star && "★"}
               </span>
-              <span className="text-xs text-muted">Conf {freePick.confidence}/5</span>
+              <span className="text-xs text-muted">{pickWinEdge(freePick)}</span>
             </div>
             <h3 className="font-display text-2xl mb-2">{freePick.game}</h3>
             <p className="text-xl font-bold text-goldsoft mb-2">

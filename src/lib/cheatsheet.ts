@@ -101,7 +101,9 @@ export type CheatLeg = {
   starts?: string;
   play: string; // original feed play text
   price: string; // original feed price (incl. book)
-  confidence: number; // feed confidence (2 or 3) — conf-2 legs are badged in the UI
+  confidence: number; // feed confidence (2 or 3) — internal gate only, never displayed
+  edge_cents?: number; // feed edge (brief legs only) — drives the win% + edge badge
+  win_prob?: number; // feed model win prob (0-100), when the brief carries one
   source: "brief" | "board"; // brief = a researched MoyLine lean; board = live book prop (not a lean)
   player: string; // resolved full name
   team: string; // player's team abbreviation
@@ -904,6 +906,8 @@ export async function buildCheatsheet(): Promise<CheatSheet | null> {
       play: w.pick.play,
       price: w.pick.price,
       confidence: w.pick.confidence ?? 0,
+      edge_cents: w.pick.edge_cents,
+      win_prob: w.pick.win_prob,
       source: w.source,
       player: a.name,
       team: a.teamAbbr,

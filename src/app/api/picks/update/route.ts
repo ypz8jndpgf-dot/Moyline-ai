@@ -17,6 +17,7 @@ type FeedPick = {
   writeup?: string;
   deep_dive?: string;
   edge_cents?: number;
+  win_prob?: number;
   risk?: string;
   market?: "spread" | "total" | "ml" | "prop";
   line?: string;
@@ -30,6 +31,7 @@ type Ticket = {
   odds?: string;
   book?: string;
   confidence: number;
+  win_prob?: number;
   reasoning?: string;
 };
 
@@ -38,6 +40,7 @@ type TeaserLookahead = {
   legs: string[];
   points: number;
   confidence: number;
+  win_prob?: number;
   reasoning?: string;
   target_date: string;
 };
@@ -51,6 +54,7 @@ type SpotlightLookahead = {
     confidence: number;
     reasoning?: string;
     edge_cents?: number;
+    win_prob?: number;
     market?: string;
     line?: string;
   }[];

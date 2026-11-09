@@ -4,7 +4,8 @@ import { getSubscription, hasAccess, isFounder } from "@/lib/store";
 import { getPicksFeed, PicksFeed, FeedPick, sportFromGame } from "@/lib/picks";
 import { getOdds, getOpenings } from "@/lib/odds";
 import { buildBoard, MoverVM } from "@/lib/board";
-import { findBoardGame, bestPriceForPick, badgeBeatsPlay, movedAgainstNote, edgeGoneNote, propEdgeGoneNote, lineStoryForPick, modelWinProb, bookPriceForPick, selectCardSteamMoves, BestPrice } from "@/lib/card-utils";
+import { findBoardGame, bestPriceForPick, badgeBeatsPlay, movedAgainstNote, edgeGoneNote, propEdgeGoneNote, lineStoryForPick, bookPriceForPick, selectCardSteamMoves, BestPrice } from "@/lib/card-utils";
+import { pickWinEdge, winEdgeInfo, formatWinEdge } from "@/lib/winprob";
 import { parseProp, livePropQuote } from "@/lib/cheatsheet";
 import { readTails } from "@/lib/tails";
 import TailButton from "./TailButton";
@@ -15,7 +16,7 @@ import LiveScore from "./LiveScore";
 import StartsIn from "./StartsIn";
 import PropHitRate from "./PropHitRate";
 import MarketingPaywall from "@/components/MarketingPaywall";
-import { getYesterdayGlance, getConfidenceCalibration, formatRecord, formatUnits } from "@/lib/records";
+import { getYesterdayGlance, formatRecord, formatUnits } from "@/lib/records";
 import PushPrompt from "@/components/PushPrompt";
 import IosInstallPrompt from "@/components/IosInstallPrompt";
 import { getPrefs, PREF_BOOKS } from "@/lib/prefs";
@@ -147,7 +148,6 @@ function PickCard({
   movedNote,
   edgeGone,
   lineStory,
-  winProb,
   yourBook,
   initiallyTailed,
   cardDate,
@@ -161,7 +161,6 @@ function PickCard({
   movedNote?: string | null;
   edgeGone?: string | null;
   lineStory?: string | null;
-  winProb?: number | null;
   yourBook?: BestPrice;
   initiallyTailed: boolean;
   cardDate: string;
@@ -170,6 +169,7 @@ function PickCard({
   /** "NEW · added 6pm" for later-edition picks (optimization #43), else null. */
   newLabel?: string | null;
 }) {
+  const winEdge = pickWinEdge(p);
   const gameShort = (p.game || "").split("(")[0].trim();
   const askQuestions = [
     "Why this pick?",
@@ -192,7 +192,7 @@ function PickCard({
         </span>
         <span className="flex items-center gap-2">
           <StatusBadge status={status} />
-          <span className="text-xs text-muted">Conf {p.confidence}/5</span>
+          {winEdge && <span className="text-xs text-muted">{winEdge}</span>}
         </span>
       </div>
       <h3 className="font-display text-xl mb-1">{p.game}</h3>
@@ -230,11 +230,6 @@ function PickCard({
           <span className="inline-block bg-gold/10 text-goldsoft px-2 py-0.5 rounded border border-gold/30">
             Your book · {yourBook.book}: {yourBook.display}
           </span>
-        </p>
-      )}
-      {winProb != null && (
-        <p className="text-xs text-muted mb-2">
-          Model win prob ~{winProb}% at our fair price
         </p>
       )}
       {!best && movedNote && (
@@ -299,7 +294,8 @@ function PickCard({
           game={p.game}
           play={p.play}
           price={p.price}
-          confidence={p.confidence}
+          edgeCents={p.edge_cents}
+          winProb={p.win_prob}
           star={!!p.star}
           dateLabel={cardDate}
           starts={p.starts}
@@ -338,7 +334,7 @@ function PaywallPreview({
         <p className="text-sm text-muted mb-6 max-w-lg mx-auto">
           Our desk grinds every slate — spreads, totals, props, weather,
           injuries, line movement — and distills it into one card of only the
-          plays that clear our strict confidence bar. Members also get the
+          plays that clear our strict edge bar. Members also get the
           Teaser and Parlay of the Day, plus the Parlay Lab builder.
         </p>
         <Link href={ctaHref} className="btn-gold px-8 py-3 inline-block">
@@ -356,7 +352,7 @@ function PaywallPreview({
               <span className="text-xs font-bold uppercase tracking-widest text-gold">
                 Free {freePick.star && "★"}
               </span>
-              <span className="text-xs text-muted">Conf {freePick.confidence}/5</span>
+              <span className="text-xs text-muted">{pickWinEdge(freePick)}</span>
             </div>
             <h3 className="font-display text-xl mb-1">{freePick.game}</h3>
             {freePick.starts && (
@@ -407,7 +403,7 @@ function PaywallPreview({
                     #{i + 1} {p.star && "★"}
                   </span>
                   <span className="text-xs text-muted">
-                    Conf {p.confidence}/5{p.starts ? ` · ${formatCardDate(feed?.date)} ${p.starts}` : ""}
+                    {pickWinEdge(p)}{p.starts ? ` · ${formatCardDate(feed?.date)} ${p.starts}` : ""}
                   </span>
                 </div>
                 <h3 className="font-display text-xl mb-3">{p.game}</h3>
@@ -571,19 +567,14 @@ export default async function PicksPage({
   // Wild @ Canucks via the substring "wild" in "Wildcats".)
   const cardSteam = selectCardSteamMoves(feed?.picks || [], boardGames, boardMovers);
 
-  // Yesterday strip + confidence calibration (same track-record source
-  // as /track-record; renders nothing when there's nothing graded).
+  // Yesterday strip (same track-record source as /track-record;
+  // renders nothing when there's nothing graded).
   let yesterdayGlance: Awaited<ReturnType<typeof getYesterdayGlance>> = null;
-  let confCalibration: Awaited<ReturnType<typeof getConfidenceCalibration>> = [];
   try {
-    [yesterdayGlance, confCalibration] = await Promise.all([
-      getYesterdayGlance(),
-      getConfidenceCalibration(),
-    ]);
+    yesterdayGlance = await getYesterdayGlance();
   } catch {
     /* record unavailable — card renders without the strip */
   }
-  const conf3 = confCalibration.find((c) => c.conf === "3");
 
   // Member's tailed picks (for initial button state).
   const tails = email ? await readTails(email) : [];
@@ -654,10 +645,10 @@ export default async function PicksPage({
   // (optimization #33): ranked order, one line per pick.
   const cardCopyText = [
     `MoyLine AI — ${cardDate}`,
-    ...rankedPicks.map(
-      ({ p }) =>
-        `${p.star ? "★ " : ""}${p.game} · ${p.play}${p.price ? ` ${p.price}` : ""} (Conf ${p.confidence})`
-    ),
+    ...rankedPicks.map(({ p }) => {
+      const badge = pickWinEdge(p);
+      return `${p.star ? "★ " : ""}${p.game} · ${p.play}${p.price ? ` ${p.price}` : ""}${badge ? ` (${badge})` : ""}`;
+    }),
     "Full card: moylineai.com/picks",
   ].join("\n");
 
@@ -707,24 +698,24 @@ export default async function PicksPage({
 
       <details className="mb-6">
         <summary className="text-xs text-muted cursor-pointer hover:text-gold">
-          What confidence means
+          What the numbers mean
         </summary>
         <div className="text-xs text-muted mt-2 space-y-1 max-w-xl">
           <p>
-            Every play is graded 1–5. <strong className="text-paper">Conf 3</strong> is our
-            workhorse grade — a real quantified edge with a confirmed driver behind it.
-            <strong className="text-paper"> Conf 4</strong> is star-quality only, published
-            rarely. <strong className="text-paper">Conf 5</strong> is the highest bar we
-            have — it has never been awarded.
+            Every play carries two numbers. <strong className="text-paper">Win%</strong> is
+            the model win probability — the chance our fair price gives the play of
+            cashing. <strong className="text-paper">Edge</strong> is how far the
+            book&apos;s price sits from that fair price, in cents:{" "}
+            <strong className="text-paper">+35¢ edge</strong> means the book is offering
+            35¢ better than the price we&apos;d make it ourselves. A play only makes the
+            card with a real quantified edge and a confirmed driver behind it — the
+            bigger the edge at a gettable price, the stronger the play.
           </p>
-          {conf3 && conf3.stat.w + conf3.stat.l >= 10 && (
-            <p>
-              Lifetime on the recorded card, Conf 3 is {formatRecord(conf3.stat)}
-              {conf3.stat.pct !== null && <> ({conf3.stat.pct.toFixed(1)}%)</>} across{" "}
-              {conf3.stat.w + conf3.stat.l + conf3.stat.p} graded picks. Full breakdown on
-              the <Link href="/track-record" className="underline hover:text-gold">record page</Link>.
-            </p>
-          )}
+          <p>
+            Every play is graded after the game, win or lose — the full record, cut
+            every way we track it, lives on the{" "}
+            <Link href="/track-record" className="underline hover:text-gold">record page</Link>.
+          </p>
         </div>
       </details>
 
@@ -808,8 +799,8 @@ export default async function PicksPage({
           <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
             <p className="text-xs font-bold uppercase tracking-widest text-gold">
               {sortByTime
-                ? "Ordered by start time — badges keep the confidence rank"
-                : "Ranked by confidence — #1 is our top play"}
+                ? "Ordered by start time — badges keep the ranked order"
+                : "Ranked — #1 is our top play"}
               {activeSport && (
                 <> · {activeSport} only — {displayPicks.length} of {rankedPicks.length}</>
               )}
@@ -822,7 +813,7 @@ export default async function PicksPage({
                 href={picksHref(activeSport, false)}
                 className={`px-2.5 py-1 rounded-full border ${sortByTime ? "border-line text-muted hover:text-gold" : "border-gold/60 bg-gold/10 text-gold"}`}
               >
-                Confidence
+                Ranked
               </Link>
               <Link
                 href={picksHref(activeSport, true)}
@@ -856,7 +847,6 @@ export default async function PicksPage({
                   movedNote={movedByPick.get(key) || null}
                   edgeGone={edgeGoneByPick.get(key) || null}
                   lineStory={storyByPick.get(key) || null}
-                  winProb={modelWinProb(p)}
                   yourBook={yourBookByPick.get(key) || null}
                   initiallyTailed={tailedSet.has(key)}
                   cardDate={cardDate}
@@ -888,7 +878,7 @@ export default async function PicksPage({
                           {prop.play} <span className="text-muted">{prop.price}</span>
                         </p>
                         <p className="text-xs text-muted">
-                          Conf {prop.confidence}/5
+                          {pickWinEdge(prop)}
                           {prop.starts ? ` · 🕐 ${prop.starts}` : ""}
                         </p>
                         {prop.reasoning && (
@@ -915,8 +905,8 @@ export default async function PicksPage({
                 <span className="text-xs font-bold uppercase tracking-widest text-gold">
                   Teaser of the Day
                 </span>
-                {feed.teaser && (
-                  <span className="text-xs text-muted">Conf {feed.teaser.confidence}/5</span>
+                {feed.teaser && formatWinEdge(winEdgeInfo(feed.teaser)) && (
+                  <span className="text-xs text-muted">{formatWinEdge(winEdgeInfo(feed.teaser))}</span>
                 )}
               </div>
               {feed.teaser ? (
@@ -937,7 +927,7 @@ export default async function PicksPage({
                       game="Teaser of the Day"
                       play={feed.teaser.legs.join(" · ")}
                       price={`${feed.teaser.points}-pt teaser`}
-                      confidence={feed.teaser.confidence}
+                      winProb={feed.teaser.win_prob}
                       dateLabel={cardDate}
                     />
                   </div>
@@ -951,8 +941,8 @@ export default async function PicksPage({
                 <span className="text-xs font-bold uppercase tracking-widest text-gold">
                   Parlay of the Day
                 </span>
-                {feed.parlay && (
-                  <span className="text-xs text-muted">Conf {feed.parlay.confidence}/5</span>
+                {feed.parlay && formatWinEdge(winEdgeInfo({ price: feed.parlay.odds, win_prob: feed.parlay.win_prob })) && (
+                  <span className="text-xs text-muted">{formatWinEdge(winEdgeInfo({ price: feed.parlay.odds, win_prob: feed.parlay.win_prob }))}</span>
                 )}
               </div>
               {feed.parlay ? (
@@ -974,7 +964,7 @@ export default async function PicksPage({
                       game="Parlay of the Day"
                       play={feed.parlay.legs.join(" · ")}
                       price={`${feed.parlay.odds} (${feed.parlay.book})`}
-                      confidence={feed.parlay.confidence}
+                      winProb={feed.parlay.win_prob}
                       dateLabel={cardDate}
                     />
                   </div>
@@ -1025,7 +1015,9 @@ export default async function PicksPage({
                   Weekend NFL Lookahead
                 </span>
                 <span className="text-xs text-muted">
-                  Settles {feed.lookaheads.teaser.target_date} · Conf {feed.lookaheads.teaser.confidence}/5
+                  Settles {feed.lookaheads.teaser.target_date}
+                  {formatWinEdge(winEdgeInfo(feed.lookaheads.teaser)) &&
+                    ` · ${formatWinEdge(winEdgeInfo(feed.lookaheads.teaser))}`}
                 </span>
               </div>
               <p className="text-lg font-bold text-goldsoft mb-2">
@@ -1057,7 +1049,7 @@ export default async function PicksPage({
                   <div key={j} className="border-l-2 border-gold/40 pl-3">
                     <p className="text-sm font-bold text-paper">{pick.game}</p>
                     <p className="text-sm text-goldsoft">{pick.play} <span className="text-muted">{pick.price}</span></p>
-                    <p className="text-xs text-muted">Conf {pick.confidence}/5{typeof pick.edge_cents === "number" ? ` · ~${pick.edge_cents}¢ edge` : ""}</p>
+                    <p className="text-xs text-muted">{pickWinEdge(pick)}</p>
                     {pick.reasoning && (
                       <p className="text-xs text-muted mt-1">{pick.reasoning}</p>
                     )}

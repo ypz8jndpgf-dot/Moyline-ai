@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { CheatLeg, CheatSheet, Split } from "@/lib/cheatsheet";
+import { winEdgeInfo, formatWinEdge } from "@/lib/winprob";
 import PropLadder from "./PropLadder";
 
 type Basis = "l10" | "l5" | "vsOpp" | "venue";
@@ -276,11 +277,18 @@ export default function CheatsheetBuilder() {
                       </span>
                       {leg.source === "board" ? (
                         <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-goldsoft border border-gold/40 rounded-full px-2 py-0.5">
-                          Board prop · not a MoyLine lean
+                          {(() => {
+                            const info = winEdgeInfo(leg);
+                            return info
+                              ? `Board prop · ${info.winProb}% implied`
+                              : "Board prop · not a MoyLine lean";
+                          })()}
                         </span>
                       ) : leg.confidence === 2 ? (
                         <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-muted border border-line rounded-full px-2 py-0.5">
-                          Conf 2 · thinner lean
+                          {formatWinEdge(winEdgeInfo(leg))
+                            ? `${formatWinEdge(winEdgeInfo(leg))} · thinner lean`
+                            : "Thinner lean"}
                         </span>
                       ) : null}
                       {leg.streak >= 3 && (
