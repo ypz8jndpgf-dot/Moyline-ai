@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sendEmail, getMemberEmails } from "@/lib/email";
+import { sendEmail, getMemberEmails, OWNER_ONLY_SENDS } from "@/lib/email";
 import { unsubUrl } from "@/lib/unsub";
 import { briefSignInUrl } from "@/lib/brief-signin";
 import { replaceTailLinks } from "@/lib/tail-link";
@@ -50,5 +50,13 @@ export async function POST(req: Request) {
       /* continue to next recipient */
     }
   }
-  return NextResponse.json({ ok: true, sent, total: members.length });
+  return NextResponse.json({
+    ok: true,
+    sent,
+    total: members.length,
+    // Owner-only mode (2026-11-08): recipients were hard-restricted to the
+    // owner inside getMemberEmails; echoed so send logs prove the mode.
+    ownerOnly: OWNER_ONLY_SENDS,
+    recipients: members,
+  });
 }

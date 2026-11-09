@@ -75,6 +75,8 @@ type PicksFeed = {
   props?: FeedPick[];
   /** Backpage: conf-3 leans. Paywalled tab, paper-traded + graded privately for admin. */
   backpage?: FeedPick[];
+  /** Top 3 Football Plays (Sat/Sun briefs; optimization #59). */
+  top3?: FeedPick[];
   /** Longshot of the Day: one +300-or-longer play, public Longshot Ledger. */
   longshot?: { game: string; play: string; price: string; reasoning?: string } | null;
   teaser: Ticket | null;
@@ -106,7 +108,8 @@ function isValidFeed(b: unknown): b is PicksFeed {
     Array.isArray(f.picks) &&
     (f.teaser === null || typeof f.teaser === "object") &&
     (f.parlay === null || typeof f.parlay === "object") &&
-    (f.lookahead === undefined || f.lookahead === null || typeof f.lookahead === "object")
+    (f.lookahead === undefined || f.lookahead === null || typeof f.lookahead === "object") &&
+    (f.top3 === undefined || f.top3 === null || Array.isArray(f.top3))
   );
 }
 
@@ -221,6 +224,10 @@ export async function POST(req: Request) {
       parlay: body.parlay || existing?.parlay || null,
       // Same rule for the longshot: first edition sets it, later nulls keep it.
       longshot: body.longshot || existing?.longshot || null,
+      // Top 3 Football Plays (#59): a later edition's non-empty list
+      // replaces the earlier one wholesale; missing/null/empty never erases.
+      top3:
+        body.top3 && body.top3.length > 0 ? body.top3 : existing?.top3,
       // Weekend lookaheads: keyed by type so NFL teaser and NCAAB spotlight coexist.
       // Incoming single `lookahead` (from brief workers) routes to its type key; null never erases.
       // Backward compat: old single `lookahead` without a type field is treated as a teaser.

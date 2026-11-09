@@ -4,7 +4,7 @@ import { getSubscription, hasAccess, isFounder } from "@/lib/store";
 import { getPicksFeed, PicksFeed, FeedPick, sportFromGame } from "@/lib/picks";
 import { getOdds, getOpenings } from "@/lib/odds";
 import { buildBoard, MoverVM } from "@/lib/board";
-import { findBoardGame, bestPriceForPick, badgeBeatsPlay, movedAgainstNote, edgeGoneNote, propEdgeGoneNote, lineStoryForPick, bookPriceForPick, selectCardSteamMoves, BestPrice } from "@/lib/card-utils";
+import { findBoardGame, bestPriceForPick, badgeBeatsPlay, movedAgainstNote, edgeGoneNote, propEdgeGoneNote, lineStoryForPick, bookPriceForPick, bookPricesForPick, selectCardSteamMoves, BestPrice, BookPriceRow } from "@/lib/card-utils";
 import { pickWinEdge, winEdgeInfo, formatWinEdge } from "@/lib/winprob";
 import { parseProp, livePropQuote } from "@/lib/cheatsheet";
 import { readTails } from "@/lib/tails";
@@ -148,6 +148,7 @@ function PickCard({
   movedNote,
   edgeGone,
   lineStory,
+  bookPrices,
   yourBook,
   initiallyTailed,
   cardDate,
@@ -161,6 +162,8 @@ function PickCard({
   movedNote?: string | null;
   edgeGone?: string | null;
   lineStory?: string | null;
+  /** Per-book live prices for this pick's market (optimization #58). */
+  bookPrices?: BookPriceRow[] | null;
   yourBook?: BestPrice;
   initiallyTailed: boolean;
   cardDate: string;
@@ -248,6 +251,31 @@ function PickCard({
       )}
       {lineStory && (
         <p className="text-[11px] text-muted mb-2">📈 {lineStory}</p>
+      )}
+      {bookPrices && bookPrices.length > 1 && (
+        <details className="mt-1 mb-2 group">
+          <summary className="text-sm font-bold text-gold cursor-pointer list-none flex items-center gap-1">
+            <span className="transition-transform group-open:rotate-90">▶</span>
+            Compare all books
+          </summary>
+          <div className="mt-2 space-y-1">
+            {bookPrices.map((r) => (
+              <div key={r.book} className="flex items-center justify-between text-xs">
+                <span className="text-muted">
+                  {r.book}
+                  {r.cardBook && <span className="text-goldsoft"> · card price</span>}
+                </span>
+                <span className={r.best ? "font-bold text-gold" : "text-paper/80"}>
+                  {r.display}
+                  {r.best ? " · best" : ""}
+                </span>
+              </div>
+            ))}
+            <p className="text-[11px] text-muted">
+              Live board prices for this market · the card published {p.price}
+            </p>
+          </div>
+        </details>
       )}
       {p.reasoning && <p className="text-sm text-muted">{p.reasoning}</p>}
       {p.risk && (
@@ -498,10 +526,13 @@ export default async function PicksPage({
   const edgeGoneByPick = new Map<string, string | null>();
   const storyByPick = new Map<string, string | null>();
   const yourBookByPick = new Map<string, BestPrice>();
+  const booksByPick = new Map<string, BookPriceRow[] | null>();
   for (const p of feed?.picks || []) {
     const key = `${p.game}|${p.play}`;
     const bg = findBoardGame(p, boardGames);
     if (bg) {
+      // Compare-all-books rows (#58): same cached board, no new pulls.
+      booksByPick.set(key, bookPricesForPick(p, bg));
       storyByPick.set(key, lineStoryForPick(p, bg));
       if (prefs.book) {
         yourBookByPick.set(key, bookPriceForPick(p, bg, prefs.book));
@@ -847,6 +878,7 @@ export default async function PicksPage({
                   movedNote={movedByPick.get(key) || null}
                   edgeGone={edgeGoneByPick.get(key) || null}
                   lineStory={storyByPick.get(key) || null}
+                  bookPrices={booksByPick.get(key) || null}
                   yourBook={yourBookByPick.get(key) || null}
                   initiallyTailed={tailedSet.has(key)}
                   cardDate={cardDate}
@@ -856,6 +888,41 @@ export default async function PicksPage({
               );
             })}
           </div>
+          )}
+
+          {feed.top3 && feed.top3.length > 0 && (
+            <div className="card p-5 mb-8 border-gold/30">
+              <h2 className="font-display text-xl mb-1">🏈 Top 3 Football Plays</h2>
+              <p className="text-xs text-muted mb-4">
+                The day&apos;s best football leans, ranked — set by the morning brief and
+                updated only on a material line move or a better lean.
+              </p>
+              <div className="space-y-3">
+                {feed.top3.map((tp, i) => (
+                  <div
+                    key={i}
+                    className="flex items-start gap-3 border-l-2 border-gold/40 pl-3"
+                  >
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-gold/40 bg-gold/10 text-gold text-xs font-bold shrink-0">
+                      #{i + 1}
+                    </span>
+                    <div>
+                      <p className="text-sm font-bold text-paper">{tp.game}</p>
+                      <p className="text-sm text-goldsoft">
+                        {tp.play} <span className="text-muted">{tp.price}</span>
+                      </p>
+                      <p className="text-xs text-muted">
+                        {pickWinEdge(tp)}
+                        {tp.starts ? ` · 🕐 ${tp.starts}` : ""}
+                      </p>
+                      {tp.reasoning && (
+                        <p className="text-xs text-muted mt-1">{tp.reasoning}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
           {feed.props && feed.props.length > 0 && (

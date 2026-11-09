@@ -58,6 +58,10 @@ export type PicksFeed = {
   props?: FeedPick[];
   /** Backpage: conf-3 leans. Separate paywalled tab, admin-only paper trading + grading. */
   backpage?: FeedPick[];
+  /** Top 3 Football Plays (Sat/Sun briefs; optimization #59): the day's
+   *  three best football leans, ranked. A later edition's list replaces
+   *  the earlier one wholesale; a missing/null list never erases it. */
+  top3?: FeedPick[];
   /** Longshot of the Day (2026-11-02, suggestion #37): one labeled
    *  high-variance play at +300 or longer, with its own public Longshot
    *  Ledger — never a grid pick, never in the combined record. */

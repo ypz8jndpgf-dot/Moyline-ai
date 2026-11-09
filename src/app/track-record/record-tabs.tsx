@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { TrackPick, TrackRecord } from "@/lib/store";
 import type { DaySummary, RecordAnalytics, SegmentRow } from "@/lib/records";
 import type { ClvMovement } from "@/lib/clv";
+import type { CalibrationData } from "@/lib/calibration";
 
 type Tab = "all" | "opt";
 
@@ -545,6 +546,92 @@ function SegmentTables({ analytics }: { analytics: RecordAnalytics }) {
   );
 }
 
+function fmtCalDate(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(`${iso}T12:00:00Z`);
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/**
+ * Model calibration — the accountability view for the win% the site now
+ * displays: picks grouped by the win% the model's fair price implied,
+ * against what actually happened. Data: src/lib/calibration.json,
+ * generated from results-tracker.md by scripts/build-calibration.py.
+ * Thin bands (n<30) are daggered and never headlined.
+ */
+function CalibrationSection({ cal }: { cal: CalibrationData }) {
+  if (!cal || cal.n === 0 || !cal.bands?.length) return null;
+  return (
+    <div className="mb-8">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-xs font-bold uppercase tracking-[0.3em] text-gold">
+          Model calibration
+        </span>
+        <span className="text-[11px] text-muted">
+          when the model says it, does it happen?
+        </span>
+      </div>
+      <div className="card p-5 max-w-2xl">
+        <p className="text-xs text-muted leading-relaxed mb-4">
+          Every pick is stamped with a model win% — the implied probability of the
+          fair price the brief published. Grouped by what the model claimed, here
+          is what the graded record shows:{" "}
+          <span className="text-paper font-bold">
+            n={cal.n} graded picks with a published price + edge,{" "}
+            {fmtCalDate(cal.windowStart)} – {fmtCalDate(cal.windowEnd)}
+          </span>
+          {cal.pushes > 0 ? ` (${cal.pushes} pushes excluded)` : ""}. Realized
+          win% excludes pushes.
+        </p>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-[11px] uppercase tracking-widest text-muted border-b border-line">
+              <th className="py-2 pr-3 font-bold">Model win%</th>
+              <th className="py-2 pr-3 font-bold">Model avg</th>
+              <th className="py-2 pr-3 font-bold">Realized</th>
+              <th className="py-2 font-bold text-right">n</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cal.bands.map((b) => (
+              <tr key={b.label} className="border-b border-line/50">
+                <td className="py-2 pr-3 font-bold text-paper">
+                  {b.label}
+                  {b.thin ? <span className="text-gold"> †</span> : ""}
+                </td>
+                <td className="py-2 pr-3 text-muted">
+                  {b.meanPredicted !== null ? `${b.meanPredicted.toFixed(1)}%` : "—"}
+                </td>
+                <td className="py-2 pr-3 text-paper">
+                  {b.realized !== null ? `${b.realized.toFixed(1)}%` : "—"}
+                  <span className="text-muted text-xs">
+                    {" "}
+                    ({b.wins}–{b.losses})
+                  </span>
+                </td>
+                <td className="py-2 text-right text-muted">{b.n}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="text-[11px] text-muted leading-relaxed mt-3">
+          † Small sample (n&lt;30) — one hot or cold week swings it; a band that
+          size proves nothing either way. Overall across these picks the model
+          claimed {cal.meanPredicted !== null ? `${cal.meanPredicted.toFixed(1)}%` : "—"}{" "}
+          on average and realized {cal.realized !== null ? `${cal.realized.toFixed(1)}%` : "—"}.
+          Computed from the same results tracker as everything on this page
+          (scripts/build-calibration.py) — the numbers reproduce or they don&apos;t ship.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 const REGIME_RULES = [
   ["Recalibrated Oct 16", "359 bets analyzed — confidence tiers fixed, stars sharpened"],
   ["Quantified edge", "Every play states its edge as a number. No number, no grid spot"],
@@ -556,10 +643,12 @@ export default function RecordTabs({
   rec,
   analytics,
   clvByPick,
+  calibration,
 }: {
   rec: TrackRecord;
   analytics: RecordAnalytics;
   clvByPick?: Record<string, ClvMovement>;
+  calibration: CalibrationData;
 }) {
   const [tab, setTab] = useState<Tab>("all");
   const optStart = rec.optimizedStartDate ?? "2026-10-16";
@@ -640,6 +729,7 @@ export default function RecordTabs({
 
       <Featured picks={shown} />
       <SegmentTables analytics={analytics} />
+      <CalibrationSection cal={calibration} />
       <PickTable picks={shown} clvByPick={clvByPick} />
 
       {rec.note && <p className="text-xs text-muted mt-4 max-w-2xl">{rec.note}</p>}

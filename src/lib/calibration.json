@@ -1,0 +1,62 @@
+{
+ "source": "results-tracker.md via parse_track_picks.py (canonical verified parse)",
+ "method": "Predicted win% = implied probability of the brief's fair price (published american odds shifted by the stated edge in cents), the src/lib/winprob.ts convention. Realized win% excludes pushes.",
+ "windowStart": "2026-10-16",
+ "windowEnd": "2026-11-07",
+ "n": 106,
+ "pushes": 0,
+ "meanPredicted": 57.4,
+ "realized": 48.1,
+ "bands": [
+  {
+   "label": "<50",
+   "n": 7,
+   "wins": 3,
+   "losses": 4,
+   "pushes": 0,
+   "meanPredicted": 35.0,
+   "realized": 42.9,
+   "thin": true
+  },
+  {
+   "label": "50\u201354",
+   "n": 11,
+   "wins": 7,
+   "losses": 4,
+   "pushes": 0,
+   "meanPredicted": 53.2,
+   "realized": 63.6,
+   "thin": true
+  },
+  {
+   "label": "55\u201359",
+   "n": 59,
+   "wins": 26,
+   "losses": 33,
+   "pushes": 0,
+   "meanPredicted": 57.4,
+   "realized": 44.1,
+   "thin": false
+  },
+  {
+   "label": "60\u201364",
+   "n": 18,
+   "wins": 8,
+   "losses": 10,
+   "pushes": 0,
+   "meanPredicted": 61.7,
+   "realized": 44.4,
+   "thin": true
+  },
+  {
+   "label": "65+",
+   "n": 11,
+   "wins": 7,
+   "losses": 4,
+   "pushes": 0,
+   "meanPredicted": 69.3,
+   "realized": 63.6,
+   "thin": true
+  }
+ ]
+}

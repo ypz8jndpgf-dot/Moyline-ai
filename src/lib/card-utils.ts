@@ -147,6 +147,41 @@ export function bookPriceForPick(pick: FeedPick, game: GameVM, bookLabel: string
   return cell && b ? { book: b.label, display: cell.display } : null;
 }
 
+export interface BookPriceRow {
+  book: string;
+  /** Live board display for this pick's market+side, e.g. "-3.5 (-110)". */
+  display: string;
+  /** The board's best-price flag for this cell. */
+  best: boolean;
+  /** True when this is the book the card's published price came from. */
+  cardBook: boolean;
+}
+
+/**
+ * Every book's live price for this pick's market+side (optimization #58,
+ * "Compare all books"). Reads only the cached board the best-price badge
+ * already uses — no new odds pulls. Null when the pick's market isn't on
+ * the board (player props, unmatched games).
+ */
+export function bookPricesForPick(pick: FeedPick, game: GameVM): BookPriceRow[] | null {
+  const cellKey = cellKeyForPick(pick);
+  if (!cellKey) return null;
+  const cardBook =
+    (pick.price || "").match(/\(([^)]+)\)\s*$/)?.[1]?.trim().toLowerCase() || "";
+  const rows: BookPriceRow[] = [];
+  for (const b of game.books) {
+    const cell = b[cellKey];
+    if (!cell) continue;
+    rows.push({
+      book: b.label,
+      display: cell.display,
+      best: cell.best,
+      cardBook: !!cardBook && b.label.toLowerCase() === cardBook,
+    });
+  }
+  return rows.length > 0 ? rows : null;
+}
+
 /** Extract an American-odds number from a price string like "-138" or "(-154)". */
 function parseAmerican(s: string | undefined): number | null {
   if (!s) return null;

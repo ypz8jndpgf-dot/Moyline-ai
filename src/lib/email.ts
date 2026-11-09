@@ -8,6 +8,24 @@ function cleanEnv(v: string | undefined): string {
   return s.replace(/^[\"']+|[\"']+$/g, "");
 }
 
+/**
+ * BRIEF SEND MODE (user directive 2026-11-08 — supersedes the 2026-11-04
+ * member pause on the brief path): while this mode is on, every
+ * member-broadcast recipient list (getMemberEmails — brief bulk sends,
+ * results recaps, steam alerts, the 5-alarm) resolves to the OWNER ONLY,
+ * and the one-off send route refuses non-owner recipients. Members
+ * receive nothing; unsubscribe/snooze logic is untouched (it still
+ * filters the owner like anyone else).
+ *
+ * ONE-CHANGE FLIP: set BRIEF_SEND_MODE=members in the Vercel env to
+ * restore normal member sends — no code edit. Unset defaults to "owner".
+ */
+export const OWNER_EMAIL = "amoyseowicz@gmail.com";
+export const BRIEF_SEND_MODE = (process.env.BRIEF_SEND_MODE || "owner")
+  .trim()
+  .toLowerCase();
+export const OWNER_ONLY_SENDS = BRIEF_SEND_MODE !== "members";
+
 function redisClient(): Redis | null {
   const url = cleanEnv(process.env.UPSTASH_REDIS_REST_URL);
   const token = cleanEnv(process.env.UPSTASH_REDIS_REST_TOKEN);
@@ -72,6 +90,14 @@ export async function getMemberEmails(): Promise<string[]> {
 
   const admin = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
   if (admin.includes("@")) out.add(admin);
+
+  // OWNER-ONLY MODE (2026-11-08): hard-restrict the broadcast list to the
+  // owner alone, whatever the member sources above produced (defense in
+  // depth — the filter lives here, not at each caller).
+  if (OWNER_ONLY_SENDS) {
+    out.clear();
+    out.add(OWNER_EMAIL);
+  }
 
   // Honor one-click unsubscribes and snoozes (paused briefs).
   if (redis) {

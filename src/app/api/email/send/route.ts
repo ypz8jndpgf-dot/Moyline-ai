@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sendEmail } from "@/lib/email";
+import { sendEmail, OWNER_ONLY_SENDS, OWNER_EMAIL } from "@/lib/email";
 import { unsubUrl, isUnsubscribed, isSnoozed } from "@/lib/unsub";
 import { briefSignInUrl } from "@/lib/brief-signin";
 import { replaceTailLinks } from "@/lib/tail-link";
@@ -33,6 +33,12 @@ export async function POST(req: Request) {
   const html = body.html || "";
   if (!to.includes("@") || !subject || !html) {
     return NextResponse.json({ error: "to, subject, html required" }, { status: 400 });
+  }
+  // OWNER-ONLY MODE (2026-11-08): this route is the brief resend path —
+  // while the mode is on it sends to the owner alone, whatever address
+  // the caller asked for. Unsubscribe/snooze checks below are unchanged.
+  if (OWNER_ONLY_SENDS && to !== OWNER_EMAIL) {
+    return NextResponse.json({ ok: false, ownerOnly: true });
   }
   if (await isUnsubscribed(to)) {
     return NextResponse.json({ ok: false, unsubscribed: true });
