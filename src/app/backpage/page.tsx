@@ -3,15 +3,17 @@ import { auth } from "@/lib/auth";
 import { getSubscription, hasAccess } from "@/lib/store";
 import { getPicksFeed, type FeedPick } from "@/lib/picks";
 import { pickWinEdge } from "@/lib/winprob";
+import PickStatusBanner from "@/components/PickStatusBanner";
 
 export const dynamic = "force-dynamic";
 
 function BackpageCard({ p }: { p: FeedPick }) {
   const winEdge = pickWinEdge(p);
+  const voided = p.status === "voided";
   return (
     <div className="card p-4">
       <div className="flex items-center justify-between mb-1">
-        {winEdge ? (
+        {winEdge && !voided ? (
           <span className="text-xs font-bold uppercase tracking-widest text-muted">
             {winEdge}
           </span>
@@ -20,8 +22,11 @@ function BackpageCard({ p }: { p: FeedPick }) {
         )}
         {p.starts && <span className="text-xs text-muted">{p.starts}</span>}
       </div>
+      <PickStatusBanner p={p} className="mb-2" />
       <h3 className="font-display text-lg">{p.game}</h3>
-      <p className="text-md font-bold text-goldsoft">
+      <p
+        className={`text-md font-bold text-goldsoft ${voided ? "line-through opacity-50" : ""}`}
+      >
         {p.play} <span className="text-sm text-muted">{p.price}</span>
       </p>
       {p.reasoning && <p className="text-sm text-muted mt-2">{p.reasoning}</p>}

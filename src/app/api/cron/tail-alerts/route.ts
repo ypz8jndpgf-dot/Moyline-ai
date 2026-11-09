@@ -28,6 +28,14 @@ import { findBoardGame, bestPriceForPick, movedAgainstNote, movedInFavorNote } f
  *    tails, so the first refresh after the 6:30am grading sends it
  *    (optimization #57). Settled pushes need no board, so they are
  *    checked before the odds-board early return.
+ *  - "voided" / "corrected": the pick's publication status in today's
+ *    feed changed after the fact (optimization #62) — the play was
+ *    voided (dead: bad line/data) or its line was corrected. Checked
+ *    from the feed, not the board, so a voided pick alerts even when
+ *    its game has left the board; a voided tail then gets no moved /
+ *    favorable / start alerts. One push per member per pick per
+ *    status, ever — the dedupe mark carries the settled kind's 90-day
+ *    TTL, which for a same-day pick is effectively permanent.
  * Also on this route (it runs on every odds refresh): the once-a-day
  * card-locks broadcast (optimization #53) — one push when the card's
  * first game is within two hours of starting, deduped per date.
@@ -242,6 +250,43 @@ async function checkTailAlerts() {
           const pick: FeedPick =
             feedMap.get(`${tail.game}|${tail.play}`) ||
             ({ game: tail.game, play: tail.play, price: tail.price, confidence: 0 } as FeedPick);
+
+          // Voided / corrected (optimization #62): the loud death a bad
+          // line used to never get — the Breece Hall correction went out
+          // in chat only while tailed members saw nothing in-app. Fires
+          // from the feed entry, before any board lookup, so it lands
+          // even when the game is off the board. A voided tail is done
+          // after this (no moved/favorable/start for a dead play); a
+          // corrected tail is still live and flows on to the checks
+          // below.
+          if (pick.status === "voided" || pick.status === "corrected") {
+            const isVoid = pick.status === "voided";
+            const sentStatus = await sendOnce(
+              redis,
+              email,
+              tail.date,
+              isVoid ? "voided" : "corrected",
+              tail.game,
+              tail.play,
+              {
+                title: isVoid
+                  ? "🚫 Your tail was voided"
+                  : "✏️ Your tail was corrected",
+                body: `${tail.game} — ${tail.play}${
+                  pick.statusNote
+                    ? ` — ${pick.statusNote}`
+                    : isVoid
+                      ? " — this play is off the board; do not bet it."
+                      : " — the line was corrected after publication; check the card."
+                }`,
+                url: "/my-tails",
+              },
+              90 * 24 * 3600
+            );
+            if (sentStatus) results.sent++;
+            if (isVoid) continue;
+          }
+
           const bg = findBoardGame(pick, games);
           if (!bg) continue;
 
@@ -309,7 +354,7 @@ async function sendOnce(
   redis: Redis,
   email: string,
   date: string,
-  kind: "moved" | "favorable" | "start" | "settled",
+  kind: "moved" | "favorable" | "start" | "settled" | "voided" | "corrected",
   game: string,
   play: string,
   payload: { title: string; body: string; url?: string },

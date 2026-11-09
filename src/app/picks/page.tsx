@@ -16,6 +16,7 @@ import LiveScore from "./LiveScore";
 import StartsIn from "./StartsIn";
 import PropHitRate from "./PropHitRate";
 import MarketingPaywall from "@/components/MarketingPaywall";
+import PickStatusBanner from "@/components/PickStatusBanner";
 import { getYesterdayGlance, formatRecord, formatUnits } from "@/lib/records";
 import PushPrompt from "@/components/PushPrompt";
 import IosInstallPrompt from "@/components/IosInstallPrompt";
@@ -173,6 +174,9 @@ function PickCard({
   newLabel?: string | null;
 }) {
   const winEdge = pickWinEdge(p);
+  // Voided pick (optimization #62): the banner replaces every live-play
+  // treatment — no best-price chasing, no edge-gone math, no tail action.
+  const voided = p.status === "voided";
   const gameShort = (p.game || "").split("(")[0].trim();
   const askQuestions = [
     "Why this pick?",
@@ -195,9 +199,10 @@ function PickCard({
         </span>
         <span className="flex items-center gap-2">
           <StatusBadge status={status} />
-          {winEdge && <span className="text-xs text-muted">{winEdge}</span>}
+          {winEdge && !voided && <span className="text-xs text-muted">{winEdge}</span>}
         </span>
       </div>
+      <PickStatusBanner p={p} className="mb-3" />
       <h3 className="font-display text-xl mb-1">{p.game}</h3>
       {p.starts && (
         <p className="text-xs text-muted mb-1">
@@ -205,11 +210,13 @@ function PickCard({
           {p.starts}
         </p>
       )}
-      {status === "upcoming" && p.starts && (
+      {status === "upcoming" && p.starts && !voided && (
         <StartsIn starts={p.starts} date={feedDate} />
       )}
       {status !== "upcoming" && <LiveScore game={p.game} />}
-      <p className="text-lg font-bold text-goldsoft mb-1">
+      <p
+        className={`text-lg font-bold text-goldsoft mb-1 ${voided ? "line-through opacity-50" : ""}`}
+      >
         {p.play} <span className="text-sm text-muted">{p.price}</span>
       </p>
       {(p.added_at || p.updated_at) && (
@@ -221,38 +228,38 @@ function PickCard({
               : ""}
         </p>
       )}
-      {best && (
+      {!voided && best && (
         <p className="text-xs mb-2">
           <span className="inline-block bg-white/10 text-paper/80 px-2 py-0.5 rounded">
             Best price: {best.book} {best.display}
           </span>
         </p>
       )}
-      {yourBook && (
+      {!voided && yourBook && (
         <p className="text-xs mb-2">
           <span className="inline-block bg-gold/10 text-goldsoft px-2 py-0.5 rounded border border-gold/30">
             Your book · {yourBook.book}: {yourBook.display}
           </span>
         </p>
       )}
-      {!best && movedNote && (
+      {!voided && !best && movedNote && (
         <p className="text-xs mb-2">
           <span className="inline-block bg-red-500/10 text-red-200/80 px-2 py-0.5 rounded">
             ⚠ {movedNote}
           </span>
         </p>
       )}
-      {edgeGone && (
+      {!voided && edgeGone && (
         <p className="text-xs mb-2">
           <span className="inline-block bg-red-500/15 text-red-100 px-2 py-0.5 rounded border border-red-400/40 font-bold">
             🚫 {edgeGone}
           </span>
         </p>
       )}
-      {lineStory && (
+      {!voided && lineStory && (
         <p className="text-[11px] text-muted mb-2">📈 {lineStory}</p>
       )}
-      {bookPrices && bookPrices.length > 1 && (
+      {!voided && bookPrices && bookPrices.length > 1 && (
         <details className="mt-1 mb-2 group">
           <summary className="text-sm font-bold text-gold cursor-pointer list-none flex items-center gap-1">
             <span className="transition-transform group-open:rotate-90">▶</span>
@@ -317,17 +324,29 @@ function PickCard({
         ))}
       </div>
       <div className="mt-3 flex items-center gap-2">
-        <TailButton game={p.game} play={p.play} price={p.price} initiallyTailed={initiallyTailed} />
-        <ShareButton
-          game={p.game}
-          play={p.play}
-          price={p.price}
-          edgeCents={p.edge_cents}
-          winProb={p.win_prob}
-          star={!!p.star}
-          dateLabel={cardDate}
-          starts={p.starts}
-        />
+        {voided ? (
+          <button
+            disabled
+            title={p.statusNote || "This pick was voided after publication"}
+            className="text-xs font-bold px-3 py-1.5 rounded-full border border-red-500/40 text-red-300/70 cursor-not-allowed"
+          >
+            🚫 Voided — not playable
+          </button>
+        ) : (
+          <>
+            <TailButton game={p.game} play={p.play} price={p.price} initiallyTailed={initiallyTailed} />
+            <ShareButton
+              game={p.game}
+              play={p.play}
+              price={p.price}
+              edgeCents={p.edge_cents}
+              winProb={p.win_prob}
+              star={!!p.star}
+              dateLabel={cardDate}
+              starts={p.starts}
+            />
+          </>
+        )}
       </div>
     </div>
   );
@@ -388,7 +407,10 @@ function PaywallPreview({
                 🕐 {formatCardDate(feed?.date)} · {freePick.starts}
               </p>
             )}
-            <p className="text-lg font-bold text-goldsoft mb-2">
+            <PickStatusBanner p={freePick} className="mb-2" />
+            <p
+              className={`text-lg font-bold text-goldsoft mb-2 ${freePick.status === "voided" ? "line-through opacity-50" : ""}`}
+            >
               {freePick.play} <span className="text-sm text-muted">{freePick.price}</span>
             </p>
             {freePick.reasoning && <p className="text-sm text-muted">{freePick.reasoning}</p>}
@@ -662,7 +684,9 @@ export default async function PicksPage({
   const tailAllPicks = rankedPicks
     .filter(
       ({ p, status }) =>
-        status === "upcoming" && !tailedSet.has(`${p.game}|${p.play}`)
+        status === "upcoming" &&
+        p.status !== "voided" && // a dead play is never mass-tailed (#62)
+        !tailedSet.has(`${p.game}|${p.play}`)
     )
     .map(({ p }) => ({ game: p.game, play: p.play, price: p.price }));
 
@@ -812,7 +836,9 @@ export default async function PicksPage({
               Every play has to clear the full gate set — a quantified edge and a
               confirmed driver — and today only {rankedPicks.length}{" "}
               {rankedPicks.length === 1 ? "play" : "plays"} did. The leans that
-              didn&apos;t clear are in the brief; the card is never padded.
+              didn&apos;t clear are in the brief
+              {feed.passes && feed.passes.length > 0 ? " — and listed below" : ""};
+              the card is never padded.
             </p>
           )}
 
@@ -919,16 +945,19 @@ export default async function PicksPage({
                     </span>
                     <div>
                       <p className="text-sm font-bold text-paper">{tp.game}</p>
-                      <p className="text-sm text-goldsoft">
+                      <p
+                        className={`text-sm text-goldsoft ${tp.status === "voided" ? "line-through opacity-50" : ""}`}
+                      >
                         {tp.play} <span className="text-muted">{tp.price}</span>
                       </p>
                       <p className="text-xs text-muted">
-                        {pickWinEdge(tp)}
+                        {tp.status === "voided" ? "" : pickWinEdge(tp)}
                         {tp.starts ? ` · 🕐 ${tp.starts}` : ""}
                       </p>
                       {tp.reasoning && (
                         <p className="text-xs text-muted mt-1">{tp.reasoning}</p>
                       )}
+                      <PickStatusBanner p={tp} className="mt-2" />
                     </div>
                   </div>
                 ))}
@@ -952,24 +981,35 @@ export default async function PicksPage({
                     >
                       <div>
                         <p className="text-sm font-bold text-paper">{prop.game}</p>
-                        <p className="text-sm text-goldsoft">
+                        <p
+                          className={`text-sm text-goldsoft ${prop.status === "voided" ? "line-through opacity-50" : ""}`}
+                        >
                           {prop.play} <span className="text-muted">{prop.price}</span>
                         </p>
                         <p className="text-xs text-muted">
-                          {pickWinEdge(prop)}
+                          {prop.status === "voided" ? "" : pickWinEdge(prop)}
                           {prop.starts ? ` · 🕐 ${prop.starts}` : ""}
                         </p>
                         {prop.reasoning && (
                           <p className="text-xs text-muted mt-1">{prop.reasoning}</p>
                         )}
-                        <PropHitRate game={prop.game} play={prop.play} />
+                        <PickStatusBanner p={prop} className="mt-2" />
+                        {prop.status !== "voided" && (
+                          <PropHitRate game={prop.game} play={prop.play} />
+                        )}
                       </div>
-                      <TailButton
-                        game={prop.game}
-                        play={prop.play}
-                        price={prop.price}
-                        initiallyTailed={tailedSet.has(key)}
-                      />
+                      {prop.status === "voided" ? (
+                        <span className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border border-red-500/40 text-red-300/70">
+                          🚫 Voided
+                        </span>
+                      ) : (
+                        <TailButton
+                          game={prop.game}
+                          play={prop.play}
+                          price={prop.price}
+                          initiallyTailed={tailedSet.has(key)}
+                        />
+                      )}
                     </div>
                   );
                 })}
@@ -1134,6 +1174,24 @@ export default async function PicksPage({
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {feed.passes && feed.passes.length > 0 && (
+            <div className="card p-5 mt-4">
+              <h2 className="font-display text-xl mb-1">🔍 Considered &amp; passed</h2>
+              <p className="text-xs text-muted mb-4">
+                The whole slate gets researched every day. These games were covered
+                and left off the card — the edge or the driver wasn&apos;t there.
+              </p>
+              <ul className="space-y-2">
+                {feed.passes.map((ps, i) => (
+                  <li key={i} className="text-sm">
+                    <span className="font-bold text-paper">{ps.game}</span>
+                    <span className="text-muted"> — {ps.reason}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </>

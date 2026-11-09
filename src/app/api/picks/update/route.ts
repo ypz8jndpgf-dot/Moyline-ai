@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Redis } from "@upstash/redis";
-import { mergeKey } from "@/lib/card-utils";
+import { mergeKey, normalizeGame } from "@/lib/card-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +23,19 @@ type FeedPick = {
   line?: string;
   added_at?: string;
   updated_at?: string;
+  /** Publication status (optimization #62) — see src/lib/picks.ts for the
+   *  semantics. The merge treats an ABSENT status as "leave the stored
+   *  status alone", an explicit value as "set it", and an explicit null
+   *  as "clear it". */
+  status?: "voided" | "corrected" | null;
+  statusNote?: string | null;
+};
+
+/** Considered & passed entry (optimization #61): a researched game the
+ *  card did not publish, with a one-line reason. */
+type Pass = {
+  game: string;
+  reason: string;
 };
 
 type Ticket = {
@@ -77,6 +90,9 @@ type PicksFeed = {
   backpage?: FeedPick[];
   /** Top 3 Football Plays (Sat/Sun briefs; optimization #59). */
   top3?: FeedPick[];
+  /** Considered & passed (optimization #61). Accumulates across editions —
+   *  see mergePasses. Display-only: never graded, never paper-traded. */
+  passes?: Pass[];
   /** Longshot of the Day: one +300-or-longer play, public Longshot Ledger. */
   longshot?: { game: string; play: string; price: string; reasoning?: string } | null;
   teaser: Ticket | null;
@@ -99,6 +115,23 @@ function cleanEnv(v: string | undefined): string {
   return s.replace(/^[\"']+|[\"']+$/g, "");
 }
 
+/** Optimization #62: when a status is present on a pick entry it must be
+ *  a known value (or explicit null = clear), and statusNote must be a
+ *  string when present. Absent fields are always fine. */
+function validPickStatuses(list: unknown): boolean {
+  if (list === undefined || list === null) return true;
+  if (!Array.isArray(list)) return false;
+  return list.every((p) => {
+    if (!p || typeof p !== "object") return false;
+    const s = (p as Record<string, unknown>).status;
+    const n = (p as Record<string, unknown>).statusNote;
+    return (
+      (s === undefined || s === null || s === "voided" || s === "corrected") &&
+      (n === undefined || n === null || typeof n === "string")
+    );
+  });
+}
+
 function isValidFeed(b: unknown): b is PicksFeed {
   if (!b || typeof b !== "object") return false;
   const f = b as Record<string, unknown>;
@@ -109,7 +142,12 @@ function isValidFeed(b: unknown): b is PicksFeed {
     (f.teaser === null || typeof f.teaser === "object") &&
     (f.parlay === null || typeof f.parlay === "object") &&
     (f.lookahead === undefined || f.lookahead === null || typeof f.lookahead === "object") &&
-    (f.top3 === undefined || f.top3 === null || Array.isArray(f.top3))
+    (f.top3 === undefined || f.top3 === null || Array.isArray(f.top3)) &&
+    (f.passes === undefined || f.passes === null || Array.isArray(f.passes)) &&
+    validPickStatuses(f.picks) &&
+    validPickStatuses(f.props) &&
+    validPickStatuses(f.backpage) &&
+    validPickStatuses(f.top3)
   );
 }
 
@@ -128,13 +166,42 @@ function mergePicks(
     const key = pickKey(p);
     const prev = byKey.get(key);
     if (!prev) added.push(p);
-    byKey.set(key, {
+    const next: FeedPick = {
       ...p,
       // First appearance keeps its birth timestamp; re-published plays keep
       // the original added_at and record when they were last updated.
       added_at: prev?.added_at || (p as FeedPick).added_at || now,
       updated_at: prev ? now : (p as FeedPick).updated_at,
-    });
+    };
+    // Publication status (optimization #62) does NOT follow the plain
+    // replace rule above — it is sticky. An ABSENT `status` key in the
+    // push leaves the stored status untouched, so a routine edition
+    // re-push of the same pick can never silently un-void it. An explicit
+    // status value sets it; an explicit null clears it. `statusNote`
+    // follows its status: preserved with it, replaced when a new status
+    // is pushed with a note, dropped when the status clears or changes
+    // without one.
+    if (!("status" in p)) {
+      if (prev?.status) {
+        next.status = prev.status;
+        if (prev.statusNote) next.statusNote = prev.statusNote;
+        else delete next.statusNote;
+      } else {
+        delete next.status;
+        delete next.statusNote;
+      }
+    } else if (p.status === null || p.status === undefined) {
+      delete next.status;
+      delete next.statusNote;
+    } else {
+      next.status = p.status;
+      if (typeof p.statusNote === "string" && p.statusNote) {
+        next.statusNote = p.statusNote;
+      } else {
+        delete next.statusNote;
+      }
+    }
+    byKey.set(key, next);
   }
   const merged = [...byKey.values()];
   // Single ★ per card: a new edition crowning a star demotes earlier ones.
@@ -145,6 +212,28 @@ function mergePicks(
     }
   }
   return { merged, added };
+}
+
+/**
+ * Merge "considered & passed" lists (#61): passes ACCUMULATE across the
+ * day's editions (the 7am edition covers the full slate; later editions
+ * research new games only and add their passes). Union by normalized game;
+ * a later edition's entry for a game already listed replaces the earlier
+ * reason — the freshest research wins. Malformed entries are dropped.
+ */
+function mergePasses(existing: Pass[], incoming: Pass[]): Pass[] {
+  const byGame = new Map<string, Pass>();
+  for (const p of existing) {
+    if (p && typeof p.game === "string" && typeof p.reason === "string") {
+      byGame.set(normalizeGame(p.game), p);
+    }
+  }
+  for (const p of incoming) {
+    if (p && typeof p.game === "string" && typeof p.reason === "string") {
+      byGame.set(normalizeGame(p.game), p);
+    }
+  }
+  return [...byGame.values()];
 }
 
 /**
@@ -228,6 +317,9 @@ export async function POST(req: Request) {
       // replaces the earlier one wholesale; missing/null/empty never erases.
       top3:
         body.top3 && body.top3.length > 0 ? body.top3 : existing?.top3,
+      // Considered & passed (#61): accumulates across editions, deduped by
+      // normalized game — see mergePasses. Display-only; never graded.
+      passes: mergePasses(existing?.passes || [], body.passes || []),
       // Weekend lookaheads: keyed by type so NFL teaser and NCAAB spotlight coexist.
       // Incoming single `lookahead` (from brief workers) routes to its type key; null never erases.
       // Backward compat: old single `lookahead` without a type field is treated as a teaser.
@@ -404,14 +496,16 @@ export async function POST(req: Request) {
     let longshotPlaced = 0;
     try {
       const { placePaperBets } = await import("@/lib/paper");
+      // Status rides along so placePaperBets skips voided picks (#62):
+      // a pick voided before its first placement never enters the ledger.
       const placed = await placePaperBets(
-        mergedPicks.map((p) => ({ game: p.game, play: p.play, price: p.price })),
+        mergedPicks.map((p) => ({ game: p.game, play: p.play, price: p.price, status: p.status })),
         body.date,
         "card"
       );
       paperPlaced = placed.length;
       const bpPlaced = await placePaperBets(
-        mergedBackpage.map((p) => ({ game: p.game, play: p.play, price: p.price })),
+        mergedBackpage.map((p) => ({ game: p.game, play: p.play, price: p.price, status: p.status })),
         body.date,
         "backpage"
       );
@@ -446,6 +540,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       picks: merged.picks.length,
+      passes: merged.passes?.length || 0,
       card_live_push: cardLivePush,
       new_picks_push: newPicksPush,
       backpage: mergedBackpage.length,

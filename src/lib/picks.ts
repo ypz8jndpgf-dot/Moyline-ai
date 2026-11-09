@@ -43,6 +43,31 @@ export type FeedPick = {
   added_at?: string;
   /** ISO timestamp when the pick was last re-published (e.g. changed line). Set by the merge. */
   updated_at?: string;
+  /**
+   * Publication status (optimization #62) — set by an operator push when a
+   * published pick turns out to be wrong after the fact:
+   *  - "voided": the play is dead (bad line, stale data — the Breece Hall
+   *    prop, 2026-11-08). Renders with a VOIDED banner everywhere, tail
+   *    buttons disabled, never paper-traded, and members who tailed it get
+   *    a one-time "voided" tail alert.
+   *  - "corrected": the play stands but its line/price was fixed after
+   *    publication. Renders with a CORRECTED note; still a live play.
+   *  - null / absent: a normal live pick.
+   * Merge semantics (enforced in /api/picks/update): an ABSENT status in a
+   * push never changes the stored status — a routine edition re-push must
+   * not silently un-void a pick. Only an explicit status value sets it,
+   * and an explicit null clears it. `statusNote` follows its status.
+   */
+  status?: "voided" | "corrected" | null;
+  /** One-line reason for the status, shown with the banner/note. */
+  statusNote?: string | null;
+};
+
+export type FeedPass = {
+  game: string;
+  /** One-line reason the researched game was passed — no edge, driver
+   *  unconfirmed, price gone, or uncertainty. Display-only. */
+  reason: string;
 };
 
 export type PicksFeed = {
@@ -62,6 +87,14 @@ export type PicksFeed = {
    *  three best football leans, ranked. A later edition's list replaces
    *  the earlier one wholesale; a missing/null list never erases it. */
   top3?: FeedPick[];
+  /** Considered & passed (optimization #61): games the briefs' research
+   *  covered but the card did not publish, each with a one-line reason.
+   *  Unlike top3, passes ACCUMULATE across the day's editions — the 7am
+   *  edition covers the full slate and later editions add newly-researched
+   *  passes — deduped by normalized game, with a later edition's reason
+   *  for the same game replacing the earlier one. Display-only context:
+   *  never graded, never paper-traded. */
+  passes?: FeedPass[];
   /** Longshot of the Day (2026-11-02, suggestion #37): one labeled
    *  high-variance play at +300 or longer, with its own public Longshot
    *  Ledger — never a grid pick, never in the combined record. */

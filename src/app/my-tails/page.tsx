@@ -19,6 +19,7 @@ import { parseAmericanOdds } from "@/lib/winprob";
 import { parseProp } from "@/lib/cheatsheet";
 import { gradeTail, tailUnits } from "@/lib/tail-results";
 import TailAlertsToggle from "./TailAlertsToggle";
+import PickStatusBanner from "@/components/PickStatusBanner";
 
 export const dynamic = "force-dynamic";
 
@@ -108,6 +109,28 @@ export default async function MyTailsPage() {
   // odds pulls. Props and unmirrorable markets resolve to null inside
   // hedgeQuoteForPick and simply get no panel.
   const hedgeByTail = new Map<number, TailHedge>();
+  // Publication status per tail (optimization #62), from today's feed —
+  // the voided/corrected banner renders on the row, and a voided tail
+  // gets no live price or hedge math: the play is dead. Read from the
+  // feed alone (its own try), so the banner survives an odds outage.
+  const statusByTail = new Map<number, FeedPick>();
+  try {
+    const statusFeed = await getPicksFeed();
+    const statusMap = new Map<string, FeedPick>();
+    for (const p of [
+      ...(statusFeed?.picks || []),
+      ...(statusFeed?.props || []),
+      ...(statusFeed?.backpage || []),
+    ]) {
+      if (p.status) statusMap.set(`${p.game}|${p.play}`, p);
+    }
+    tails.forEach((tail, i) => {
+      const fp = statusMap.get(`${tail.game}|${tail.play}`);
+      if (fp) statusByTail.set(i, fp);
+    });
+  } catch {
+    /* feed unavailable — tails render without status banners */
+  }
   let boardAsOf = 0;
   try {
     const [feed, oddsResult, openings] = await Promise.all([
@@ -127,6 +150,8 @@ export default async function MyTailsPage() {
     }
     const now = Date.now();
     tails.forEach((tail, i) => {
+      // A voided play is dead — no live price, no hedge math (#62).
+      if (statusByTail.get(i)?.status === "voided") return;
       const result = graded[i].result;
       if (result && result.result !== "Pending") return;
       const pick: FeedPick =
@@ -154,6 +179,7 @@ export default async function MyTailsPage() {
     ...g,
     live: liveByTail.get(i) ?? null,
     hedge: hedgeByTail.get(i) ?? null,
+    statusPick: statusByTail.get(i) ?? null,
   }));
 
   const w = graded.filter((g) => g.result?.result === "Win").length;
@@ -210,13 +236,16 @@ export default async function MyTailsPage() {
           {gradedWithLive
             .slice()
             .reverse()
-            .map(({ tail, result, live, hedge }, i) => (
+            .map(({ tail, result, live, hedge, statusPick }, i) => (
               <div key={i} className="card p-4 flex items-center justify-between gap-3">
                 <div>
                   <p className="font-bold">{tail.game}</p>
-                  <p className="text-sm text-goldsoft">
+                  <p
+                    className={`text-sm text-goldsoft ${statusPick?.status === "voided" ? "line-through opacity-60" : ""}`}
+                  >
                     {tail.play} <span className="text-muted">{tail.price}</span>
                   </p>
+                  {statusPick && <PickStatusBanner p={statusPick} className="mt-2" />}
                   {live && (
                     <p className="text-xs mt-1">
                       <span className="text-muted">Tailed {tail.price}</span>
@@ -284,14 +313,22 @@ export default async function MyTailsPage() {
                 </div>
                 <span
                   className={`text-sm font-bold px-3 py-1 rounded ${
-                    result?.result === "Win"
-                      ? "text-up"
-                      : result?.result === "Loss"
-                        ? "text-down"
-                        : "text-muted"
+                    statusPick?.status === "voided" &&
+                    (!result || result.result === "Pending")
+                      ? "text-down"
+                      : result?.result === "Win"
+                        ? "text-up"
+                        : result?.result === "Loss"
+                          ? "text-down"
+                          : "text-muted"
                   }`}
                 >
-                  {result ? result.result : "Pending"}
+                  {statusPick?.status === "voided" &&
+                  (!result || result.result === "Pending")
+                    ? "Voided"
+                    : result
+                      ? result.result
+                      : "Pending"}
                 </span>
               </div>
             ))}

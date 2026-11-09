@@ -32,6 +32,10 @@ export default async function FeaturedPlays() {
               result: "Pending",
               star: true,
               conf: p.confidence?.toString() || "",
+              // Optimization #62: a voided/corrected ★ must not read as a
+              // live pending play on the homepage either.
+              status: p.status || undefined,
+              statusNote: p.statusNote || undefined,
             } as any);
           }
         }
@@ -77,29 +81,42 @@ export default async function FeaturedPlays() {
             <p className="text-xs text-muted mt-1">Biggest-edge plays · verified record</p>
           </div>
           <div className="flex-1 min-w-0 divide-y divide-line/50">
-            {recent.map((pick) => (
+            {recent.map((pick) => {
+              // Only feed-derived rows carry a publication status (#62).
+              const status = (pick as any).status as string | undefined;
+              const statusNote = (pick as any).statusNote as string | undefined;
+              return (
               <div key={pick.id} className="py-2 flex items-center gap-3 text-sm">
                 <span
                   className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                    pick.result === "Win"
-                      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                      : pick.result === "Loss"
-                        ? "bg-red-500/15 text-red-400 border-red-500/30"
-                        : pick.result === "Pending"
-                          ? "bg-amber-500/15 text-gold border-amber-500/30 animate-pulse"
-                          : "bg-zinc-500/15 text-zinc-400 border-zinc-500/30"
+                    status === "voided"
+                      ? "bg-red-500/15 text-red-400 border-red-500/30"
+                      : pick.result === "Win"
+                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                        : pick.result === "Loss"
+                          ? "bg-red-500/15 text-red-400 border-red-500/30"
+                          : pick.result === "Pending"
+                            ? "bg-amber-500/15 text-gold border-amber-500/30 animate-pulse"
+                            : "bg-zinc-500/15 text-zinc-400 border-zinc-500/30"
                   }`}
                 >
-                  {pick.result}
+                  {status === "voided" ? "Voided" : pick.result}
                 </span>
+                {status === "corrected" && (
+                  <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border bg-amber-500/15 text-amber-300 border-amber-500/30">
+                    ✏️ Corrected
+                  </span>
+                )}
                 <div className="min-w-0">
                   <span className="font-bold truncate block sm:inline">{pick.game}</span>
                   <span className="text-muted text-xs sm:ml-2">
                     {pick.play} {pick.line} · {pick.date.slice(5)}
+                    {status && statusNote ? ` — ${statusNote}` : ""}
                   </span>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>

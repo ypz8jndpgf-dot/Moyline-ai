@@ -98,7 +98,7 @@ async function saveBets(bets: PaperBet[]): Promise<void> {
  * concurrent pushes can no longer double-place the same pick either.
  * Returns the bets that were actually added. */
 export async function placePaperBets(
-  picks: { game: string; play: string; price: string }[],
+  picks: { game: string; play: string; price: string; status?: string | null }[],
   date: string,
   source: PaperSource = "card"
 ): Promise<PaperBet[]> {
@@ -107,6 +107,10 @@ export async function placePaperBets(
   const seen = new Set<string>();
   const candidates: PaperBet[] = [];
   for (const p of picks) {
+    // Voided picks (optimization #62) never enter the paper ledger — the
+    // play was published in error and is dead. Corrected picks stay
+    // placeable: they are live plays with a fixed line.
+    if (p.status === "voided") continue;
     const key = mergeKey({ game: p.game, play: p.play });
     if (seen.has(key)) continue;
     seen.add(key);

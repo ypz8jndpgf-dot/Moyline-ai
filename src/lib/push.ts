@@ -133,18 +133,27 @@ export function getVapidPublicKey(): string {
   return cleanEnv(process.env.VAPID_PUBLIC_KEY);
 }
 
+/** Why a single-member push did or didn't land. */
+export type PushSendOutcome =
+  | "sent" // push service accepted the notification
+  | "no-subscription" // nothing stored for this member
+  | "not-configured" // VAPID keys missing on the server
+  | "unavailable" // subscription storage (Redis) unreachable
+  | "expired" // endpoint was stale (404/410) — pruned from storage
+  | "rejected"; // push service refused the send for another reason
+
 /**
- * Sends a push to one member's stored subscription.
- * Returns true only when the notification was accepted by the push
- * service. Stale (410/404) subscriptions are removed.
+ * Sends a push to one member's stored subscription, reporting exactly
+ * what happened. Stale (410/404) subscriptions are removed.
  */
-export async function sendPushTo(
+export async function sendPushDetailed(
   email: string,
   payload: { title: string; body: string; url?: string }
-): Promise<boolean> {
-  if (!vapidConfigured()) return false;
+): Promise<PushSendOutcome> {
+  if (!vapidConfigured()) return "not-configured";
+  if (!getRedis()) return "unavailable";
   const sub = await getSubscription(email);
-  if (!sub) return false;
+  if (!sub) return "no-subscription";
   webpush.setVapidDetails(
     "mailto:support@moylineai.com",
     cleanEnv(process.env.VAPID_PUBLIC_KEY),
@@ -159,12 +168,69 @@ export async function sendPushTo(
         url: payload.url || "/picks",
       })
     );
-    return true;
+    return "sent";
   } catch (e: unknown) {
     const status = (e as { statusCode?: number })?.statusCode;
     if (status === 404 || status === 410) {
       await removeSubscription(email);
+      return "expired";
     }
-    return false;
+    return "rejected";
+  }
+}
+
+/**
+ * Sends a push to one member's stored subscription.
+ * Returns true only when the notification was accepted by the push
+ * service. Stale (410/404) subscriptions are removed.
+ */
+export async function sendPushTo(
+  email: string,
+  payload: { title: string; body: string; url?: string }
+): Promise<boolean> {
+  return (await sendPushDetailed(email, payload)) === "sent";
+}
+
+/** Test-notification copy (Optimization #63). */
+export const TEST_PUSH_PAYLOAD = {
+  title: "MoyLine AI — alerts are on",
+  body: "You'll get ★ plays, steam alerts and settled results here.",
+  url: "/picks",
+};
+
+/**
+ * Sends the test notification to the member's own stored subscription —
+ * the exact same delivery path (sendPushDetailed) as real alerts,
+ * addressed only to that member. Never a broadcast.
+ */
+export async function sendTestPush(email: string): Promise<PushSendOutcome> {
+  return sendPushDetailed(email, TEST_PUSH_PAYLOAD);
+}
+
+/** Max test pushes per member per hour. */
+export const TEST_PUSH_LIMIT_PER_HOUR = 3;
+
+/**
+ * Per-member rate limit for the test-push endpoint, so it can't be used
+ * as a free push relay. Fixed hourly bucket in Redis (same store as the
+ * subscriptions): `moyline:push:test:<email>:<hour>`. Returns "ok" when
+ * the caller may send, "limited" when over the cap, "unavailable" when
+ * the store can't be reached (fail closed — the send would fail anyway).
+ */
+export async function tryConsumeTestPush(
+  email: string
+): Promise<"ok" | "limited" | "unavailable"> {
+  const redis = getRedis();
+  if (!redis) return "unavailable";
+  const hour = Math.floor(Date.now() / 3_600_000);
+  const key = `moyline:push:test:${email.toLowerCase()}:${hour}`;
+  try {
+    const count = await redis.incr(key);
+    if (count === 1) {
+      await redis.expire(key, 3600);
+    }
+    return count <= TEST_PUSH_LIMIT_PER_HOUR ? "ok" : "limited";
+  } catch {
+    return "unavailable";
   }
 }
