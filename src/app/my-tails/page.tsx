@@ -6,7 +6,16 @@ import { formatUnits } from "@/lib/records";
 import { getPicksFeed, type FeedPick } from "@/lib/picks";
 import { getOdds, getOpenings } from "@/lib/odds";
 import { buildBoard } from "@/lib/board";
-import { findBoardGame, bestPriceForPick, type BestPrice } from "@/lib/card-utils";
+import {
+  findBoardGame,
+  bestPriceForPick,
+  hedgeQuoteForPick,
+  hedgeMath,
+  type BestPrice,
+  type HedgeQuote,
+  type HedgeMath,
+} from "@/lib/card-utils";
+import { parseAmericanOdds } from "@/lib/winprob";
 import { parseProp } from "@/lib/cheatsheet";
 import { gradeTail, tailUnits } from "@/lib/tail-results";
 import TailAlertsToggle from "./TailAlertsToggle";
@@ -18,6 +27,44 @@ function livePriceLabel(display: string): string {
   return display.startsWith("(") && display.endsWith(")")
     ? display.slice(1, -1)
     : display;
+}
+
+type TailHedge = { quote: HedgeQuote; math: HedgeMath; tailAmerican: number };
+
+/** "$91.46" / "-$6.71" — display rounding only; the math stays exact. */
+function fmtMoney(v: number): string {
+  const r = Math.round(v * 100) / 100;
+  return `${r < 0 ? "-" : ""}$${Math.abs(r).toFixed(2)}`;
+}
+
+/** "+$35.73" / "-$6.71" / "$0.00" for net figures. */
+function fmtSignedMoney(v: number): string {
+  const r = Math.round(v * 100) / 100;
+  if (r === 0) return "$0.00";
+  return `${r > 0 ? "+" : "-"}$${Math.abs(r).toFixed(2)}`;
+}
+
+function fmtAmerican(v: number): string {
+  return v > 0 ? `+${v}` : `${v}`;
+}
+
+/** Signed point for prose: 4.5 → "+4.5", -3.5 → "-3.5", 48 → "48". */
+function fmtPt(v: number): string {
+  const s = v % 1 === 0 ? String(Math.round(v)) : String(v);
+  return v > 0 ? `+${s}` : s;
+}
+
+/** Board snapshot time for the hedge panel's freshness line, ET. */
+function fmtBoardTime(ms: number): string {
+  return new Date(ms)
+    .toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: "America/New_York",
+    })
+    .replace(" ", "")
+    .toLowerCase();
 }
 
 export default async function MyTailsPage() {
@@ -54,12 +101,21 @@ export default async function MyTailsPage() {
   // only — a started game's in-play price is not the same market — and
   // game markets only: props have no cell on the game board.
   const liveByTail = new Map<number, BestPrice>();
+  // "Lock it in" hedge math (optimization #60): for the same pending,
+  // pregame, game-market tails, the board's other side of the tailed
+  // market at its best current price, plus the exact per-$100 lock /
+  // half-hedge figures. Same cached board as the live prices — no new
+  // odds pulls. Props and unmirrorable markets resolve to null inside
+  // hedgeQuoteForPick and simply get no panel.
+  const hedgeByTail = new Map<number, TailHedge>();
+  let boardAsOf = 0;
   try {
     const [feed, oddsResult, openings] = await Promise.all([
       getPicksFeed(),
       getOdds(),
       getOpenings(),
     ]);
+    boardAsOf = oddsResult.fetchedAt || 0;
     const { games } = buildBoard(oddsResult.events, openings);
     const feedMap = new Map<string, FeedPick>();
     for (const p of [
@@ -84,6 +140,12 @@ export default async function MyTailsPage() {
       if (!bg || Date.parse(bg.commence) <= now) return;
       const best = bestPriceForPick(pick, bg);
       if (best) liveByTail.set(i, best);
+      const quote = hedgeQuoteForPick(pick, bg);
+      const tailAmerican = parseAmericanOdds(tail.price);
+      if (quote && tailAmerican !== null) {
+        const math = hedgeMath(tailAmerican, quote.otherPrice);
+        if (math) hedgeByTail.set(i, { quote, math, tailAmerican });
+      }
     });
   } catch {
     /* odds unavailable — tails render without live prices */
@@ -91,6 +153,7 @@ export default async function MyTailsPage() {
   const gradedWithLive = graded.map((g, i) => ({
     ...g,
     live: liveByTail.get(i) ?? null,
+    hedge: hedgeByTail.get(i) ?? null,
   }));
 
   const w = graded.filter((g) => g.result?.result === "Win").length;
@@ -147,7 +210,7 @@ export default async function MyTailsPage() {
           {gradedWithLive
             .slice()
             .reverse()
-            .map(({ tail, result, live }, i) => (
+            .map(({ tail, result, live, hedge }, i) => (
               <div key={i} className="card p-4 flex items-center justify-between gap-3">
                 <div>
                   <p className="font-bold">{tail.game}</p>
@@ -166,6 +229,58 @@ export default async function MyTailsPage() {
                   )}
                   <p className="text-xs text-muted">{tail.date}</p>
                   {result?.final && <p className="text-xs text-muted mt-1">{result.final}</p>}
+                  {hedge && (
+                    <details className="mt-2 group">
+                      <summary className="text-xs font-bold text-gold cursor-pointer list-none flex items-center gap-1">
+                        <span className="transition-transform group-open:rotate-90">▶</span>
+                        🔒 Lock it in — hedge math
+                      </summary>
+                      <div className="mt-2 space-y-1 text-xs">
+                        <p className="text-muted">
+                          The other side right now:{" "}
+                          <span className="text-paper font-semibold">
+                            {hedge.quote.otherLabel} ({fmtAmerican(hedge.quote.otherPrice)})
+                          </span>{" "}
+                          at {hedge.quote.otherBook}
+                        </p>
+                        {hedge.quote.pointMoved && hedge.quote.market === "total" && (
+                          <p className="text-muted">
+                            You tailed {tail.play} — the board is at{" "}
+                            {fmtPt(Math.abs(hedge.quote.otherPoint ?? 0))} now, so the hedge
+                            prices the current number. A finish between the two numbers wins
+                            both.
+                          </p>
+                        )}
+                        {hedge.quote.pointMoved && hedge.quote.market === "spread" && (
+                          <p className="text-muted">
+                            You tailed {fmtPt(hedge.quote.tailPoint ?? 0)} — the other side is{" "}
+                            {fmtPt(hedge.quote.otherPoint ?? 0)} now, so the hedge prices the
+                            current line. A finish between the two numbers can win both or lose
+                            both.
+                          </p>
+                        )}
+                        <p>
+                          <span className="font-bold text-paper">Full lock:</span>{" "}
+                          {fmtMoney(hedge.math.fullHedge)} on the other side →{" "}
+                          {fmtSignedMoney(hedge.math.fullNet)} either way
+                        </p>
+                        <p>
+                          <span className="font-bold text-paper">Half hedge:</span>{" "}
+                          {fmtMoney(hedge.math.halfHedge)} → worst case{" "}
+                          {fmtSignedMoney(hedge.math.halfNetOtherWins)}; if your tail hits,{" "}
+                          {fmtSignedMoney(hedge.math.halfNetTailWins)}
+                        </p>
+                        <p className="text-[11px] text-muted">
+                          Per $100 on your tail at {fmtAmerican(hedge.tailAmerican)}. A push
+                          returns stakes and isn&apos;t in the math.
+                          {boardAsOf > 0 && (
+                            <> Board price as of {fmtBoardTime(boardAsOf)} ET.</>
+                          )}{" "}
+                          Just the math — what you do with it is your call.
+                        </p>
+                      </div>
+                    </details>
+                  )}
                 </div>
                 <span
                   className={`text-sm font-bold px-3 py-1 rounded ${

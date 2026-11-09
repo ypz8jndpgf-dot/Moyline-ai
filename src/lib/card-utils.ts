@@ -182,6 +182,152 @@ export function bookPricesForPick(pick: FeedPick, game: GameVM): BookPriceRow[] 
   return rows.length > 0 ? rows : null;
 }
 
+/* ------------------------------------------------------------------ */
+/* Hedge math — "Lock it in" on /my-tails (optimization #60,          */
+/* 2026-11-08). For a pregame tail, the board's OTHER side of the     */
+/* same market is the hedge instrument. The quote resolves that side  */
+/* from the same cached board cells bestPriceForPick reads — no new   */
+/* odds pulls — and only for two-way markets the board can mirror     */
+/* exactly: moneylines, spreads, totals. Props never resolve to a     */
+/* board cell (cellKeyForPick), a Draw pick has no mirror on a        */
+/* two-cell board, and a soccer moneyline is a three-way market       */
+/* (the draw beats both sides), so all three return null. When the    */
+/* line has moved, the quote prices the CURRENT number and says so   */
+/* via pointMoved — the binary lock math then has a middle (totals:   */
+/* a finish between the two numbers wins both; spreads: it can win    */
+/* both or lose both), which the panel copy names rather than hiding. */
+/* ------------------------------------------------------------------ */
+
+const OPPOSITE_CELL: Record<CellKey, CellKey> = {
+  spreadAway: "spreadHome",
+  spreadHome: "spreadAway",
+  totalOver: "totalUnder",
+  totalUnder: "totalOver",
+  mlAway: "mlHome",
+  mlHome: "mlAway",
+};
+
+export interface HedgeQuote {
+  market: "moneyline" | "spread" | "total";
+  /** The other side, named: "Baltimore Ravens +4.5" / "Over 47.5" / "Kansas City Chiefs ML". */
+  otherLabel: string;
+  /** Raw board display of the other side, e.g. "+4.5 (-110)" / "(+102)". */
+  otherDisplay: string;
+  /** Best current American price on the other side across the board's books. */
+  otherPrice: number;
+  otherBook: string;
+  /** Point the member tailed (spread: signed for their side; total: the number). Null for ML / unparseable. */
+  tailPoint: number | null;
+  /** Current point on the other side (spread: signed for that side; total: the number). */
+  otherPoint: number | null;
+  /** True when the current point differs from the tailed point — the hedge prices the current number. */
+  pointMoved: boolean;
+}
+
+/**
+ * The board's other side of a pick's market, at its best current price.
+ * Null when the market can't be mirrored (prop, draw, soccer ML, game
+ * or cell missing, price unparseable).
+ */
+export function hedgeQuoteForPick(pick: FeedPick, game: GameVM): HedgeQuote | null {
+  const ownKey = cellKeyForPick(pick);
+  if (!ownKey) return null;
+  const market = pickAlertMarket(pick);
+  if (!market) return null;
+  if (market === "moneyline") {
+    if (/\bdraw\b/i.test(pick.play || "")) return null; // no mirror for a draw
+    if ((game.sport || "").startsWith("soccer")) return null; // 3-way market
+  }
+  const oppKey = OPPOSITE_CELL[ownKey];
+
+  let best: { book: string; display: string; price: number } | null = null;
+  for (const b of game.books) {
+    const cell = b[oppKey];
+    if (!cell) continue;
+    const price = parseCellPrice(cell.display) ?? parseAmerican(cell.display);
+    if (price === null) continue;
+    if (!best || payout(price) > payout(best.price)) {
+      best = { book: b.label, display: cell.display, price };
+    }
+  }
+  if (!best) return null;
+
+  const otherPoint = parsePoint(best.display);
+  const tailPoint = parsePoint(pick.line) ?? parsePoint(pick.play);
+  const pointMoved =
+    market !== "moneyline" &&
+    tailPoint !== null &&
+    otherPoint !== null &&
+    Math.abs(tailPoint) !== Math.abs(otherPoint);
+
+  let otherLabel: string;
+  if (market === "total") {
+    const side = oppKey === "totalOver" ? "Over" : "Under";
+    otherLabel = otherPoint !== null ? `${side} ${fmtPoint(Math.abs(otherPoint))}` : side;
+  } else {
+    const team = oppKey.endsWith("Away") ? game.away : game.home;
+    if (market === "moneyline") {
+      otherLabel = `${team} ML`;
+    } else {
+      otherLabel =
+        otherPoint !== null
+          ? `${team} ${otherPoint > 0 ? "+" : ""}${fmtPoint(otherPoint)}`
+          : team;
+    }
+  }
+
+  return {
+    market,
+    otherLabel,
+    otherDisplay: best.display,
+    otherPrice: best.price,
+    otherBook: best.book,
+    tailPoint,
+    otherPoint,
+    pointMoved,
+  };
+}
+
+export interface HedgeMath {
+  /** Profit per $100 staked if the tail wins, before any hedge. */
+  tailProfit: number;
+  /** Hedge stake (per $100 tailed) that makes the net identical either way. */
+  fullHedge: number;
+  /** Net under the full hedge — the same whether the tail wins or loses. */
+  fullNet: number;
+  /** Hedge stake (per $100 tailed) that makes the worst case exactly -$50. */
+  halfHedge: number;
+  /** Net if the tail wins under the half hedge. */
+  halfNetTailWins: number;
+  /** Net if the other side wins under the half hedge — -$50 by construction. */
+  halfNetOtherWins: number;
+}
+
+/**
+ * Exact American-odds hedge math, per $100 on the tail. Win/lose only —
+ * a push returns stakes and is not in the figures. The full lock solves
+ * profitA − H = H·payoutB − 100; the half hedge stakes 50/payoutB so
+ * the other-side-wins net is exactly −$50.
+ */
+export function hedgeMath(tailAmerican: number, hedgeAmerican: number): HedgeMath | null {
+  if (!tailAmerican || !hedgeAmerican) return null;
+  const pA = payout(tailAmerican);
+  const pB = payout(hedgeAmerican);
+  if (!(pA > 0) || !(pB > 0)) return null;
+  const tailProfit = 100 * pA;
+  const fullHedge = (100 + tailProfit) / (1 + pB);
+  const fullNet = tailProfit - fullHedge;
+  const halfHedge = 50 / pB;
+  return {
+    tailProfit,
+    fullHedge,
+    fullNet,
+    halfHedge,
+    halfNetTailWins: tailProfit - halfHedge,
+    halfNetOtherWins: halfHedge * pB - 100,
+  };
+}
+
 /** Extract an American-odds number from a price string like "-138" or "(-154)". */
 function parseAmerican(s: string | undefined): number | null {
   if (!s) return null;
