@@ -12,6 +12,21 @@ way the site displays it (src/lib/winprob.ts convention):
 then bucket realized win rate (wins / decisions, pushes excluded) by
 predicted band: <50, 50-54, 55-59, 60-64, 65+.
 
+It also fits the DISPLAY recalibration mapping: an isotonic regression
+(pool-adjacent-violators, weighted, monotonic non-decreasing) over the
+INDIVIDUAL decided picks (raw predicted % -> win/loss), emitted as a
+step function `fit.breakpoints` ([{upTo, fitted, n}, ...] covering
+0-100, fitted clamped to [5, 95]). One small-sample guard on top of
+textbook PAVA: any block with support n < MIN_BLOCK_N is pooled into
+its nearer-mean neighbor (merging adjacent blocks of a monotone step
+keeps it monotone). Without it, the 2026-11-07 fit put a 3-pick
+all-wins tail block at fitted 100 (clamped 95) — a raw 70% pick would
+have displayed 95% on three picks' evidence. src/lib/winprob.ts
+applies this fit to model probabilities at render time only — the raw
+model numbers stay in the feed and drive gates/sorting/grading
+untouched. Per-band `meanFitted` is the mean of the fitted step over
+the band's picks (what members actually see for picks in that band).
+
 Pick selection is NOT re-implemented here: this script imports the
 canonical verified parser (parse_track_picks.py — the same parse the
 optimizer and the epoch scoreboard use), so the numbers reproduce from
@@ -54,6 +69,79 @@ def implied_pct(american: int) -> float:
     return 100 / (american + 100) * 100
 
 
+FIT_LO, FIT_HI = 5.0, 95.0
+MIN_BLOCK_N = 5
+
+
+def _merge_pair(a, b):
+    return {"w": a["w"] + b["w"], "y": a["y"] + b["y"], "xmax": b["xmax"]}
+
+
+def isotonic_breakpoints(points):
+    """Weighted isotonic regression (PAVA) on (x, y) points, y in {0, 1}.
+
+    Returns a step function as [{upTo, fitted, n}, ...]: for a raw x,
+    the fitted % is the `fitted` of the first breakpoint whose
+    `upTo` >= x. Blocks span the observed x-range; the final breakpoint
+    is extended to upTo=100 so the step covers 0-100 (x below the first
+    block takes the first block's value). Fitted values are monotonic
+    non-decreasing and clamped to [FIT_LO, FIT_HI].
+
+    Small-sample guard: after PAVA converges, any block with support
+    n < MIN_BLOCK_N is pooled into its nearer-mean neighbor (edge
+    blocks take their only neighbor), repeating until every block has
+    support or one block remains. Merging adjacent blocks of a monotone
+    step preserves monotonicity.
+    """
+    pts = sorted(points)  # by x, then y
+    # Stack of blocks: {w: count, y: wins, xmax: largest x in block}.
+    blocks = []
+    for x, y in pts:
+        blocks.append({"w": 1.0, "y": float(y), "xmax": x})
+        while len(blocks) >= 2 and (
+            blocks[-2]["y"] / blocks[-2]["w"] > blocks[-1]["y"] / blocks[-1]["w"]
+        ):
+            top = blocks.pop()
+            prev = blocks.pop()
+            blocks.append(_merge_pair(prev, top))
+    # Minimum-support pooling.
+    while len(blocks) > 1:
+        small = next((i for i, b in enumerate(blocks) if b["w"] < MIN_BLOCK_N), None)
+        if small is None:
+            break
+        mean = blocks[small]["y"] / blocks[small]["w"]
+        if small == 0:
+            j = 1
+        elif small == len(blocks) - 1:
+            j = small - 1
+        else:
+            left = abs(blocks[small - 1]["y"] / blocks[small - 1]["w"] - mean)
+            right = abs(blocks[small + 1]["y"] / blocks[small + 1]["w"] - mean)
+            j = small - 1 if left <= right else small + 1
+        lo, hi = min(small, j), max(small, j)
+        blocks[lo : hi + 1] = [_merge_pair(blocks[lo], blocks[hi])]
+    steps = []
+    for b in blocks:
+        fitted = round(min(FIT_HI, max(FIT_LO, b["y"] / b["w"] * 100)), 1)
+        up_to = round(b["xmax"], 1)
+        if steps and steps[-1]["fitted"] == fitted:
+            steps[-1]["upTo"] = up_to  # same fitted value: widen the step
+            steps[-1]["n"] += int(b["w"])
+        else:
+            steps.append({"upTo": up_to, "fitted": fitted, "n": int(b["w"])})
+    if steps:
+        steps[-1]["upTo"] = 100.0
+    return steps
+
+
+def apply_fit(steps, raw_pct):
+    """Evaluate the emitted step function exactly as winprob.ts does."""
+    for s in steps:
+        if raw_pct <= s["upTo"]:
+            return s["fitted"]
+    return steps[-1]["fitted"] if steps else raw_pct
+
+
 def main() -> int:
     tracker = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_TRACKER
     parser_path = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_PARSER
@@ -92,6 +180,21 @@ def main() -> int:
             }
         )
 
+    decided_all = [u for u in usable if u["result"] in ("Win", "Loss")]
+    wins_all = sum(1 for u in decided_all if u["result"] == "Win")
+
+    # Isotonic recalibration fit on the individual decided picks.
+    steps = isotonic_breakpoints(
+        [(u["predicted"], 1 if u["result"] == "Win" else 0) for u in decided_all]
+    )
+    for u in decided_all:
+        u["fitted"] = apply_fit(steps, u["predicted"])
+    mean_fitted = (
+        round(sum(u["fitted"] for u in decided_all) / len(decided_all), 1)
+        if decided_all
+        else None
+    )
+
     bands = []
     for label, lo, hi in BANDS:
         rows = [u for u in usable if lo <= u["predicted"] < hi]
@@ -99,6 +202,7 @@ def main() -> int:
         losses = sum(1 for u in rows if u["result"] == "Loss")
         pushes = sum(1 for u in rows if u["result"] == "Push")
         decided = wins + losses
+        rows_decided = [u for u in rows if u["result"] in ("Win", "Loss")]
         bands.append(
             {
                 "label": label,
@@ -109,13 +213,15 @@ def main() -> int:
                 "meanPredicted": round(sum(u["predicted"] for u in rows) / len(rows), 1)
                 if rows
                 else None,
+                "meanFitted": round(
+                    sum(u["fitted"] for u in rows_decided) / len(rows_decided), 1
+                )
+                if rows_decided
+                else None,
                 "realized": round(wins / decided * 100, 1) if decided else None,
                 "thin": decided < THIN_N,
             }
         )
-
-    decided_all = [u for u in usable if u["result"] in ("Win", "Loss")]
-    wins_all = sum(1 for u in decided_all if u["result"] == "Win")
     data = {
         "source": "results-tracker.md via parse_track_picks.py (canonical verified parse)",
         "method": (
@@ -133,6 +239,21 @@ def main() -> int:
         if decided_all
         else None,
         "realized": round(wins_all / len(decided_all) * 100, 1) if decided_all else None,
+        "meanFitted": mean_fitted,
+        "fit": {
+            "method": (
+                "Isotonic regression (pool-adjacent-violators, weighted, "
+                "monotonic non-decreasing) on the individual decided picks: "
+                "raw predicted % -> fitted %. Step function: the fitted % of "
+                "the first breakpoint whose upTo >= the raw %. Fitted values "
+                "clamped to [5, 95]; blocks with support n<5 are pooled into "
+                "their nearer-mean neighbor so no step rests on a handful of "
+                "picks. Applied at display time only (src/lib/winprob.ts); "
+                "raw model numbers stay in the feed."
+            ),
+            "n": len(decided_all),
+            "breakpoints": steps,
+        },
         "bands": bands,
     }
     with open(out_path, "w") as f:
@@ -145,8 +266,13 @@ def main() -> int:
     for b in bands:
         print(
             f"  {b['label']:>6}: n={b['n']:>3}  model={b['meanPredicted']}  "
-            f"realized={b['realized']}{'  (thin)' if b['thin'] else ''}"
+            f"fitted={b['meanFitted']}  realized={b['realized']}"
+            f"{'  (thin)' if b['thin'] else ''}"
         )
+    print(f"  fit: mean raw={data['meanPredicted']} -> mean fitted={mean_fitted} "
+          f"(realized={data['realized']})")
+    print("  breakpoints: " + ", ".join(
+        f"<={s['upTo']}: {s['fitted']}" for s in steps))
     return 0
 
 

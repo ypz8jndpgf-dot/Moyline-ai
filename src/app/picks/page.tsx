@@ -743,6 +743,17 @@ export default async function PicksPage({
             bigger the edge at a gettable price, the stronger the play.
           </p>
           <p>
+            The win% is also <strong className="text-paper">calibrated</strong>: it&apos;s
+            fitted to our own graded record, so a play shown at 55% is at a level where
+            picks have historically won about 55% of the time. The fit comes straight
+            from the{" "}
+            <Link href="/track-record" className="underline hover:text-gold">
+              Model calibration table
+            </Link>{" "}
+            — the sample behind it is still young, so the fit is coarse, and it refits
+            as more picks grade.
+          </p>
+          <p>
             Every play is graded after the game, win or lose — the full record, cut
             every way we track it, lives on the{" "}
             <Link href="/track-record" className="underline hover:text-gold">record page</Link>.

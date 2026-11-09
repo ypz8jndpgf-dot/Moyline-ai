@@ -1,5 +1,6 @@
 import { GameVM, MoverVM } from "./board";
 import { FeedPick } from "./picks";
+import { winEdgeInfo } from "./winprob";
 
 /** "Nevada @ UTEP (CFB)" -> { away: "Nevada", home: "UTEP" }. */
 export function parseGameTeams(game: string): { away: string; home: string } | null {
@@ -359,13 +360,19 @@ export function badgeBeatsPlay(pick: FeedPick, best: BestPrice): boolean {
  * the win probability is that fair price's implied probability. It's the
  * same number the edge already asserts, re-expressed — nothing new is
  * invented. Returns a whole percent, or null without a usable edge.
+ *
+ * DISPLAY value: routed through src/lib/winprob.ts so the calibration
+ * fit is applied exactly like every other surface (a feed `win_prob`,
+ * when present, wins there, as everywhere). This function's own
+ * contract is unchanged — null without a usable quantified edge and no
+ * feed win_prob.
  */
 export function modelWinProb(pick: FeedPick): number | null {
-  const fair = fairPriceForPick(pick);
-  if (fair === null) return null;
-  const prob =
-    fair > 0 ? 100 / (fair + 100) : Math.abs(fair) / (Math.abs(fair) + 100);
-  return Math.round(prob * 100);
+  const hasModelInput =
+    (typeof pick.win_prob === "number" && isFinite(pick.win_prob)) ||
+    fairPriceForPick(pick) !== null;
+  if (!hasModelInput) return null;
+  return winEdgeInfo(pick)?.winProb ?? null;
 }
 
 /**

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { winEdgeInfo } from "@/lib/winprob";
+import { winEdgeInfo, rawModelWinProb } from "@/lib/winprob";
 
 /**
  * Share a pick as a branded card link (/share renders the card; its OG
@@ -38,10 +38,15 @@ export default function ShareButton({
     params.set("p", play);
     if (price) params.set("pr", price);
     // Members see win% + edge, never the internal 1–5 confidence:
-    // w = model win prob (whole %), e = edge in cents.
-    const info = winEdgeInfo({ price, edge_cents: edgeCents, win_prob: winProb });
+    // w = RAW model win prob (whole %), e = edge in cents. Raw, not the
+    // fitted display %: /share and /api/share-card re-derive the badge
+    // through winEdgeInfo, which applies the calibration fit — sending
+    // the fitted number would double-fit it on arrival.
+    const input = { price, edge_cents: edgeCents, win_prob: winProb };
+    const info = winEdgeInfo(input);
     if (info) {
-      params.set("w", String(info.winProb));
+      const rawW = rawModelWinProb(input);
+      if (rawW !== null) params.set("w", String(rawW));
       if (info.edgeCents !== null && info.edgeCents !== 0)
         params.set("e", String(info.edgeCents));
     }

@@ -7,6 +7,33 @@
  "pushes": 0,
  "meanPredicted": 57.4,
  "realized": 48.1,
+ "meanFitted": 48.0,
+ "fit": {
+  "method": "Isotonic regression (pool-adjacent-violators, weighted, monotonic non-decreasing) on the individual decided picks: raw predicted % -> fitted %. Step function: the fitted % of the first breakpoint whose upTo >= the raw %. Fitted values clamped to [5, 95]; blocks with support n<5 are pooled into their nearer-mean neighbor so no step rests on a handful of picks. Applied at display time only (src/lib/winprob.ts); raw model numbers stay in the feed.",
+  "n": 106,
+  "breakpoints": [
+   {
+    "upTo": 52.6,
+    "fitted": 36.4,
+    "n": 11
+   },
+   {
+    "upTo": 61.5,
+    "fitted": 46.8,
+    "n": 77
+   },
+   {
+    "upTo": 66.7,
+    "fitted": 50.0,
+    "n": 10
+   },
+   {
+    "upTo": 100.0,
+    "fitted": 75.0,
+    "n": 8
+   }
+  ]
+ },
  "bands": [
   {
    "label": "<50",
@@ -15,6 +42,7 @@
    "losses": 4,
    "pushes": 0,
    "meanPredicted": 35.0,
+   "meanFitted": 36.4,
    "realized": 42.9,
    "thin": true
   },
@@ -25,6 +53,7 @@
    "losses": 4,
    "pushes": 0,
    "meanPredicted": 53.2,
+   "meanFitted": 44.9,
    "realized": 63.6,
    "thin": true
   },
@@ -35,6 +64,7 @@
    "losses": 33,
    "pushes": 0,
    "meanPredicted": 57.4,
+   "meanFitted": 46.8,
    "realized": 44.1,
    "thin": false
   },
@@ -45,6 +75,7 @@
    "losses": 10,
    "pushes": 0,
    "meanPredicted": 61.7,
+   "meanFitted": 48.8,
    "realized": 44.4,
    "thin": true
   },
@@ -55,6 +86,7 @@
    "losses": 4,
    "pushes": 0,
    "meanPredicted": 69.3,
+   "meanFitted": 63.6,
    "realized": 63.6,
    "thin": true
   }

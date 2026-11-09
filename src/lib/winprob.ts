@@ -12,7 +12,24 @@
  * fair odds' implied probability. When a feed carries an explicit
  * `win_prob` it wins. With no edge, the win% is the price's own implied
  * probability — an "implied" number, labeled as such (board legs).
+ *
+ * CALIBRATION FIT (2026-11-08, owner decision): MODEL probabilities —
+ * feed `win_prob` or fair-price-derived — are passed through the
+ * isotonic recalibration fit in src/lib/calibration.json (fitted by
+ * scripts/build-calibration.py on the graded record) before display,
+ * so the % a member sees is what picks at that level have actually
+ * done. Market-implied probabilities (no model edge behind them —
+ * board legs) are NOT fitted. Edge display is a price fact and is
+ * never fitted.
+ *
+ * ⚠️ DISPLAY ONLY. The fit lives here, at render, on purpose: the
+ * feed's `win_prob` stays RAW, and gates, sorting, grading and every
+ * algo input keep using raw model numbers. Do not "fix" this by
+ * fitting upstream or by reading fitted values back into logic — if a
+ * consumer needs the raw probability, it should read the feed fields,
+ * not this helper.
  */
+import { CALIBRATION } from "./calibration";
 
 export type WinEdgeInput = {
   price?: string | null;
@@ -47,16 +64,36 @@ export function impliedProbFraction(american: number): number {
     : 100 / (american + 100);
 }
 
+const FIT_STEPS = CALIBRATION.fit?.breakpoints ?? [];
+
 /**
- * Win probability (0–1, unrounded) for a priced play: the feed's
- * explicit win_prob when present, else the fair-price probability
- * (price shifted by edge_cents), else the price's own implied
- * probability. Null when nothing usable exists.
+ * Apply the calibration fit to a RAW model win% (0–100): the fitted %
+ * of the first breakpoint whose `upTo` >= the raw %. Returns the raw %
+ * unchanged when no fit is loaded. Fitted values come clamped to
+ * [5, 95] from the build script; the lookup can only return a step's
+ * fitted value, so monotonicity holds by construction.
  */
-export function winProbFraction(input: WinEdgeInput): number | null {
+export function fittedWinProb(rawPct: number): number {
+  if (!FIT_STEPS.length || !isFinite(rawPct)) return rawPct;
+  for (const s of FIT_STEPS) {
+    if (rawPct <= s.upTo) return s.fitted;
+  }
+  return FIT_STEPS[FIT_STEPS.length - 1].fitted;
+}
+
+/**
+ * The raw (unfitted) probability for a priced play, flagged by kind:
+ * `isModel` when it comes from the model (feed win_prob, or the
+ * fair-price probability behind a stated edge) — those get the
+ * calibration fit at display; not-model when it's the price's own
+ * implied probability — those never do.
+ */
+function rawWinProb(
+  input: WinEdgeInput
+): { frac: number; isModel: boolean } | null {
   if (typeof input.win_prob === "number" && isFinite(input.win_prob)) {
     const p = input.win_prob / 100;
-    if (p > 0 && p < 1) return p;
+    if (p > 0 && p < 1) return { frac: p, isModel: true };
   }
   const american = parseAmericanOdds(input.price);
   if (american === null || american === 0) return null;
@@ -67,26 +104,52 @@ export function winProbFraction(input: WinEdgeInput): number | null {
   if (edge !== null && edge !== 0) {
     const fair = american - edge;
     if (fair === 0) return null;
-    return impliedProbFraction(fair);
+    return { frac: impliedProbFraction(fair), isModel: true };
   }
-  return impliedProbFraction(american);
+  return { frac: impliedProbFraction(american), isModel: false };
+}
+
+/**
+ * DISPLAY win probability (0–1, unrounded) for a priced play: the
+ * feed's explicit win_prob when present, else the fair-price
+ * probability (price shifted by edge_cents), else the price's own
+ * implied probability — with the calibration fit applied to the model
+ * cases (see header). Null when nothing usable exists. This is a
+ * render-time number; never feed it back into gates or grading.
+ */
+export function winProbFraction(input: WinEdgeInput): number | null {
+  const raw = rawWinProb(input);
+  if (raw === null) return null;
+  return raw.isModel ? fittedWinProb(raw.frac * 100) / 100 : raw.frac;
+}
+
+/**
+ * The RAW (unfitted) model win% for a priced play, whole percent — null
+ * when the play has no model probability (implied-only). Exists for
+ * the share-link round-trip: ShareButton puts this raw % in the `w`
+ * param and /share + /api/share-card re-derive the display through
+ * winEdgeInfo, so the calibration fit is applied exactly once, there.
+ * (Putting the fitted % in `w` instead would double-fit on arrival.)
+ */
+export function rawModelWinProb(input: WinEdgeInput): number | null {
+  const raw = rawWinProb(input);
+  if (raw === null || !raw.isModel) return null;
+  return Math.round(raw.frac * 100);
 }
 
 /** Full win% + edge info for a priced play, or null when unusable. */
 export function winEdgeInfo(input: WinEdgeInput): WinEdgeInfo | null {
-  const frac = winProbFraction(input);
-  if (frac === null) return null;
+  const raw = rawWinProb(input);
+  if (raw === null) return null;
   const edge =
     typeof input.edge_cents === "number" && isFinite(input.edge_cents)
       ? input.edge_cents
       : null;
-  const hasModelProb =
-    (typeof input.win_prob === "number" && isFinite(input.win_prob)) ||
-    (edge !== null && edge !== 0);
+  const displayPct = raw.isModel ? fittedWinProb(raw.frac * 100) : raw.frac * 100;
   return {
-    winProb: Math.round(frac * 100),
+    winProb: Math.round(displayPct),
     edgeCents: edge,
-    impliedOnly: !hasModelProb,
+    impliedOnly: !raw.isModel,
   };
 }
 
@@ -111,8 +174,10 @@ export function pickWinEdge(p: WinEdgeInput): string | null {
 
 /**
  * Combined win probability (whole %) for a multi-leg ticket: the
- * product of the legs' win probabilities. Null when any leg is
- * unusable — never a partial product dressed up as the ticket's.
+ * product of the legs' DISPLAY win probabilities (model legs enter
+ * calibration-fitted, via winProbFraction; implied-only legs enter at
+ * their raw price implication). Null when any leg is unusable — never
+ * a partial product dressed up as the ticket's.
  */
 export function combinedWinProb(legs: WinEdgeInput[]): number | null {
   if (!legs.length) return null;

@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
  * Branded 1200×630 card image for a member-shared pick (the OG image
  * behind /share links, so a shared pick unfurls as a MoyLine AI card in
  * Messages/WhatsApp/X). Params are the same short keys ShareButton sends:
- * g=game, p=play, pr=price, w=model win prob %, e=edge cents, s=star,
+ * g=game, p=play, pr=price, w=RAW model win prob %, e=edge cents, s=star,
  * d=date, t=starts. Values are capped so the route can't be used to
  * render arbitrary billboards; Satori escapes text by construction.
  */

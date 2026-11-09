@@ -8,6 +8,11 @@ import data from "./calibration.json";
  * scripts/build-calibration.py (canonical verified parse — the same one
  * the optimizer uses); rerun the script and commit the JSON to refresh.
  * Bands with n<30 are `thin` and render daggered, never headlined.
+ *
+ * `fit` is the isotonic recalibration step function the script fits on
+ * the same picks; src/lib/winprob.ts applies it to MODEL probabilities
+ * at display time only (the feed's raw win_prob and every gate, sort
+ * and grading input stay raw — see winprob.ts).
  */
 export interface CalibrationBand {
   label: string;
@@ -18,9 +23,27 @@ export interface CalibrationBand {
   pushes: number;
   /** Mean predicted win% within the band. */
   meanPredicted: number | null;
+  /** Mean of the fitted (displayed) win% over the band's decided picks. */
+  meanFitted: number | null;
   /** Realized win% over decided picks (pushes excluded). */
   realized: number | null;
   thin: boolean;
+}
+
+export interface CalibrationFitStep {
+  /** Raw predicted % ceiling for this step (first step with upTo >= raw applies). */
+  upTo: number;
+  /** Fitted (displayed) win% for raw predictions in this step. */
+  fitted: number;
+  /** Graded picks behind the step. */
+  n: number;
+}
+
+export interface CalibrationFit {
+  method: string;
+  /** Decided graded picks the fit was trained on. */
+  n: number;
+  breakpoints: CalibrationFitStep[];
 }
 
 export interface CalibrationData {
@@ -31,6 +54,9 @@ export interface CalibrationData {
   pushes: number;
   meanPredicted: number | null;
   realized: number | null;
+  /** Mean fitted (displayed) win% over the same picks. */
+  meanFitted: number | null;
+  fit: CalibrationFit;
   bands: CalibrationBand[];
 }
 

@@ -562,7 +562,9 @@ function fmtCalDate(iso: string | null): string {
  * displays: picks grouped by the win% the model's fair price implied,
  * against what actually happened. Data: src/lib/calibration.json,
  * generated from results-tracker.md by scripts/build-calibration.py.
- * Thin bands (n<30) are daggered and never headlined.
+ * Thin bands (n<30) are daggered and never headlined. The "We show"
+ * column is the isotonic fit (calibration.json `fit`) that
+ * src/lib/winprob.ts applies to model probabilities at display time.
  */
 function CalibrationSection({ cal }: { cal: CalibrationData }) {
   if (!cal || cal.n === 0 || !cal.bands?.length) return null;
@@ -593,6 +595,7 @@ function CalibrationSection({ cal }: { cal: CalibrationData }) {
             <tr className="text-left text-[11px] uppercase tracking-widest text-muted border-b border-line">
               <th className="py-2 pr-3 font-bold">Model win%</th>
               <th className="py-2 pr-3 font-bold">Model avg</th>
+              <th className="py-2 pr-3 font-bold">We show</th>
               <th className="py-2 pr-3 font-bold">Realized</th>
               <th className="py-2 font-bold text-right">n</th>
             </tr>
@@ -607,6 +610,9 @@ function CalibrationSection({ cal }: { cal: CalibrationData }) {
                 <td className="py-2 pr-3 text-muted">
                   {b.meanPredicted !== null ? `${b.meanPredicted.toFixed(1)}%` : "—"}
                 </td>
+                <td className="py-2 pr-3 text-goldsoft">
+                  {b.meanFitted !== null ? `${b.meanFitted.toFixed(1)}%` : "—"}
+                </td>
                 <td className="py-2 pr-3 text-paper">
                   {b.realized !== null ? `${b.realized.toFixed(1)}%` : "—"}
                   <span className="text-muted text-xs">
@@ -619,6 +625,14 @@ function CalibrationSection({ cal }: { cal: CalibrationData }) {
             ))}
           </tbody>
         </table>
+        <p className="text-[11px] text-muted leading-relaxed mt-3">
+          <span className="text-paper font-bold">What we show you:</span> the win%
+          stamped on today&apos;s picks is the <span className="text-paper">We show</span>{" "}
+          column, not the raw model number — an isotonic fit maps each raw claim
+          to the fitted value from this table (fitted on n={cal.fit?.n ?? cal.n}{" "}
+          graded picks, refit as the record grows). The raw model numbers still
+          drive our gates and grading; only the display is calibrated.
+        </p>
         <p className="text-[11px] text-muted leading-relaxed mt-3">
           † Small sample (n&lt;30) — one hot or cold week swings it; a band that
           size proves nothing either way. Overall across these picks the model
