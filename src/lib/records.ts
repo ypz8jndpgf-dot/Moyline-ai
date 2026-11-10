@@ -110,7 +110,7 @@ export async function getTrendCards(): Promise<TrendCard[]> {
 
   const defs: {
     label: string;
-    detail: (rec: string) => string;
+    detail: (rec: string, units: string) => string;
     keep: (p: TrackPick) => boolean;
   }[] = [
     {
@@ -156,6 +156,15 @@ export async function getTrendCards(): Promise<TrendCard[]> {
       keep: (p) => type(p) === "Moneyline",
     },
     {
+      // Replacement for the pulled Moneylines card (user decision
+      // 2026-11-09, below): NHL overall passes the showcase floor on
+      // positive units (47-39, 54.7%, +0.5u at the swap), so its card
+      // shows record AND units beside the win rate.
+      label: "NHL overall",
+      detail: (r, u) => `${r} · ${u} · all NHL plays`,
+      keep: (p) => sport(p) === "NHL",
+    },
+    {
       label: "WNBA overall",
       detail: (r) => `${r} · all WNBA plays`,
       keep: (p) => sport(p) === "WNBA",
@@ -167,7 +176,14 @@ export async function getTrendCards(): Promise<TrendCard[]> {
   // neither ≥55% win% nor positive units). Pulled from this marketing
   // surface only; the segment stays fully visible on /track-record.
   // Reinstate only on the user's approval.
-  const PULLED_LABELS = new Set(["NHL moneylines"]);
+  //
+  // Pulled by user decision 2026-11-09 (supersedes the 2026-10-31
+  // "leave it as is" exception): the all-sports "Moneylines" card sat at
+  // 82-71-1, 53.6%, -2.4u — failing both showcase floor prongs — and was
+  // swapped for the floor-passing "NHL overall" card above. Same rule:
+  // marketing surface only, full segment stays on /track-record,
+  // reinstate only on the user's approval.
+  const PULLED_LABELS = new Set(["NHL moneylines", "Moneylines"]);
 
   const cards: (TrendCard & { exact: number; decisions: number })[] = [];
   for (const d of defs) {
@@ -176,10 +192,11 @@ export async function getTrendCards(): Promise<TrendCard[]> {
     const decisions = s.w + s.l;
     if (decisions < 8 || s.pct === null || s.pct < 50) continue;
     const rec = s.p > 0 ? `${s.w}-${s.l}-${s.p}` : `${s.w}-${s.l}`;
+    const units = formatUnits(unitsFor(graded.filter(d.keep)).units);
     cards.push({
       pct: `${Math.round(s.pct)}%`,
       label: d.label,
-      detail: d.detail(rec),
+      detail: d.detail(rec, units),
       exact: s.pct,
       decisions,
     });

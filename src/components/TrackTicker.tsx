@@ -49,7 +49,15 @@ function collectSegments(picks: TrackPick[]): Segment[] {
     ["MONEYLINES", (p) => classifyPick(p) === "Moneyline"],
     ["SPREADS", (p) => classifyPick(p) === "Spread"],
   ];
+  // Pulled by user decision 2026-11-09 (supersedes the 2026-10-31
+  // "leave it as is" exception): MONEYLINES sat at 82-71, 53.6%, -2.4u —
+  // failing both showcase floor prongs (≥55% win% or positive units).
+  // Pulled from the ticker only; the segment stays fully visible on
+  // /track-record. Reinstate only on the user's approval.
+  const PULLED_TYPES = new Set(["MONEYLINES"]);
+
   for (const [label, match] of types) {
+    if (PULLED_TYPES.has(label)) continue;
     const list = picks.filter(match);
     const [w, l] = tally(list);
     if (w + l >= 15 && w / (w + l) >= 0.5) segments.push({ label, w, l });

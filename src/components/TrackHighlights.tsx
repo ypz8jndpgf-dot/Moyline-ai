@@ -57,7 +57,15 @@ export default async function TrackHighlights() {
     ["Moneylines", "picking winners outright", (p) => classifyPick(p) === "Moneyline"],
     ["Spreads", "beating the number", (p) => classifyPick(p) === "Spread"],
   ];
+  // Pulled by user decision 2026-11-09 (supersedes the 2026-10-31
+  // "leave it as is" exception): Moneylines sat at 82-71-1, 53.6%, -2.4u —
+  // failing both showcase floor prongs (≥55% win% or positive units).
+  // Pulled from this marketing strip only; the segment stays fully
+  // visible on /track-record. Reinstate only on the user's approval.
+  const PULLED_TYPES = new Set(["Moneylines"]);
+
   for (const [label, detail, match] of types) {
+    if (PULLED_TYPES.has(label)) continue;
     const [w, l, p] = tally(picks.filter(match));
     add(label, w, l, p, detail, 15);
   }
