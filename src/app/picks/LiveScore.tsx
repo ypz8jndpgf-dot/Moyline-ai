@@ -66,7 +66,83 @@ function matchGame(gameStr: string, games: LiveGame[]): LiveGame | null {
   );
 }
 
-export default function LiveScore({ game }: { game: string }) {
+type Verdict = "Win" | "Loss" | "Push";
+
+/**
+ * Settle a score-decidable pick against the final score (optimization #64):
+ * moneylines, spreads and game totals only — props need player stats the
+ * scoreboard doesn't carry, so they get no marker. Display convenience
+ * only; the official result still comes from the morning grader.
+ */
+function settlePick(
+  g: LiveGame,
+  play: string,
+  market?: string,
+  line?: string
+): Verdict | null {
+  const away = parseInt(g.awayScore, 10);
+  const home = parseInt(g.homeScore, 10);
+  if (isNaN(away) || isNaN(home)) return null;
+  const p = (play || "").trim();
+  const mkt =
+    market ||
+    (/\bml\b/i.test(p)
+      ? "ml"
+      : /\b(over|under)\b/i.test(p)
+        ? "total"
+        : /[+-]\d+(\.\d+)?\s*$/.test(p)
+          ? "spread"
+          : undefined);
+  if (!mkt || mkt === "prop") return null;
+
+  if (mkt === "total") {
+    const num = parseFloat(line || p.match(/(\d+(\.\d+)?)\s*$/)?.[1] || "");
+    if (isNaN(num)) return null;
+    const sum = away + home;
+    if (sum === num) return "Push";
+    return /\bover\b/i.test(p) === sum > num ? "Win" : "Loss";
+  }
+
+  // Moneyline / spread: identify the picked side from the play text.
+  const numMatch = p.match(/([+-]\d+(?:\.\d+)?)\s*$/);
+  const teamToken = p
+    .replace(/\bml\b/i, "")
+    .replace(/([+-]\d+(?:\.\d+)?)\s*$/, "")
+    .trim();
+  if (!teamToken) return null;
+  const pickedAway = teamHit(teamToken, g.away);
+  const pickedHome = teamHit(teamToken, g.home);
+  if (pickedAway === pickedHome) return null; // both or neither — ambiguous
+  const mine = pickedAway ? away : home;
+  const theirs = pickedAway ? home : away;
+
+  if (mkt === "ml") {
+    if (mine > theirs) return "Win";
+    if (mine < theirs) return "Loss";
+    // Level at full time: a 3-way soccer moneyline loses on the draw;
+    // everywhere else the stake comes back.
+    return g.sport === "MLS" || g.sport === "Soccer" ? "Loss" : "Push";
+  }
+  // spread
+  const spread = parseFloat(line || numMatch?.[1] || "");
+  if (isNaN(spread)) return null;
+  const covered = mine + spread - theirs;
+  if (covered > 0) return "Win";
+  if (covered < 0) return "Loss";
+  return "Push";
+}
+
+export default function LiveScore({
+  game,
+  play,
+  market,
+  line,
+}: {
+  game: string;
+  play?: string;
+  market?: string;
+  line?: string;
+}) {
   const [g, setG] = useState<LiveGame | null>(null);
 
   useEffect(() => {
@@ -87,9 +163,19 @@ export default function LiveScore({ game }: { game: string }) {
   const awayLabel = g.away[2] || g.away[1] || g.away[0];
   const homeLabel = g.home[2] || g.home[1] || g.home[0];
   if (g.state === "post") {
+    const verdict = play ? settlePick(g, play, market, line) : null;
     return (
       <p className="text-xs text-muted mb-2">
         Final · {awayLabel} {g.awayScore} — {homeLabel} {g.homeScore}
+        {verdict === "Win" && (
+          <span className="ml-2 font-bold text-up">✓ Won</span>
+        )}
+        {verdict === "Loss" && (
+          <span className="ml-2 font-bold text-down">✗ Lost</span>
+        )}
+        {verdict === "Push" && (
+          <span className="ml-2 font-bold text-paper/70">· Push</span>
+        )}
       </p>
     );
   }

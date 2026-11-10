@@ -16,6 +16,7 @@ import PromoVideo from "@/components/PromoVideo";
 import LongshotStrip from "@/components/LongshotStrip";
 import { auth } from "@/lib/auth";
 import { getPrefs } from "@/lib/prefs";
+import { getPicksFeed } from "@/lib/picks";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,16 @@ export default async function Home() {
     getTrendCards(),
   ]);
   const { games, movers, sports } = buildBoard(oddsResult.events, openings);
+
+  // Today's card games for the board's "Card games only" toggle
+  // (optimization #65) — best-effort: no feed, no toggle.
+  let cardGames: string[] = [];
+  try {
+    const feed = await getPicksFeed();
+    cardGames = (feed?.picks ?? []).map((p) => p.game).filter(Boolean);
+  } catch {
+    /* the toggle simply doesn't render */
+  }
 
   // Personalization (steal #5): a signed-in member's favorite sports lead
   // the board. Stable sort — everything else keeps its natural order.
@@ -152,6 +163,7 @@ export default async function Home() {
         games={orderedGames}
         movers={movers}
         sports={sports}
+        cardGames={cardGames}
         updatedAt={oddsResult.fetchedAt ? new Date(oddsResult.fetchedAt).toISOString() : ""}
         quotaNote={
           getQuotaRemaining() !== null && getQuotaRemaining()! < 100

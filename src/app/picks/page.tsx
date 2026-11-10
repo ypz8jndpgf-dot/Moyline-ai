@@ -213,7 +213,9 @@ function PickCard({
       {status === "upcoming" && p.starts && !voided && (
         <StartsIn starts={p.starts} date={feedDate} />
       )}
-      {status !== "upcoming" && <LiveScore game={p.game} />}
+      {status !== "upcoming" && (
+        <LiveScore game={p.game} play={p.play} market={p.market} line={p.line} />
+      )}
       <p
         className={`text-lg font-bold text-goldsoft mb-1 ${voided ? "line-through opacity-50" : ""}`}
       >

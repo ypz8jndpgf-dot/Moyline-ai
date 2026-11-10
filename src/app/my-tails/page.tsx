@@ -19,6 +19,7 @@ import { parseAmericanOdds } from "@/lib/winprob";
 import { parseProp } from "@/lib/cheatsheet";
 import { gradeTail, tailUnits } from "@/lib/tail-results";
 import TailAlertsToggle from "./TailAlertsToggle";
+import ExportTailsCsv, { type TailCsvRow } from "./ExportTailsCsv";
 import PickStatusBanner from "@/components/PickStatusBanner";
 
 export const dynamic = "force-dynamic";
@@ -205,6 +206,20 @@ export default async function MyTailsPage() {
     }
   }
 
+  // CSV export rows (optimization #66) — the same graded data the page
+  // renders, in tail order: date · game · play · price · result · units.
+  const csvRows: TailCsvRow[] = graded.map(({ tail, result }) => {
+    const u = tailUnits(tail, result);
+    return {
+      date: tail.date,
+      game: tail.game,
+      play: tail.play,
+      price: tail.price,
+      result: result?.result ?? "Pending",
+      units: u !== null ? u.toFixed(2) : "",
+    };
+  });
+
   return (
     <div className="max-w-2xl mx-auto">
       <h1 className="font-display text-4xl mb-1">
@@ -218,6 +233,12 @@ export default async function MyTailsPage() {
         )}
         {pending > 0 && <span className="text-muted"> · {pending} pending</span>}
       </p>
+
+      {tails.length > 0 && (
+        <div className="mb-4">
+          <ExportTailsCsv rows={csvRows} />
+        </div>
+      )}
 
       <TailAlertsToggle />
 

@@ -188,25 +188,67 @@ function GameCard({ game }: { game: GameVM }) {
   );
 }
 
+/** "Card games only" matching (optimization #65): feed game strings look
+ *  like "Oklahoma City Thunder @ Portland Trail Blazers (NBA)"; the board
+ *  carries full team names. Same tolerant name matching as the live-score
+ *  strip — either name may be the longer form. */
+function normName(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function nameHit(a: string, b: string): boolean {
+  const na = normName(a);
+  const nb = normName(b);
+  if (!na || !nb) return false;
+  return (
+    na === nb ||
+    na.endsWith(" " + nb) ||
+    nb.endsWith(" " + na) ||
+    (na.length >= 4 && nb.includes(na)) ||
+    (nb.length >= 4 && na.includes(nb))
+  );
+}
+
+function isCardGame(game: GameVM, cardGames: string[]): boolean {
+  return cardGames.some((c) => {
+    const parts = c.split("(")[0].split(/\s+@\s+|\s+vs\.?\s+/i);
+    if (parts.length !== 2) return false;
+    const [away, home] = [parts[0].trim(), parts[1].trim()];
+    return (
+      (nameHit(away, game.away) && nameHit(home, game.home)) ||
+      (nameHit(away, game.home) && nameHit(home, game.away))
+    );
+  });
+}
+
 export default function OddsBoard({
   games,
   movers,
   sports,
   updatedAt,
   quotaNote,
+  cardGames,
 }: {
   games: GameVM[];
   movers: MoverVM[];
   sports: string[];
   updatedAt: string;
   quotaNote?: string;
+  /** Today's card game strings from the picks feed (optimization #65). */
+  cardGames?: string[];
 }) {
   const [tab, setTab] = useState<string>("all");
+  const [cardOnly, setCardOnly] = useState<boolean>(false);
 
-  const filtered = useMemo(
-    () => (tab === "all" ? games : games.filter((g) => g.sport === tab)),
-    [tab, games]
+  const cardCount = useMemo(
+    () => (cardGames && cardGames.length > 0 ? games.filter((g) => isCardGame(g, cardGames)).length : 0),
+    [games, cardGames]
   );
+
+  const filtered = useMemo(() => {
+    const byTab = tab === "all" ? games : games.filter((g) => g.sport === tab);
+    return cardOnly && cardGames ? byTab.filter((g) => isCardGame(g, cardGames)) : byTab;
+  }, [tab, games, cardOnly, cardGames]);
 
   const updated = updatedAt ? new Date(updatedAt).toLocaleString("en-US", { timeZone: "America/New_York" }) : "—";
 
@@ -261,6 +303,17 @@ export default function OddsBoard({
             {SPORT_LABELS[s] || s}
           </button>
         ))}
+        {cardCount > 0 && (
+          <button
+            onClick={() => setCardOnly((v) => !v)}
+            aria-pressed={cardOnly}
+            className={`px-4 py-1.5 rounded-full text-sm font-bold ${
+              cardOnly ? "btn-gold" : "btn-ghost"
+            }`}
+          >
+            🎯 Card games only ({cardCount})
+          </button>
+        )}
       </div>
 
       <p className="text-xs text-muted mb-4">
@@ -270,8 +323,17 @@ export default function OddsBoard({
 
       {filtered.length === 0 ? (
         <div className="card p-8 text-center text-muted">
-          <p className="mb-1">Lines are refreshing.</p>
-          <p className="text-sm">The board updates throughout the day as books post numbers — check back soon.</p>
+          {cardOnly ? (
+            <>
+              <p className="mb-1">No card games on the board in this view.</p>
+              <p className="text-sm">Turn off “Card games only” or pick another league tab to see the full board.</p>
+            </>
+          ) : (
+            <>
+              <p className="mb-1">Lines are refreshing.</p>
+              <p className="text-sm">The board updates throughout the day as books post numbers — check back soon.</p>
+            </>
+          )}
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
