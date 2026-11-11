@@ -33,8 +33,28 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
   }
+  // Optional baseline reset (added 2026-11-11 for the Oct 16, 2026 record
+  // reset): drop every bet dated before `dropBefore` and recompute the
+  // bankroll from the surviving ledger — PAPER_START + settled pnl − stakes
+  // still reserved by open bets. Runs INSTEAD of a delta adjustment.
+  const dropBefore = (body as { dropBefore?: unknown }).dropBefore;
+  if (dropBefore !== undefined) {
+    if (typeof dropBefore !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dropBefore)) {
+      return NextResponse.json(
+        { ok: false, error: "dropBefore must be a YYYY-MM-DD date" },
+        { status: 400 }
+      );
+    }
+    const d = (body as { delta?: unknown }).delta;
+    if (typeof d === "number" && d !== 0) {
+      return NextResponse.json(
+        { ok: false, error: "dropBefore cannot be combined with a nonzero delta" },
+        { status: 400 }
+      );
+    }
+  }
   const delta = (body as { delta?: unknown }).delta;
-  if (typeof delta !== "number" || !isFinite(delta)) {
+  if (dropBefore === undefined && (typeof delta !== "number" || !isFinite(delta))) {
     return NextResponse.json({ ok: false, error: "delta must be a number" }, { status: 400 });
   }
   // Optional one-off bet correction (e.g. a mis-parsed price): rewrites the
@@ -65,6 +85,30 @@ export async function POST(req: Request) {
 
   try {
     const redis = new Redis({ url, token });
+    if (dropBefore !== undefined) {
+      const all =
+        (await redis.get<
+          { date: string; status: string; pnl: number | null; stake: number }[]
+        >("moyline:paper:bets")) || [];
+      const kept = all.filter((b) => b.date >= (dropBefore as string));
+      const dropped = all.length - kept.length;
+      const settledPnl = kept
+        .filter((b) => b.status !== "open")
+        .reduce((s, b) => s + (b.pnl ?? 0), 0);
+      const reserved = kept
+        .filter((b) => b.status === "open")
+        .reduce((s, b) => s + (b.stake || 0), 0);
+      const bankroll = Math.round((1000 + settledPnl - reserved) * 100) / 100;
+      await redis.set("moyline:paper:bets", kept);
+      await redis.set("moyline:paper:bankroll", bankroll);
+      return NextResponse.json({
+        ok: true,
+        dropBefore,
+        dropped,
+        kept: kept.length,
+        bankroll,
+      });
+    }
     let fixedBet: { id: string; game: string; odds: number; pnl: number } | null = null;
     if (fixBet) {
       const bets =
@@ -85,7 +129,7 @@ export async function POST(req: Request) {
       await redis.set("moyline:paper:bets", bets);
       fixedBet = { id: target.id, game: target.game, odds: target.odds, pnl: target.pnl };
     }
-    const newVal = await redis.incrbyfloat("moyline:paper:bankroll", delta);
+    const newVal = await redis.incrbyfloat("moyline:paper:bankroll", delta as number);
     return NextResponse.json({
       ok: true,
       delta,
