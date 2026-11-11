@@ -21,6 +21,8 @@ import { gradeTail, tailUnits } from "@/lib/tail-results";
 import TailAlertsToggle from "./TailAlertsToggle";
 import ExportTailsCsv, { type TailCsvRow } from "./ExportTailsCsv";
 import PickStatusBanner from "@/components/PickStatusBanner";
+import LiveScore from "@/app/picks/LiveScore";
+import StartsIn from "@/app/picks/StartsIn";
 
 export const dynamic = "force-dynamic";
 
@@ -115,19 +117,27 @@ export default async function MyTailsPage() {
   // gets no live price or hedge math: the play is dead. Read from the
   // feed alone (its own try), so the banner survives an odds outage.
   const statusByTail = new Map<number, FeedPick>();
+  // The tail's own feed pick (any status) — drives the live-state row
+  // (#68): its starts time feeds the countdown, its market/line feed the
+  // live-score settler.
+  const feedPickByTail = new Map<number, FeedPick>();
   try {
     const statusFeed = await getPicksFeed();
     const statusMap = new Map<string, FeedPick>();
+    const allMap = new Map<string, FeedPick>();
     for (const p of [
       ...(statusFeed?.picks || []),
       ...(statusFeed?.props || []),
       ...(statusFeed?.backpage || []),
     ]) {
+      allMap.set(`${p.game}|${p.play}`, p);
       if (p.status) statusMap.set(`${p.game}|${p.play}`, p);
     }
     tails.forEach((tail, i) => {
       const fp = statusMap.get(`${tail.game}|${tail.play}`);
       if (fp) statusByTail.set(i, fp);
+      const any = allMap.get(`${tail.game}|${tail.play}`);
+      if (any) feedPickByTail.set(i, any);
     });
   } catch {
     /* feed unavailable — tails render without status banners */
@@ -181,6 +191,7 @@ export default async function MyTailsPage() {
     live: liveByTail.get(i) ?? null,
     hedge: hedgeByTail.get(i) ?? null,
     statusPick: statusByTail.get(i) ?? null,
+    feedPick: feedPickByTail.get(i) ?? null,
   }));
 
   const w = graded.filter((g) => g.result?.result === "Win").length;
@@ -257,7 +268,7 @@ export default async function MyTailsPage() {
           {gradedWithLive
             .slice()
             .reverse()
-            .map(({ tail, result, live, hedge, statusPick }, i) => (
+            .map(({ tail, result, live, hedge, statusPick, feedPick }, i) => (
               <div key={i} className="card p-4 flex items-center justify-between gap-3">
                 <div>
                   <p className="font-bold">{tail.game}</p>
@@ -279,6 +290,26 @@ export default async function MyTailsPage() {
                   )}
                   <p className="text-xs text-muted">{tail.date}</p>
                   {result?.final && <p className="text-xs text-muted mt-1">{result.final}</p>}
+                  {/* Live state for a still-pending tail (optimization
+                      #68): the same countdown + live scoreline the card
+                      itself shows, so this page doubles as the place to
+                      watch your own bets. Graded tails keep the badge on
+                      the right; voided plays are dead. Both components
+                      render nothing when they have nothing to say. */}
+                  {(!result || result.result === "Pending") &&
+                    statusPick?.status !== "voided" && (
+                      <>
+                        {feedPick && (
+                          <StartsIn starts={feedPick.starts} date={tail.date} />
+                        )}
+                        <LiveScore
+                          game={tail.game}
+                          play={tail.play}
+                          market={feedPick?.market}
+                          line={feedPick?.line}
+                        />
+                      </>
+                    )}
                   {hedge && (
                     <details className="mt-2 group">
                       <summary className="text-xs font-bold text-gold cursor-pointer list-none flex items-center gap-1">

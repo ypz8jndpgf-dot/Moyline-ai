@@ -41,6 +41,51 @@ export function gradeTail(
   );
 }
 
+export interface TailsDaySummary {
+  w: number;
+  l: number;
+  p: number;
+  /** Units over the day's graded tails — null unless every graded tail
+   *  that day carries a price (the daily-results rule: the figure is
+   *  exact or absent, never partial). */
+  units: number | null;
+}
+
+/**
+ * A member's graded record on one date's tails (optimization #69, for
+ * the "Your tails went X–Y" line in the morning results email). Uses the
+ * same gradeTail/tailUnits matching as /my-tails, so the email can never
+ * disagree with the page. Null when none of that day's tails are graded.
+ */
+export function summarizeTailsForDate(
+  tails: readonly Tail[],
+  picks: readonly GradedTailPick[],
+  date: string
+): TailsDaySummary | null {
+  let w = 0;
+  let l = 0;
+  let p = 0;
+  let units = 0;
+  let priced = 0;
+  let gradedCount = 0;
+  for (const t of tails) {
+    if (t.date !== date) continue;
+    const result = gradeTail(t, picks);
+    if (!result || result.result === "Pending") continue;
+    gradedCount++;
+    if (result.result === "Win") w++;
+    else if (result.result === "Loss") l++;
+    else p++;
+    const u = tailUnits(t, result);
+    if (u !== null) {
+      priced++;
+      units += u;
+    }
+  }
+  if (gradedCount === 0) return null;
+  return { w, l, p, units: priced === gradedCount ? units : null };
+}
+
 /**
  * Units for a settled tail at the price the member tailed at — flat 1u
  * risked, the same convention /my-tails has always shown (#32). Falls

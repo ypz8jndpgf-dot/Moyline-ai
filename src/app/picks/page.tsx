@@ -999,6 +999,9 @@ export default async function PicksPage({
                         {prop.status !== "voided" && (
                           <PropHitRate game={prop.game} play={prop.play} />
                         )}
+                        {prop.status !== "voided" && (
+                          <LiveScore game={prop.game} play={prop.play} market="prop" />
+                        )}
                       </div>
                       {prop.status === "voided" ? (
                         <span className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border border-red-500/40 text-red-300/70">

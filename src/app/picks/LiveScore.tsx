@@ -69,10 +69,45 @@ function matchGame(gameStr: string, games: LiveGame[]): LiveGame | null {
 type Verdict = "Win" | "Loss" | "Push";
 
 /**
+ * Settle a prop against the box-score result the server attached to the
+ * game (optimization #67): the server parsed the play and read the
+ * player's actual stat from the final ESPN box score, so this is a bare
+ * comparison. No attached result (unparseable play, player unmatched,
+ * sport the box-score engine doesn't cover) → no marker.
+ */
+function settleProp(g: LiveGame, play: string): Verdict | null {
+  const r = (g.propResults || []).find((x) => x.play === play);
+  if (!r) return null;
+  if (r.value === r.line) return "Push";
+  const won = r.direction === "over" ? r.value > r.line : r.value < r.line;
+  return won ? "Win" : "Loss";
+}
+
+const PROP_STAT_HINT =
+  /(pass|rush|receiv|points?|rebounds?|assists?|yards|yds|receptions?|completions?|strikeouts?|saves|shots|goals|steals|blocks|threes|touchdowns?|tds)\b/i;
+
+/**
+ * A prop that arrives without its market label ("Booker Over 24.5
+ * points") would otherwise be misread as a game total from its
+ * Over/Under. It reads as a prop when it carries a stat market and its
+ * subject is a player — i.e. not one of the two teams playing.
+ */
+function looksLikeProp(g: LiveGame, play: string): boolean {
+  if (!PROP_STAT_HINT.test(play)) return false;
+  if (/team total/i.test(play)) return false;
+  const subject = play
+    .split(/\b(?:over|under)\b/i)[0]
+    .replace(/\d+(\.\d+)?\s*\+.*$/, "")
+    .trim();
+  if (!subject) return false;
+  return !teamHit(subject, g.away) && !teamHit(subject, g.home);
+}
+
+/**
  * Settle a score-decidable pick against the final score (optimization #64):
- * moneylines, spreads and game totals only — props need player stats the
- * scoreboard doesn't carry, so they get no marker. Display convenience
- * only; the official result still comes from the morning grader.
+ * moneylines, spreads and game totals from the scoreline; props from the
+ * box-score results the server attaches (#67). Display convenience only;
+ * the official result still comes from the morning grader.
  */
 function settlePick(
   g: LiveGame,
@@ -80,9 +115,6 @@ function settlePick(
   market?: string,
   line?: string
 ): Verdict | null {
-  const away = parseInt(g.awayScore, 10);
-  const home = parseInt(g.homeScore, 10);
-  if (isNaN(away) || isNaN(home)) return null;
   const p = (play || "").trim();
   const mkt =
     market ||
@@ -93,7 +125,16 @@ function settlePick(
         : /[+-]\d+(\.\d+)?\s*$/.test(p)
           ? "spread"
           : undefined);
-  if (!mkt || mkt === "prop") return null;
+  if (mkt === "prop") return settleProp(g, p);
+  if (!mkt) return null;
+  // Unlabeled prop: never let its Over/Under fall into the game-total
+  // branch below.
+  if (!market && mkt === "total" && looksLikeProp(g, p)) {
+    return settleProp(g, p);
+  }
+  const away = parseInt(g.awayScore, 10);
+  const home = parseInt(g.homeScore, 10);
+  if (isNaN(away) || isNaN(home)) return null;
 
   if (mkt === "total") {
     const num = parseFloat(line || p.match(/(\d+(\.\d+)?)\s*$/)?.[1] || "");

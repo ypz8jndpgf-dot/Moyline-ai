@@ -223,7 +223,7 @@ export function parseProp(playRaw: string): ParsedProp | null {
 /* ------------------------- stat computation ------------------------- */
 
 /** Compute the market's stat value from a unified box-score stat map. */
-function statValue(sport: string, market: string, s: Record<string, number>): number | null {
+export function statValue(sport: string, market: string, s: Record<string, number>): number | null {
   const g = (k: string) => (typeof s[k] === "number" ? s[k] : null);
   const sum = (...ks: string[]) => {
     let t = 0;
@@ -367,7 +367,10 @@ async function teamSchedule(path: string, teamId: string, dateKey: string): Prom
   await cacheSet(cacheKey, events, 6 * 3600);
   return events;
 }
-type EventBox = {
+/** Exported (with statValue + getEventBox below) for the live-scores
+ *  prop settler (optimization #67): the card's Won/Lost marker for props
+ *  reads the same ESPN box-score rows this engine already fetches. */
+export type EventBox = {
   dateET: string;
   homeId: string;
   awayId: string;
@@ -456,7 +459,7 @@ function extractBox(sport: string, summary: any, dateET: string): EventBox | nul
   };
 }
 
-async function getEventBox(sport: string, path: string, eventId: string, dateET: string): Promise<EventBox | null> {
+export async function getEventBox(sport: string, path: string, eventId: string, dateET: string): Promise<EventBox | null> {
   const cacheKey = `moyline:cheatsheet:event:${path}:${eventId}`;
   const cached = await cacheGet<EventBox>(cacheKey);
   if (cached) return cached;

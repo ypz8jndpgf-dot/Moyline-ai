@@ -6,6 +6,8 @@ import { briefSignInUrl } from "@/lib/brief-signin";
 import { broadcastPush } from "@/lib/push";
 import { getTrackRecord } from "@/lib/store";
 import { unitsFor, formatUnits } from "@/lib/records";
+import { getAllTails } from "@/lib/tails";
+import { summarizeTailsForDate } from "@/lib/tail-results";
 import { DayResults } from "../../results/update/route";
 
 export const dynamic = "force-dynamic";
@@ -92,6 +94,7 @@ export async function GET(req: Request) {
           ? `<ul style="line-height:1.8;color:#d0d0d0;padding-left:20px;margin:0 0 8px;font-size:15px;">${highlights.map((h) => `<li style="margin-bottom:8px;">${h}</li>`).join("")}</ul>`
           : `<p style="color:#999999;font-size:15px;margin:0 0 8px;">Full breakdown in today's 7am brief.</p>`
       }
+      {{TAILS_LINE}}
       <p style="margin:28px 0 8px;text-align:center;"><a href="{{SIGNIN_URL}}" style="background:#f5c518;color:#0a0a0a;font-weight:800;padding:14px 32px;border-radius:999px;text-decoration:none;display:inline-block;font-size:16px;">See today's full card →</a></p>
       <p style="font-size:12px;color:#999999;margin:18px 0 0;text-align:center;"><a href="https://moylineai.com" style="color:#f5c518;text-decoration:none;">moylineai.com</a></p>
       <p style="font-size:11px;color:#666666;margin:10px 0 0;text-align:center;">Analysis for entertainment purposes — not financial advice.</p>
@@ -103,10 +106,37 @@ export async function GET(req: Request) {
 
   let sent = 0;
   if (!MEMBER_EMAIL_PAUSED) {
+    // "Your tails went X–Y" (optimization #69): one per-recipient line
+    // beside the card headline, computed with the same gradeTail /
+    // tailUnits matching /my-tails renders — the email can never
+    // disagree with the page. Members with no graded tails yesterday
+    // get no line. Data loads once for the whole loop and fails soft:
+    // a tails/record outage costs the line, never the email.
+    let tailsLineFor: (to: string) => string = () => "";
+    try {
+      const [allTails, rec] = await Promise.all([getAllTails(), getTrackRecord()]);
+      const byEmail = new Map(
+        allTails.map((x) => [x.email.toLowerCase(), x.tails] as const)
+      );
+      tailsLineFor = (to: string) => {
+        const sum = summarizeTailsForDate(
+          byEmail.get(to.toLowerCase()) || [],
+          rec.picks,
+          yesterday
+        );
+        if (!sum) return "";
+        const record = `${sum.w}-${sum.l}${sum.p > 0 ? `-${sum.p}` : ""}`;
+        const units = sum.units !== null ? ` · ${formatUnits(sum.units)}` : "";
+        return `<p style="font-size:15px;color:#999999;margin:14px 0 0;">Your tails: <span style="color:#ffffff;font-weight:800;">${record}${units}</span> <span style="color:#666666;">— your record, at your prices</span></p>`;
+      };
+    } catch {
+      tailsLineFor = () => "";
+    }
     for (const to of members) {
       const perHtml = html
         .replace(/\{\{SIGNIN_URL\}\}/g, await briefSignInUrl(to))
-        .replace(/\{\{UNSUB_URL\}\}/g, unsubUrl(to));
+        .replace(/\{\{UNSUB_URL\}\}/g, unsubUrl(to))
+        .replace(/\{\{TAILS_LINE\}\}/g, tailsLineFor(to));
       if (await sendEmail(to, `MoyLine AI: ${headline}`, perHtml)) sent++;
     }
   }
