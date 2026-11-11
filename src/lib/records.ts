@@ -183,7 +183,22 @@ export async function getTrendCards(): Promise<TrendCard[]> {
   // swapped for the floor-passing "NHL overall" card above. Same rule:
   // marketing surface only, full segment stays on /track-record,
   // reinstate only on the user's approval.
-  const PULLED_LABELS = new Set(["NHL moneylines", "Moneylines"]);
+  //
+  // Pulled by user decision 2026-11-11 (post-reset showcase audit): on
+  // the Oct 16 baseline every remaining trend card failed the showcase
+  // floors — "NHL overall" 21-21, 50.0%, -2.9u and "Overs — game totals"
+  // 6-6, 50.0%, -0.7u fail both prongs (≥55% win% or positive units);
+  // "CFB unders" 6-4, 60.0%, +1.5u passes the prongs but has only 10
+  // decisions, below the ≥15 segment floor. Same rule: marketing
+  // surface only, segments stay fully visible on /track-record,
+  // reinstate only on the user's approval.
+  const PULLED_LABELS = new Set([
+    "NHL moneylines",
+    "Moneylines",
+    "NHL overall",
+    "Overs — game totals",
+    "CFB unders",
+  ]);
 
   const cards: (TrendCard & { exact: number; decisions: number })[] = [];
   for (const d of defs) {

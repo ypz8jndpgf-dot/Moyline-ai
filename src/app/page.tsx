@@ -120,7 +120,12 @@ export default async function Home() {
 
       <GoldenRun />
 
-      {/* Where the edge lives — merged recalibration + trends */}
+      {/* Where the edge lives — merged recalibration + trends. The whole
+          block hides when no trend card clears the showcase floors or
+          survives the pulls (post-reset state, 2026-11-11: every card
+          pulled by user decision, so the block stays hidden until a
+          card is reinstated on the user's approval). */}
+      {trends.length > 0 && (
       <div className="mt-6 rounded border border-gold/40 bg-gradient-to-b from-gold/10 to-transparent p-6">
         <div className="flex items-center gap-2 mb-1">
           <span className="text-gold text-lg">✦</span>
@@ -154,6 +159,7 @@ export default async function Home() {
           The track record doesn't hide; it improves.
         </p>
       </div>
+      )}
 
       <RecentResults />
 

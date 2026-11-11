@@ -45,7 +45,16 @@ export default async function TrackHighlights() {
     arr.push(p);
     bySport.set(p.sport, arr);
   }
+  // Pulled by user decision 2026-11-11 (post-reset showcase audit): on
+  // the Oct 16 baseline CFB (8-8, 50.0%, -0.7u) and NHL (21-21, 50.0%,
+  // -2.9u) both failed both showcase floor prongs (≥55% win% or
+  // positive units). Pulled from this marketing strip only; both sports
+  // stay fully visible on /track-record. Reinstate only on the user's
+  // approval.
+  const PULLED_SPORTS = new Set(["CFB", "NHL"]);
+
   for (const [sport, list] of bySport) {
+    if (PULLED_SPORTS.has(sport.toUpperCase())) continue;
     const [w, l, p] = tally(list);
     add(`${sport} picks`, w, l, p, "by sport", 15);
   }
@@ -62,7 +71,13 @@ export default async function TrackHighlights() {
   // failing both showcase floor prongs (≥55% win% or positive units).
   // Pulled from this marketing strip only; the segment stays fully
   // visible on /track-record. Reinstate only on the user's approval.
-  const PULLED_TYPES = new Set(["Moneylines"]);
+  //
+  // Unders and Overs added by user decision 2026-11-11 (post-reset
+  // showcase audit): Unders sat at 15-15, 50.0%, -1.0u and Overs at
+  // 6-6, 50.0%, -0.7u on the Oct 16 baseline — both failing both floor
+  // prongs. Same rule: marketing strip only, full segments stay on
+  // /track-record, reinstate only on the user's approval.
+  const PULLED_TYPES = new Set(["Moneylines", "Unders", "Overs"]);
 
   for (const [label, detail, match] of types) {
     if (PULLED_TYPES.has(label)) continue;

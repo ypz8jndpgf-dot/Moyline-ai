@@ -33,7 +33,13 @@ function collectSegments(picks: TrackPick[]): Segment[] {
   // neither ≥55% win% nor positive units). Pulled from the ticker only;
   // NBA picks stay fully visible on /track-record. Reinstate only on the
   // user's approval.
-  const PULLED_SPORTS = new Set(["NBA"]);
+  //
+  // CFB and NHL added by user decision 2026-11-11 (post-reset showcase
+  // audit): on the Oct 16 baseline both sat at 50.0% with negative
+  // units (CFB 8-8, -0.7u; NHL 21-21, -2.9u) — failing both floor
+  // prongs. Same rule: ticker only, full segments stay on
+  // /track-record, reinstate only on the user's approval.
+  const PULLED_SPORTS = new Set(["NBA", "CFB", "NHL"]);
 
   for (const [sport, list] of bySport) {
     if (PULLED_SPORTS.has(sport.toUpperCase())) continue;
@@ -54,7 +60,13 @@ function collectSegments(picks: TrackPick[]): Segment[] {
   // failing both showcase floor prongs (≥55% win% or positive units).
   // Pulled from the ticker only; the segment stays fully visible on
   // /track-record. Reinstate only on the user's approval.
-  const PULLED_TYPES = new Set(["MONEYLINES"]);
+  //
+  // UNDERS and OVERS added by user decision 2026-11-11 (post-reset
+  // showcase audit): UNDERS sat at 15-15, 50.0%, -1.0u and OVERS at
+  // 6-6, 50.0%, -0.7u on the Oct 16 baseline — both failing both floor
+  // prongs. Same rule: ticker only, full segments stay on
+  // /track-record, reinstate only on the user's approval.
+  const PULLED_TYPES = new Set(["MONEYLINES", "UNDERS", "OVERS"]);
 
   for (const [label, match] of types) {
     if (PULLED_TYPES.has(label)) continue;
