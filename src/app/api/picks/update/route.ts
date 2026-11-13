@@ -368,6 +368,7 @@ export async function POST(req: Request) {
               ? `${mergedPicks.length} play${mergedPicks.length > 1 ? "s" : ""} posted — top: ${top.game} · ${top.play}`
               : "Today's plays are posted",
             url: "/picks",
+            kind: "card-live",
           });
           if (push.vapid) {
             cardLivePush = push.sent;
@@ -406,6 +407,7 @@ export async function POST(req: Request) {
             title: "MoyLine AI · New picks added",
             body: `${addedPicks.length} new pick${addedPicks.length > 1 ? "s" : ""} added to today's card — ${first.game} · ${first.play}${addedPicks.length > 1 ? ` (+${addedPicks.length - 1} more)` : ""}`,
             url: "/picks",
+            kind: "new-picks",
           });
           if (push.vapid) {
             newPicksPush = push.sent;
@@ -446,6 +448,7 @@ export async function POST(req: Request) {
                   title: "🚨🚨🚨 5-ALARM FIRE: 5-STAR PLAY 🚨🚨🚨",
                   body: `${p.game} — ${p.play}. Our first EVER 5-star. Get in now.`,
                   url: "/picks",
+                  kind: "five-star",
                 }),
               }).catch(() => {});
             }

@@ -8,6 +8,8 @@ import {
 } from "@/lib/alerts";
 import { getSubscription } from "@/lib/push";
 import { getOdds } from "@/lib/odds";
+import { livePropLine } from "@/lib/cheatsheet";
+import type { PropLiveQuote } from "@/lib/card-utils";
 import { fmtAmerican, type OddsEvent } from "@/lib/odds-shared";
 import webpush from "web-push";
 
@@ -107,12 +109,17 @@ async function sendAlertPush(
   if (!sub) return false;
 
   const isMoneyline = alert.market === "moneyline";
+  const isProp = alert.market === "prop";
   const currentLabel = isMoneyline ? fmtAmerican(Math.round(currentLine)) : `${currentLine}`;
   const targetLabel = isMoneyline ? fmtAmerican(Math.round(alert.target)) : `${alert.target}`;
   const payload = JSON.stringify({
-    title: `🎯 Line alert hit: ${alert.gameLabel}`,
-    body: `${alert.side} ${alert.market} is now ${currentLabel} (your target: ${targetLabel})`,
-    url: "/",
+    title: isProp
+      ? `🎯 Prop alert hit: ${alert.player || alert.gameLabel}`
+      : `🎯 Line alert hit: ${alert.gameLabel}`,
+    body: isProp
+      ? `${alert.player} ${alert.side} ${alert.propLabel || ""} is now ${currentLabel} (${alert.gameLabel}) — your target: ${targetLabel}`.replace(/\s+/g, " ")
+      : `${alert.side} ${alert.market} is now ${currentLabel} (your target: ${targetLabel})`,
+    url: isProp ? "/lab" : "/",
   });
 
   try {
@@ -166,15 +173,71 @@ async function checkAlerts() {
       return NextResponse.json({ ok: true, ...results, message: "No pending alerts" });
     }
 
-    const { events } = await getOdds();
-    if (!events || events.length === 0) {
-      return NextResponse.json({ ok: true, ...results, message: "No odds data" });
+    // Game-market alerts read the odds board; prop alerts (optimization
+    // #73) read the board-props cache the Cheatsheet maintains — fetch
+    // each source only when an alert actually needs it.
+    const hasGameAlerts = allAlerts.some(({ alerts }) =>
+      alerts.some((a) => a.market !== "prop")
+    );
+    let events: OddsEvent[] = [];
+    if (hasGameAlerts) {
+      const odds = await getOdds();
+      events = odds.events || [];
     }
+    const todayET = new Date().toLocaleDateString("en-CA", {
+      timeZone: "America/New_York",
+    });
+    const quoteMemo = new Map<string, PropLiveQuote | null>();
+    const propQuote = async (alert: LineAlert): Promise<PropLiveQuote | null> => {
+      const key = `${alert.player}|${alert.propMarket}|${alert.side}`;
+      if (!quoteMemo.has(key)) {
+        quoteMemo.set(
+          key,
+          await livePropLine(
+            {
+              game: alert.game,
+              player: alert.player!,
+              market: alert.propMarket!,
+              direction: /under/i.test(alert.side) ? "under" : "over",
+            },
+            todayET
+          ).catch(() => null)
+        );
+      }
+      return quoteMemo.get(key) ?? null;
+    };
 
     for (const { email, alerts } of allAlerts) {
       for (const alert of alerts) {
         results.checked++;
         try {
+          if (alert.market === "prop") {
+            if (!alert.player || !alert.propMarket) continue;
+            const quote = await propQuote(alert);
+            if (!quote) continue;
+            // Every line the books currently price for this side: the
+            // consensus main line plus every cached ladder rung. The
+            // most favorable one is the "current" the at-or-better
+            // test judges — Over wants the lowest, Under the highest.
+            const lines = new Set<number>(
+              Object.keys(quote.priceByLine).map((k) => Number(k))
+            );
+            if (quote.mainLine !== null) lines.add(quote.mainLine);
+            if (lines.size === 0) continue;
+            const arr = [...lines];
+            const current = /under/i.test(alert.side)
+              ? Math.max(...arr)
+              : Math.min(...arr);
+            if (alertHitsTarget(alert, current)) {
+              const sent = await sendAlertPush(email, alert, current);
+              if (sent) {
+                await markTriggered(email, alert.id);
+                results.triggered++;
+              }
+            }
+            continue;
+          }
+
           const event = findEvent(events, alert.game);
           if (!event) continue;
 

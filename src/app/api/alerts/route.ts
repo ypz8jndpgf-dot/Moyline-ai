@@ -30,9 +30,9 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  if (market !== "spread" && market !== "total" && market !== "moneyline") {
+  if (market !== "spread" && market !== "total" && market !== "moneyline" && market !== "prop") {
     return NextResponse.json(
-      { ok: false, error: "Market must be spread, total, or moneyline" },
+      { ok: false, error: "Market must be spread, total, moneyline, or prop" },
       { status: 400 }
     );
   }
@@ -41,6 +41,34 @@ export async function POST(req: NextRequest) {
       { ok: false, error: "Moneyline target must be an American price (e.g. -120 or +130)" },
       { status: 400 }
     );
+  }
+  // Prop alerts (optimization #73): the target is a LINE for one player +
+  // parsed market, on one side. Player/market come from the Cheatsheet
+  // leg the member tapped — validated to the same shapes parseProp emits.
+  let prop: { player: string; propMarket: string; propLabel: string } | null = null;
+  if (market === "prop") {
+    const player = typeof body.player === "string" ? body.player.trim().slice(0, 80) : "";
+    const propMarket = typeof body.propMarket === "string" ? body.propMarket.trim() : "";
+    const propLabel = typeof body.propLabel === "string" ? body.propLabel.trim().slice(0, 60) : "";
+    if (side !== "Over" && side !== "Under") {
+      return NextResponse.json(
+        { ok: false, error: "Prop side must be Over or Under" },
+        { status: 400 }
+      );
+    }
+    if (!player || !/^[a-zA-Z]{2,40}$/.test(propMarket)) {
+      return NextResponse.json(
+        { ok: false, error: "Prop alerts need a player and a market" },
+        { status: 400 }
+      );
+    }
+    if (!Number.isFinite(target) || target < 0 || target > 1000) {
+      return NextResponse.json(
+        { ok: false, error: "Prop target must be a line (e.g. 24.5)" },
+        { status: 400 }
+      );
+    }
+    prop = { player, propMarket, propLabel };
   }
   // Cap at 20 active alerts per user.
   const existing = await getAlerts(email);
@@ -58,6 +86,9 @@ export async function POST(req: NextRequest) {
     side,
     target,
     direction: "at-or-better",
+    ...(prop
+      ? { player: prop.player, propMarket: prop.propMarket, propLabel: prop.propLabel || undefined }
+      : {}),
   });
   return NextResponse.json({ ok: true, alert });
 }

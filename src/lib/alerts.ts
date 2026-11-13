@@ -11,10 +11,16 @@ export type LineAlert = {
   id: string;
   game: string; // normalized game key
   gameLabel: string; // display label
-  market: "spread" | "total" | "moneyline";
-  side: string; // e.g. "Chiefs -3", "Over 47.5", or the team name for a moneyline
-  target: number; // spread/total: the line to hit; moneyline: the American price to reach or beat
+  market: "spread" | "total" | "moneyline" | "prop";
+  side: string; // e.g. "Chiefs -3", "Over 47.5", or the team name for a moneyline; "Over"/"Under" for a prop
+  target: number; // spread/total: the line to hit; moneyline: the American price to reach or beat; prop: the line to reach or beat
   direction: "at-or-better"; // line reaches target or better for the user
+  // Prop alerts only (optimization #73): the player + parsed market the
+  // target applies to. The checker resolves the live line from the same
+  // board-props cache the Cheatsheet reads.
+  player?: string;
+  propMarket?: string; // internal market key (parseProp), e.g. "points"
+  propLabel?: string; // display label, e.g. "Points" — push copy only
   created_at: string;
   triggered_at: string | null;
 };
@@ -34,13 +40,21 @@ function payout(american: number): number {
  * Whether the current best line hits an alert's target. Moneylines are
  * true at-or-better: American prices order by payout, so reaching the
  * target price — or any better one — fires. Spreads and totals keep the
- * checker's long-standing exact-hit behavior.
+ * checker's long-standing exact-hit behavior. Props are at-or-better on
+ * the LINE for the alert's side: `current` is the most favorable priced
+ * line the checker found for that side — an Over fires at or below the
+ * target (a lower number is the better bet), an Under at or above it.
  */
 export function alertHitsTarget(
-  alert: Pick<LineAlert, "market" | "target">,
+  alert: Pick<LineAlert, "market" | "target" | "side">,
   current: number
 ): boolean {
   if (alert.market === "moneyline") return current >= alert.target;
+  if (alert.market === "prop") {
+    return /under/i.test(alert.side)
+      ? current >= alert.target - 1e-9
+      : current <= alert.target + 1e-9;
+  }
   return Math.abs(current - alert.target) < 0.01;
 }
 

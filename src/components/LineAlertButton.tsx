@@ -5,9 +5,14 @@ import { useState } from "react";
 type Props = {
   game: string; // normalized game key for matching
   gameLabel: string; // display label
-  market: "spread" | "total" | "moneyline";
+  market: "spread" | "total" | "moneyline" | "prop";
   side: string; // e.g. "Chiefs" or "Over"
   currentLine: number | null;
+  // Prop alerts only (optimization #73): the player + parsed market the
+  // target line applies to, from the Cheatsheet leg being rendered.
+  player?: string;
+  propMarket?: string;
+  propLabel?: string;
 };
 
 function fmtTarget(market: Props["market"], v: number): string {
@@ -19,13 +24,14 @@ function fmtTarget(market: Props["market"], v: number): string {
  * "Set line alert" button for odds board game cards.
  * Opens a small popover to pick a target line; POSTs to /api/alerts.
  */
-export default function LineAlertButton({ game, gameLabel, market, side, currentLine }: Props) {
+export default function LineAlertButton({ game, gameLabel, market, side, currentLine, player, propMarket, propLabel }: Props) {
   const [open, setOpen] = useState(false);
   const [target, setTarget] = useState("");
   const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [error, setError] = useState("");
 
   const isMoneyline = market === "moneyline";
+  const isProp = market === "prop";
 
   const submit = async () => {
     const t = isMoneyline ? parseInt(target, 10) : parseFloat(target);
@@ -43,7 +49,14 @@ export default function LineAlertButton({ game, gameLabel, market, side, current
       const res = await fetch("/api/alerts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ game, gameLabel, market, side, target: t }),
+        body: JSON.stringify({
+          game,
+          gameLabel,
+          market,
+          side,
+          target: t,
+          ...(isProp ? { player, propMarket, propLabel } : {}),
+        }),
       });
       const data = await res.json();
       if (data.ok) {
@@ -76,7 +89,14 @@ export default function LineAlertButton({ game, gameLabel, market, side, current
         <div className="absolute z-20 bottom-full mb-2 left-0 w-64 card p-4 shadow-xl border-gold/30">
           <p className="text-xs font-bold mb-1">Line alert</p>
           <p className="text-[11px] text-muted mb-3">
-            {gameLabel} · {side} {market}
+            {isProp ? (
+              <>
+                {player} · {side} {propLabel}
+                <span className="block mt-1">{gameLabel}</span>
+              </>
+            ) : (
+              <>{gameLabel} · {side} {market}</>
+            )}
             {currentLine !== null && (
               <span className="block mt-1">
                 Current: {fmtTarget(market, currentLine)}
@@ -87,6 +107,12 @@ export default function LineAlertButton({ game, gameLabel, market, side, current
                 Fires when the best price reaches your target or better.
               </span>
             )}
+            {isProp && (
+              <span className="block mt-1">
+                Fires when the best line for this side reaches your target or
+                better — Over: at or below your number · Under: at or above it.
+              </span>
+            )}
           </p>
           <div className="flex gap-2">
             <input
@@ -95,7 +121,13 @@ export default function LineAlertButton({ game, gameLabel, market, side, current
               value={target}
               onChange={(e) => setTarget(e.target.value)}
               placeholder={
-                isMoneyline ? "e.g. +130" : market === "spread" ? "e.g. -3" : "e.g. 47.5"
+                isMoneyline
+                  ? "e.g. +130"
+                  : isProp
+                    ? "e.g. 24.5"
+                    : market === "spread"
+                      ? "e.g. -3"
+                      : "e.g. 47.5"
               }
               className="flex-1 bg-white/5 border border-line rounded px-3 py-2 text-sm focus:border-gold focus:outline-none"
             />

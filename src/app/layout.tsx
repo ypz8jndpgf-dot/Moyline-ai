@@ -96,6 +96,7 @@ async function Nav() {
           <Link href="/track-record" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Record</Link>
           {/* <Link href="/archive" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Archive</Link> — hidden until track record is ready for prime time */}
           <Link href="/my-tails" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Tails</Link>
+          <Link href="/inbox" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Inbox</Link>
           <Link href="/alerts" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Alerts</Link>
           <Link href="/backpage" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">Undercard 🔒</Link>
           <Link href="/leaderboard" className="px-2 sm:px-3 py-1.5 rounded hover:text-gold shrink-0">🏆 Board</Link>

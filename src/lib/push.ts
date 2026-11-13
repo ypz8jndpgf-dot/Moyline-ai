@@ -1,5 +1,6 @@
 import { Redis } from "@upstash/redis";
 import webpush from "web-push";
+import { logPush, type PushKind } from "@/lib/push-inbox";
 
 function cleanEnv(v: string | undefined): string {
   let s = (v || "").trim();
@@ -85,11 +86,15 @@ function vapidConfigured(): boolean {
 /**
  * Sends a push notification to every stored subscription.
  * Returns { sent, failed }. Stale (410/404) subscriptions are removed.
+ * Every accepted send is logged to the member's push inbox (#74) under
+ * `kind` (call sites name their kind; untagged broadcasts log as
+ * "announcement").
  */
 export async function broadcastPush(payload: {
   title: string;
   body: string;
   url?: string;
+  kind?: PushKind | string;
 }): Promise<{ sent: number; failed: number; vapid: boolean }> {
   if (!vapidConfigured()) {
     return { sent: 0, failed: 0, vapid: false };
@@ -115,6 +120,12 @@ export async function broadcastPush(payload: {
           data
         );
         sent++;
+        await logPush(email, {
+          kind: payload.kind || "announcement",
+          title: payload.title,
+          body: payload.body,
+          url: payload.url || "/picks",
+        });
       } catch (e: unknown) {
         const status = (e as { statusCode?: number })?.statusCode;
         if (status === 404 || status === 410) {
@@ -144,9 +155,28 @@ export type PushSendOutcome =
 
 /**
  * Sends a push to one member's stored subscription, reporting exactly
- * what happened. Stale (410/404) subscriptions are removed.
+ * what happened. Stale (410/404) subscriptions are removed. When the
+ * caller tags the payload with a `kind`, an accepted send is logged to
+ * the member's push inbox (#74); untagged sends (e.g. the #63 test
+ * push) are never logged.
  */
 export async function sendPushDetailed(
+  email: string,
+  payload: { title: string; body: string; url?: string; kind?: PushKind | string }
+): Promise<PushSendOutcome> {
+  const outcome = await deliverPush(email, payload);
+  if (outcome === "sent" && payload.kind) {
+    await logPush(email, {
+      kind: payload.kind,
+      title: payload.title,
+      body: payload.body,
+      url: payload.url || "/picks",
+    });
+  }
+  return outcome;
+}
+
+async function deliverPush(
   email: string,
   payload: { title: string; body: string; url?: string }
 ): Promise<PushSendOutcome> {
@@ -186,7 +216,7 @@ export async function sendPushDetailed(
  */
 export async function sendPushTo(
   email: string,
-  payload: { title: string; body: string; url?: string }
+  payload: { title: string; body: string; url?: string; kind?: PushKind | string }
 ): Promise<boolean> {
   return (await sendPushDetailed(email, payload)) === "sent";
 }

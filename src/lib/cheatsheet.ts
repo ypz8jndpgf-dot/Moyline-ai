@@ -1120,8 +1120,7 @@ export async function buildLadder(leg: CheatLeg, dateET: string): Promise<CheatL
 }
 
 /**
- * Live quote for one feed prop pick (optimization #52, the /picks
- * edge-gone badge), from the board-props cache ONLY — the same sources
+ * Live prop quotes, from the board-props cache ONLY — the same sources
  * buildLadder reads: (b) the cache's consensus board picks (the board's
  * current main line for the player + market, best price across books)
  * and (c) its ladder rungs (every distinct priced line, best price per
@@ -1132,15 +1131,20 @@ export async function buildLadder(leg: CheatLeg, dateET: string): Promise<CheatL
  * sport, same parsed market + direction, conservative player-name
  * match (a missed quote beats a wrong one).
  */
-export async function livePropQuote(
-  pick: FeedPick,
+type PropQuoteQuery = {
+  playerQuery: string;
+  market: string;
+  direction: "over" | "under";
+};
+
+/** Shared board-cache matching behind livePropQuote / livePropLine. */
+async function quoteFromBoard(
+  parsed: PropQuoteQuery,
+  sport: string,
   dateET: string
 ): Promise<PropLiveQuote | null> {
-  const parsed = parseProp(pick.play);
-  if (!parsed) return null;
   const boardCache = await readBoardCache(dateET);
   if (!boardCache) return null;
-  const sport = sportFromGame(pick.game);
 
   let mainLine: number | null = null;
   let mainPrice: number | null = null;
@@ -1178,4 +1182,36 @@ export async function livePropQuote(
   const priceByLine: Record<number, number> = {};
   for (const [line, price] of byLine) priceByLine[line] = price;
   return { mainLine, mainPrice, priceByLine };
+}
+
+/**
+ * Live quote for one feed prop pick (optimization #52, the /picks
+ * edge-gone badge) — parses the pick's play text, then reads the
+ * board-props cache via quoteFromBoard.
+ */
+export async function livePropQuote(
+  pick: FeedPick,
+  dateET: string
+): Promise<PropLiveQuote | null> {
+  const parsed = parseProp(pick.play);
+  if (!parsed) return null;
+  return quoteFromBoard(parsed, sportFromGame(pick.game), dateET);
+}
+
+/**
+ * Live quote for a stored prop line alert (optimization #73): the same
+ * cache read, keyed by the alert's player + parsed market + side
+ * instead of a feed pick. The stored player is the sheet's
+ * ESPN-resolved name; the conservative name match handles the gap to
+ * book description names exactly as it does for the ladder.
+ */
+export async function livePropLine(
+  query: { game: string; player: string; market: string; direction: "over" | "under" },
+  dateET: string
+): Promise<PropLiveQuote | null> {
+  return quoteFromBoard(
+    { playerQuery: query.player, market: query.market, direction: query.direction },
+    sportFromGame(query.game),
+    dateET
+  );
 }

@@ -162,6 +162,7 @@ async function checkTailAlerts() {
                 title: "⏰ Card locks soon",
                 body: `First game starts in ~${rounded} min — ${openStarts.length} play${openStarts.length > 1 ? "s" : ""} still open. Tail before they lock →`,
                 url: "/picks",
+                kind: "card-locks",
               });
               if (push.vapid) {
                 results.cardLocks = push.sent;
@@ -363,7 +364,7 @@ async function sendOnce(
   const id = Buffer.from(`${email}|${date}|${kind}|${game}|${play}`).toString("base64url").slice(0, 120);
   const key = SENT_PREFIX + id;
   if (await redis.get(key)) return false;
-  const ok = await sendPushTo(email, payload);
+  const ok = await sendPushTo(email, { ...payload, kind: "tail" });
   if (!ok) return false;
   await redis.set(key, "1", { ex: ttlSeconds });
   return true;

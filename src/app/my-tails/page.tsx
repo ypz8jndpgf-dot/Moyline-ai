@@ -20,6 +20,8 @@ import { parseProp } from "@/lib/cheatsheet";
 import { gradeTail, tailUnits } from "@/lib/tail-results";
 import TailAlertsToggle from "./TailAlertsToggle";
 import ExportTailsCsv, { type TailCsvRow } from "./ExportTailsCsv";
+import ShareRecordButton from "./ShareRecordButton";
+import { recordShareParams, recordLabel } from "@/lib/record-share";
 import PickStatusBanner from "@/components/PickStatusBanner";
 import LiveScore from "@/app/picks/LiveScore";
 import StartsIn from "@/app/picks/StartsIn";
@@ -217,6 +219,21 @@ export default async function MyTailsPage() {
     }
   }
 
+  // Share-your-record card (optimization #75): the signed snapshot is
+  // built from these exact graded numbers, and the card route verifies
+  // the signature before rendering any of them — the card can only
+  // ever show what this page issued from the member's stored tails.
+  const shareStats = {
+    w,
+    l,
+    p,
+    units: Math.round(units * 100) / 100,
+    priced,
+    graded: gradedCount,
+  };
+  const sharePath = `/share-record?${recordShareParams(shareStats).toString()}`;
+  const shareText = `My tails: ${recordLabel(shareStats)} · ${formatUnits(shareStats.units)}`;
+
   // CSV export rows (optimization #66) — the same graded data the page
   // renders, in tail order: date · game · play · price · result · units.
   const csvRows: TailCsvRow[] = graded.map(({ tail, result }) => {
@@ -246,10 +263,20 @@ export default async function MyTailsPage() {
       </p>
 
       {tails.length > 0 && (
-        <div className="mb-4">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
           <ExportTailsCsv rows={csvRows} />
+          {gradedCount > 0 && priced > 0 && (
+            <ShareRecordButton path={sharePath} recordText={shareText} />
+          )}
         </div>
       )}
+
+      <p className="text-sm mb-4">
+        <Link href="/inbox" className="text-gold font-bold hover:text-goldsoft">
+          📥 What did I miss? →
+        </Link>{" "}
+        <span className="text-muted">Every alert we&apos;ve sent you, kept for 7 days.</span>
+      </p>
 
       <TailAlertsToggle />
 

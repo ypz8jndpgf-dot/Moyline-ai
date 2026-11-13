@@ -28,8 +28,11 @@ export async function POST(req: Request) {
   if (!title || !msg) {
     return NextResponse.json({ ok: false, error: "title and body required" }, { status: 400 });
   }
+  // Inbox kind (#74): only the known broadcast kinds are honored, so a
+  // caller can't invent labels — anything else logs as "announcement".
+  const kind = o.kind === "five-star" ? "five-star" : "announcement";
 
-  const result = await broadcastPush({ title, body: msg, url });
+  const result = await broadcastPush({ title, body: msg, url, kind });
   if (!result.vapid) {
     return NextResponse.json(
       { ok: false, error: "VAPID keys not configured (VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY)" },

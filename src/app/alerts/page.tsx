@@ -17,7 +17,7 @@ export default async function AlertsPage() {
         LINE <span className="gold-text">ALERTS</span>
       </h1>
       <p className="text-muted text-sm mb-8 max-w-2xl">
-        Set a target line on any game. When the books hit your number, you get a push notification instantly. No more watching the screen.
+        Set a target line on any game — or on any player prop in the Lab&apos;s Cheatsheet. When the books hit your number, you get a push notification instantly. No more watching the screen.
       </p>
       <AlertsManager />
     </div>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { CheatLeg, CheatSheet, Split } from "@/lib/cheatsheet";
 import { winEdgeInfo, formatWinEdge } from "@/lib/winprob";
 import PropLadder from "./PropLadder";
+import LineAlertButton from "@/components/LineAlertButton";
 
 type Basis = "l10" | "l5" | "vsOpp" | "venue";
 
@@ -302,7 +303,7 @@ export default function CheatsheetBuilder() {
                       {leg.game}
                       {leg.starts && <span> · 🕐 {leg.starts}</span>} · avg {leg.avg10} over last {Math.min(10, leg.rows.length)}
                     </p>
-                    <div className="flex flex-wrap gap-2 mt-3">
+                    <div className="flex flex-wrap items-center gap-2 mt-3">
                       <button
                         className={pill(isAdded)}
                         onClick={() => !isAdded && addToTicket(leg)}
@@ -312,6 +313,21 @@ export default function CheatsheetBuilder() {
                       <button className={pill(false)} onClick={() => setOpenId(open ? null : leg.id)}>
                         {open ? "Hide trend" : "Trend analysis"}
                       </button>
+                      {/* Prop line alert (optimization #73): same alert
+                          system as the odds board — target line for this
+                          player's side, pinged when the books reach it. */}
+                      <span className={pill(false)}>
+                        <LineAlertButton
+                          game={leg.game}
+                          gameLabel={leg.game}
+                          market="prop"
+                          side={leg.direction === "over" ? "Over" : "Under"}
+                          currentLine={leg.line}
+                          player={leg.player}
+                          propMarket={leg.market}
+                          propLabel={leg.marketLabel}
+                        />
+                      </span>
                     </div>
                   </div>
                 </div>

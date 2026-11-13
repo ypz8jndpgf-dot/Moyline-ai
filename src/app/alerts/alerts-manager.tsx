@@ -8,6 +8,14 @@ function targetLabel(a: LineAlert): string {
   return `${a.target}`;
 }
 
+/** "Devin Booker Over Points" for props; "Chiefs spread" etc. otherwise. */
+function alertSubject(a: LineAlert): string {
+  if (a.market === "prop") {
+    return `${a.player || "Prop"} ${a.side} ${a.propLabel || ""}`.replace(/\s+/g, " ").trim();
+  }
+  return `${a.side} ${a.market}`;
+}
+
 export default function AlertsManager() {
   const [alerts, setAlerts] = useState<LineAlert[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,7 +72,7 @@ export default function AlertsManager() {
                 <div>
                   <p className="font-bold text-sm">{a.gameLabel}</p>
                   <p className="text-xs text-muted">
-                    {a.side} {a.market} → <span className="text-gold font-bold">{targetLabel(a)}</span>
+                    {alertSubject(a)} → <span className="text-gold font-bold">{targetLabel(a)}</span>
                   </p>
                   <p className="text-[11px] text-muted mt-1">
                     Set {new Date(a.created_at).toLocaleDateString()}
@@ -93,7 +101,7 @@ export default function AlertsManager() {
                 <div>
                   <p className="font-bold text-sm">{a.gameLabel} <span className="text-emerald-400 text-xs">✓ Hit</span></p>
                   <p className="text-xs text-muted">
-                    {a.side} {a.market} hit {targetLabel(a)}
+                    {alertSubject(a)} hit {targetLabel(a)}
                   </p>
                 </div>
                 <button

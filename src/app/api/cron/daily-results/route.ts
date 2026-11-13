@@ -167,6 +167,7 @@ export async function GET(req: Request) {
         title: "MoyLine AI · Daily results",
         body: `Yesterday: ${wins}-${losses}${pushes > 0 ? `-${pushes}` : ""}${unitsText} — full record inside`,
         url: "/track-record",
+        kind: "results",
       });
       if (push.vapid) {
         pushSent = push.sent;
