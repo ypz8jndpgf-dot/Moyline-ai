@@ -1,9 +1,15 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
+
+// Cheatsheet mode is behind a tab click and fetches its own data on mount,
+// so its JS (builder + prop ladder) is split out of the initial /lab bundle
+// and loaded only when a member first opens the tab.
+const CheatsheetBuilder = dynamic(() => import("./CheatsheetBuilder"));
 
 /** Parlay Lab modes: the classic ticket builder, or the guided Cheatsheet. */
-export default function LabTabs({ lab, sheet }: { lab: ReactNode; sheet: ReactNode }) {
+export default function LabTabs({ lab }: { lab: ReactNode }) {
   const [mode, setMode] = useState<"lab" | "sheet">("lab");
   const pill = (active: boolean) =>
     `px-5 py-2.5 rounded-full text-sm font-bold border transition min-h-[44px] inline-flex items-center justify-center ${
@@ -28,7 +34,7 @@ export default function LabTabs({ lab, sheet }: { lab: ReactNode; sheet: ReactNo
           <>📋 <b className="text-paper">You build it</b> — today&apos;s props ranked by how often they&apos;ve actually cashed. Collect legs, then grade them in the Builder.</>
         )}
       </p>
-      {mode === "lab" ? lab : sheet}
+      {mode === "lab" ? lab : <CheatsheetBuilder />}
     </div>
   );
 }

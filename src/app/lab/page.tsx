@@ -5,7 +5,6 @@ import { getPicksFeed } from "@/lib/picks";
 import LabBuilder from "./LabBuilder";
 import LabPromo from "./LabPromo";
 import LabTabs from "./LabTabs";
-import CheatsheetBuilder from "./CheatsheetBuilder";
 
 export const dynamic = "force-dynamic";
 
@@ -65,10 +64,7 @@ export default async function LabPage() {
           <p className="text-sm text-muted">Check back shortly — it posts with the 7am brief.</p>
         </div>
       ) : (
-        <LabTabs
-          lab={<LabBuilder picks={feed.picks} props={feed.props || []} />}
-          sheet={<CheatsheetBuilder />}
-        />
+        <LabTabs lab={<LabBuilder picks={feed.picks} props={feed.props || []} />} />
       )}
       <p className="text-xs text-muted mt-8">
         Analysis for entertainment purposes — not financial advice.
