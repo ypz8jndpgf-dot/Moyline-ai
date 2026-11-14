@@ -12,6 +12,8 @@ import TailButton from "./TailButton";
 import TailAllButton from "./TailAllButton";
 import ShareButton from "./ShareButton";
 import CopyCardButton from "./CopyCardButton";
+import CalendarButton from "./CalendarButton";
+import { bookSportsbookUrl } from "@/lib/book-links";
 import LiveScore from "./LiveScore";
 import StartsIn from "./StartsIn";
 import PropHitRate from "./PropHitRate";
@@ -177,6 +179,12 @@ function PickCard({
   // Voided pick (optimization #62): the banner replaces every live-play
   // treatment — no best-price chasing, no edge-gone math, no tail action.
   const voided = p.status === "voided";
+  // "Open at your book" (optimization #76): the member's book when the
+  // board priced this pick there, else the best-price book — linked to
+  // that book's official sportsbook home (the card holds no event IDs,
+  // so no honest deeper link exists). No verified URL → no link.
+  const openTarget = yourBook || best;
+  const openUrl = !voided && openTarget ? bookSportsbookUrl(openTarget.book) : null;
   const gameShort = (p.game || "").split("(")[0].trim();
   const askQuestions = [
     "Why this pick?",
@@ -347,6 +355,16 @@ function PickCard({
               dateLabel={cardDate}
               starts={p.starts}
             />
+            {openUrl && openTarget && (
+              <a
+                href={openUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-bold px-3 py-1.5 rounded-full border border-line text-muted hover:border-gold hover:text-gold transition-colors"
+              >
+                Open at {openTarget.book} →
+              </a>
+            )}
           </>
         )}
       </div>
@@ -709,6 +727,15 @@ export default async function PicksPage({
     "Full card: moylineai.com/picks",
   ].join("\n");
 
+  // "Add tonight's games to your calendar" (optimization #77): the
+  // ranked grid's games with their feed start times; the button builds
+  // the .ics client-side. Voided picks are excluded — a dead play
+  // doesn't earn a calendar block. Picks without a start time are
+  // skipped by the button's parser, never guessed.
+  const calendarGames = rankedPicks
+    .filter(({ p }) => p.status !== "voided")
+    .map(({ p }) => ({ game: p.game, play: p.play, price: p.price, starts: p.starts }));
+
   return (
     <div>
       <h1 className="font-display text-4xl mb-1">
@@ -878,6 +905,9 @@ export default async function PicksPage({
             <span className="flex items-center gap-2 text-xs font-bold">
               <TailAllButton picks={tailAllPicks} date={feed?.date} />
               <CopyCardButton text={cardCopyText} />
+              {calendarGames.length > 0 && (
+                <CalendarButton games={calendarGames} date={feed?.date} />
+              )}
               <span className="flex items-center gap-1">
               <Link
                 href={picksHref(activeSport, false)}
