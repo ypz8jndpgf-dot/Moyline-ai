@@ -41,11 +41,13 @@ export default async function Home() {
   // Personalization (steal #5): a signed-in member's favorite sports lead
   // the board. Stable sort — everything else keeps its natural order.
   let orderedGames = games;
+  let primaryBook = "";
   try {
     const session = await auth();
     const email = session?.user?.email;
     if (email) {
       const prefs = await getPrefs(email);
+      primaryBook = prefs.book || "";
       if (prefs.sports.length > 0) {
         const rank = new Map(prefs.sports.map((s, i) => [s, i]));
         orderedGames = [...games].sort(
@@ -170,6 +172,7 @@ export default async function Home() {
         movers={movers}
         sports={sports}
         cardGames={cardGames}
+        primaryBook={primaryBook}
         updatedAt={oddsResult.fetchedAt ? new Date(oddsResult.fetchedAt).toISOString() : ""}
         quotaNote={
           getQuotaRemaining() !== null && getQuotaRemaining()! < 100

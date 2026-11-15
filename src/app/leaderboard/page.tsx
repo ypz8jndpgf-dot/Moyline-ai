@@ -15,19 +15,29 @@ type Row = {
 
 const MEDALS = ["🥇", "🥈", "🥉"];
 
+type Window = "all" | "week" | "month";
+
+const WINDOWS: { key: Window; label: string }[] = [
+  { key: "all", label: "All-time" },
+  { key: "week", label: "This week" },
+  { key: "month", label: "This month" },
+];
+
 export default function LeaderboardPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
+  const [win, setWin] = useState<Window>("all");
 
   useEffect(() => {
-    fetch("/api/leaderboard")
+    setLoading(true);
+    fetch(win === "all" ? "/api/leaderboard" : `/api/leaderboard?window=${win}`)
       .then((r) => r.json())
       .then((d) => {
         setRows(d.leaderboard || []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, []);
+  }, [win]);
 
   const ranked = rows.filter((r) => r.w + r.l >= 3);
   const unranked = rows.filter((r) => r.w + r.l < 3);
@@ -45,6 +55,22 @@ export default function LeaderboardPage() {
           Beta members ranked by their tailed picks. Min 3 graded picks to rank.
           Handles are anonymized.
         </p>
+        {/* Window tabs (optimization #80): the competition resets weekly
+            and monthly, so a mid-season joiner has a board to climb. */}
+        <div className="flex justify-center gap-2 mt-4">
+          {WINDOWS.map((w) => (
+            <button
+              key={w.key}
+              onClick={() => setWin(w.key)}
+              aria-pressed={win === w.key}
+              className={`px-4 py-1.5 rounded-full text-sm font-bold ${
+                win === w.key ? "btn-gold" : "btn-ghost"
+              }`}
+            >
+              {w.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {loading ? (
@@ -61,7 +87,13 @@ export default function LeaderboardPage() {
         </div>
       ) : ranked.length === 0 ? (
         <div className="card p-8 text-center">
-          <p className="text-lg mb-2">No ranked players yet.</p>
+          <p className="text-lg mb-2">
+            {win === "all"
+              ? "No ranked players yet."
+              : win === "week"
+                ? "No ranked players this week yet."
+                : "No ranked players this month yet."}
+          </p>
           <p className="text-sm text-muted mb-6">
             Tail at least 3 picks to hit the board.
           </p>

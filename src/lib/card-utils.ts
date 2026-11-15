@@ -1,4 +1,4 @@
-import { GameVM, MoverVM } from "./board";
+import { GameVM, MoverVM, CellVM } from "./board";
 import { FeedPick } from "./picks";
 import { winEdgeInfo } from "./winprob";
 
@@ -181,6 +181,78 @@ export function bookPricesForPick(pick: FeedPick, game: GameVM): BookPriceRow[] 
     });
   }
   return rows.length > 0 ? rows : null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Line-alert spec for a card pick (optimization #79, 2026-11-15).     */
+/* The LineAlertButton already lives on the odds board and on          */
+/* Cheatsheet legs; this resolves the same alert identity from a feed  */
+/* pick + its board game so the button can sit on the pick itself:     */
+/* the game key in board naming (what the alert checker matches), the  */
+/* pick's own market and side, and the current best line for that      */
+/* side as the popover's "Current". Props return null here — the       */
+/* props strip builds its spec from parseProp instead, because the     */
+/* game board carries no prop markets.                                 */
+/* ------------------------------------------------------------------ */
+
+export interface PickAlertSpec {
+  game: string;
+  gameLabel: string;
+  market: "spread" | "total" | "moneyline" | "prop";
+  side: string;
+  currentLine: number | null;
+  player?: string;
+  propMarket?: string;
+  propLabel?: string;
+}
+
+export function alertSpecForPick(pick: FeedPick, game: GameVM): PickAlertSpec | null {
+  const market = pickAlertMarket(pick);
+  if (!market) return null;
+  const cellKey = cellKeyForPick(pick);
+  if (!cellKey) return null;
+  // Same cell selection bestPriceForPick makes: the best-flagged cell
+  // wins, the first available cell is the fallback.
+  let cell: CellVM | null = null;
+  for (const b of game.books) {
+    const c = b[cellKey];
+    if (!c) continue;
+    if (!cell) cell = c;
+    if (c.best) {
+      cell = c;
+      break;
+    }
+  }
+  const gameLabel = `${game.away} @ ${game.home}`;
+  if (market === "total") {
+    return {
+      game: gameLabel,
+      gameLabel,
+      market: "total",
+      side: /\bunder\b/i.test(pick.play || "") ? "Under" : "Over",
+      currentLine: cell ? parsePoint(cell.display) : null,
+    };
+  }
+  const team = pickSideTeam(pick, game);
+  if (!team || team === "Draw") return null;
+  if (market === "moneyline") {
+    return {
+      game: gameLabel,
+      gameLabel,
+      market: "moneyline",
+      side: team,
+      currentLine: cell
+        ? parseCellPrice(cell.display) ?? parseAmerican(cell.display)
+        : null,
+    };
+  }
+  return {
+    game: gameLabel,
+    gameLabel,
+    market: "spread",
+    side: team,
+    currentLine: cell ? parsePoint(cell.display) : null,
+  };
 }
 
 /* ------------------------------------------------------------------ */

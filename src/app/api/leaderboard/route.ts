@@ -38,9 +38,31 @@ function handle(email: string): string {
   return local.slice(0, 2) + "***";
 }
 
-export async function GET() {
+/** First tail date ("YYYY-MM-DD", ET) inside a window, or null for all-time.
+ *  Week = Monday of the current ET week; month = the 1st of the ET month.
+ *  Tail dates are ET feed dates, so a string compare is exact. */
+function windowStart(window: string): string | null {
+  if (window !== "week" && window !== "month") return null;
+  const today = new Date().toLocaleDateString("en-CA", {
+    timeZone: "America/New_York",
+  });
+  if (window === "month") return `${today.slice(0, 8)}01`;
+  const [y, m, d] = today.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const sinceMonday = (dt.getUTCDay() + 6) % 7;
+  dt.setUTCDate(dt.getUTCDate() - sinceMonday);
+  return dt.toISOString().slice(0, 10);
+}
+
+export async function GET(req: Request) {
   const redis = getRedis();
   if (!redis) return NextResponse.json({ error: "not configured" }, { status: 500 });
+
+  // Windowed boards (optimization #80): ?window=week|month restricts the
+  // tally to tails dated inside the window, so a member who joins
+  // mid-season has a board they can actually climb.
+  const window = new URL(req.url).searchParams.get("window") || "all";
+  const start = windowStart(window);
 
   const members = (await redis.smembers("moyline:beta")) || [];
   const rec = await getTrackRecord();
@@ -48,7 +70,8 @@ export async function GET() {
 
   const rows = [];
   for (const email of members) {
-    const tails = await readTails(email);
+    const allTails = await readTails(email);
+    const tails = start ? allTails.filter((t) => t.date >= start) : allTails;
     if (tails.length === 0) continue;
     let w = 0, l = 0, p = 0;
     for (const t of tails) {
@@ -74,5 +97,5 @@ export async function GET() {
     return (b.w + b.l) - (a.w + a.l);
   });
 
-  return NextResponse.json({ leaderboard: rows, updated: new Date().toISOString() });
+  return NextResponse.json({ leaderboard: rows, window, updated: new Date().toISOString() });
 }

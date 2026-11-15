@@ -88,7 +88,12 @@ const MARKET_ROWS: { label: string; tag: string; get: (b: BookVM) => CellVM | nu
   { label: "ML", tag: "H", get: (b) => b.mlHome },
 ];
 
-function GameCard({ game }: { game: GameVM }) {
+function GameCard({ game, onlyBook }: { game: GameVM; onlyBook?: string | null }) {
+  // "Your book only" (optimization #81): narrow the price columns to the
+  // member's book. A book that didn't price this game falls back to the
+  // full column set rather than an empty table.
+  const onlyCols = onlyBook ? game.books.filter((b) => b.label === onlyBook) : [];
+  const cols = onlyCols.length > 0 ? onlyCols : game.books;
   const kickoff = new Date(game.commence);
   const timeStr = kickoff.toLocaleString("en-US", {
     weekday: "short",
@@ -130,7 +135,7 @@ function GameCard({ game }: { game: GameVM }) {
               <th className="text-left py-1 pr-2 font-bold text-[11px] whitespace-nowrap">
                 Open
               </th>
-              {game.books.map((b) => (
+              {cols.map((b) => (
                 <th
                   key={b.key}
                   className="text-left py-1 pr-2 font-bold text-goldsoft text-[11px] whitespace-nowrap"
@@ -149,7 +154,7 @@ function GameCard({ game }: { game: GameVM }) {
                 <td className="pr-2 py-1.5 text-[12px] whitespace-nowrap text-muted">
                   {openForRow(game, row.get)}
                 </td>
-                {game.books.map((b) => (
+                {cols.map((b) => (
                   <td key={b.key} className="pr-2">
                     <SideCell cell={row.get(b)} />
                   </td>
@@ -228,6 +233,7 @@ export default function OddsBoard({
   updatedAt,
   quotaNote,
   cardGames,
+  primaryBook,
 }: {
   games: GameVM[];
   movers: MoverVM[];
@@ -236,9 +242,30 @@ export default function OddsBoard({
   quotaNote?: string;
   /** Today's card game strings from the picks feed (optimization #65). */
   cardGames?: string[];
+  /** The signed-in member's primary book from prefs (optimization #81). */
+  primaryBook?: string;
 }) {
   const [tab, setTab] = useState<string>("all");
   const [cardOnly, setCardOnly] = useState<boolean>(false);
+  // "Your book only" (optimization #81): defaults to the member's primary
+  // book from prefs; the picker covers members who never set one.
+  const [bookOnly, setBookOnly] = useState<boolean>(false);
+  const [bookPick, setBookPick] = useState<string>("");
+
+  const boardBooks = useMemo(() => {
+    const seen: string[] = [];
+    for (const g of games) {
+      for (const b of g.books) {
+        if (!seen.includes(b.label)) seen.push(b.label);
+      }
+    }
+    return seen;
+  }, [games]);
+
+  const effBook =
+    [bookPick, primaryBook || "", ...boardBooks].find(
+      (b) => b && boardBooks.includes(b)
+    ) || "";
 
   const cardCount = useMemo(
     () => (cardGames && cardGames.length > 0 ? games.filter((g) => isCardGame(g, cardGames)).length : 0),
@@ -314,6 +341,31 @@ export default function OddsBoard({
             🎯 Card games only ({cardCount})
           </button>
         )}
+        {boardBooks.length > 1 && (
+          <button
+            onClick={() => setBookOnly((v) => !v)}
+            aria-pressed={bookOnly}
+            className={`px-4 py-1.5 rounded-full text-sm font-bold ${
+              bookOnly ? "btn-gold" : "btn-ghost"
+            }`}
+          >
+            📚 Your book only
+          </button>
+        )}
+        {bookOnly && boardBooks.length > 1 && (
+          <select
+            value={effBook}
+            onChange={(e) => setBookPick(e.target.value)}
+            aria-label="Choose your book"
+            className="px-3 py-1.5 rounded-full text-sm font-bold bg-white/5 border border-line text-paper focus:border-gold focus:outline-none"
+          >
+            {boardBooks.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       <p className="text-xs text-muted mb-4">
@@ -338,7 +390,7 @@ export default function OddsBoard({
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {filtered.map((g) => (
-            <GameCard key={g.id} game={g} />
+            <GameCard key={g.id} game={g} onlyBook={bookOnly ? effBook : null} />
           ))}
         </div>
       )}

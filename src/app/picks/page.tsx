@@ -4,7 +4,7 @@ import { getSubscription, hasAccess, isFounder } from "@/lib/store";
 import { getPicksFeed, PicksFeed, FeedPick, sportFromGame } from "@/lib/picks";
 import { getOdds, getOpenings } from "@/lib/odds";
 import { buildBoard, MoverVM } from "@/lib/board";
-import { findBoardGame, bestPriceForPick, badgeBeatsPlay, movedAgainstNote, edgeGoneNote, propEdgeGoneNote, lineStoryForPick, bookPriceForPick, bookPricesForPick, selectCardSteamMoves, BestPrice, BookPriceRow } from "@/lib/card-utils";
+import { findBoardGame, bestPriceForPick, badgeBeatsPlay, movedAgainstNote, edgeGoneNote, propEdgeGoneNote, lineStoryForPick, bookPriceForPick, bookPricesForPick, selectCardSteamMoves, alertSpecForPick, BestPrice, BookPriceRow, PickAlertSpec } from "@/lib/card-utils";
 import { pickWinEdge, winEdgeInfo, formatWinEdge } from "@/lib/winprob";
 import { parseProp, livePropQuote } from "@/lib/cheatsheet";
 import { readTails } from "@/lib/tails";
@@ -17,6 +17,7 @@ import { bookSportsbookUrl } from "@/lib/book-links";
 import LiveScore from "./LiveScore";
 import StartsIn from "./StartsIn";
 import PropHitRate from "./PropHitRate";
+import LineAlertButton from "@/components/LineAlertButton";
 import MarketingPaywall from "@/components/MarketingPaywall";
 import PickStatusBanner from "@/components/PickStatusBanner";
 import { getYesterdayGlance, formatRecord, formatUnits } from "@/lib/records";
@@ -153,6 +154,7 @@ function PickCard({
   lineStory,
   bookPrices,
   yourBook,
+  alert,
   initiallyTailed,
   cardDate,
   feedDate,
@@ -165,6 +167,9 @@ function PickCard({
   movedNote?: string | null;
   edgeGone?: string | null;
   lineStory?: string | null;
+  /** Line-alert identity for this pick (optimization #79); null when the
+   *  pick has no board-resolvable market or the game has started. */
+  alert?: PickAlertSpec | null;
   /** Per-book live prices for this pick's market (optimization #58). */
   bookPrices?: BookPriceRow[] | null;
   yourBook?: BestPrice;
@@ -364,6 +369,11 @@ function PickCard({
               >
                 Open at {openTarget.book} →
               </a>
+            )}
+            {alert && (
+              <span className="inline-flex items-center px-3 py-1.5 rounded-full border border-line">
+                <LineAlertButton {...alert} />
+              </span>
             )}
           </>
         )}
@@ -569,12 +579,19 @@ export default async function PicksPage({
   const storyByPick = new Map<string, string | null>();
   const yourBookByPick = new Map<string, BestPrice>();
   const booksByPick = new Map<string, BookPriceRow[] | null>();
+  const alertByPick = new Map<string, PickAlertSpec | null>();
   for (const p of feed?.picks || []) {
     const key = `${p.game}|${p.play}`;
     const bg = findBoardGame(p, boardGames);
     if (bg) {
       // Compare-all-books rows (#58): same cached board, no new pulls.
       booksByPick.set(key, bookPricesForPick(p, bg));
+      // Line alert on the pick itself (optimization #79): upcoming games
+      // only — an alert is a pre-game decision tool, set where the
+      // decision is made instead of on the odds board.
+      if (statusFor(parseStart(p.starts), nowMins) === "upcoming") {
+        alertByPick.set(key, alertSpecForPick(p, bg));
+      }
       storyByPick.set(key, lineStoryForPick(p, bg));
       if (prefs.book) {
         yourBookByPick.set(key, bookPriceForPick(p, bg, prefs.book));
@@ -949,6 +966,7 @@ export default async function PicksPage({
                   lineStory={storyByPick.get(key) || null}
                   bookPrices={booksByPick.get(key) || null}
                   yourBook={yourBookByPick.get(key) || null}
+                  alert={alertByPick.get(key) || null}
                   initiallyTailed={tailedSet.has(key)}
                   cardDate={cardDate}
                   feedDate={feed?.date}
@@ -1006,6 +1024,10 @@ export default async function PicksPage({
               <div className="space-y-3">
                 {feed.props.map((prop, i) => {
                   const key = `${prop.game}|${prop.play}`;
+                  // Prop line alert (optimization #79): same parse the
+                  // edge-gone badge uses; unparseable plays get no button.
+                  const parsedProp =
+                    prop.status !== "voided" ? parseProp(prop.play) : null;
                   return (
                     <div
                       key={i}
@@ -1031,6 +1053,20 @@ export default async function PicksPage({
                         )}
                         {prop.status !== "voided" && (
                           <LiveScore game={prop.game} play={prop.play} market="prop" />
+                        )}
+                        {parsedProp && (
+                          <div className="mt-1.5">
+                            <LineAlertButton
+                              game={prop.game}
+                              gameLabel={prop.game}
+                              market="prop"
+                              side={parsedProp.direction === "over" ? "Over" : "Under"}
+                              currentLine={parsedProp.line}
+                              player={parsedProp.playerQuery}
+                              propMarket={parsedProp.market}
+                              propLabel={parsedProp.marketLabel}
+                            />
+                          </div>
                         )}
                       </div>
                       {prop.status === "voided" ? (
