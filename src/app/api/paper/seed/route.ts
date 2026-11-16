@@ -44,16 +44,16 @@ export async function POST(req: Request) {
     }
     const feed = (typeof raw === "string" ? JSON.parse(raw) : raw) as {
       date: string;
-      picks: { game: string; play: string; price: string; status?: string | null }[];
-      backpage?: { game: string; play: string; price: string; status?: string | null }[];
+      picks: { game: string; play: string; price: string; status?: string | null; market?: string }[];
+      backpage?: { game: string; play: string; price: string; status?: string | null; market?: string }[];
     };
     // Status rides along so placePaperBets skips voided picks (#62).
     const placed = await placePaperBets(
-      (feed.picks || []).map((p) => ({ game: p.game, play: p.play, price: p.price, status: p.status })),
+      (feed.picks || []).map((p) => ({ game: p.game, play: p.play, price: p.price, status: p.status, market: p.market })),
       feed.date
     );
     const bpPlaced = await placePaperBets(
-      (feed.backpage || []).map((p) => ({ game: p.game, play: p.play, price: p.price, status: p.status })),
+      (feed.backpage || []).map((p) => ({ game: p.game, play: p.play, price: p.price, status: p.status, market: p.market })),
       feed.date,
       "backpage"
     );

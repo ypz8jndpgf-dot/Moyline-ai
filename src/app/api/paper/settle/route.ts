@@ -14,6 +14,8 @@ interface Grade {
   game: string;
   play: string;
   result: "win" | "loss" | "push";
+  market?: string; // optional: "spread" | "total" | "ml" | "prop" — when
+  // present, settlement matches market-aware (2026-11-16 mergeKey fix).
 }
 
 function isValidBody(b: unknown): b is { date: string; grades: Grade[] } {

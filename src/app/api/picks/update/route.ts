@@ -502,13 +502,13 @@ export async function POST(req: Request) {
       // Status rides along so placePaperBets skips voided picks (#62):
       // a pick voided before its first placement never enters the ledger.
       const placed = await placePaperBets(
-        mergedPicks.map((p) => ({ game: p.game, play: p.play, price: p.price, status: p.status })),
+        mergedPicks.map((p) => ({ game: p.game, play: p.play, price: p.price, status: p.status, market: p.market })),
         body.date,
         "card"
       );
       paperPlaced = placed.length;
       const bpPlaced = await placePaperBets(
-        mergedBackpage.map((p) => ({ game: p.game, play: p.play, price: p.price, status: p.status })),
+        mergedBackpage.map((p) => ({ game: p.game, play: p.play, price: p.price, status: p.status, market: p.market })),
         body.date,
         "backpage"
       );

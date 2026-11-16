@@ -1027,7 +1027,13 @@ export function mergeKey(p: { game: string; play: string; market?: string }): st
   const market = (p.market || "").toLowerCase();
 
   let side: string;
-  if (market === "total" || /\bover\b/.test(play)) {
+  if (market === "prop") {
+    // Props FIRST: a prop play like "Over 20.5 rushing yards" contains the
+    // word "over" but is not a game total — it must never share the total's
+    // key (2026-11-16: a Herbert prop shadowed the Over 38.5 total and
+    // blocked its paper bet). Market is authoritative when present.
+    side = "prop:" + play;
+  } else if (market === "total" || /\bover\b/.test(play)) {
     side = "total:over";
   } else if (/\bunder\b/.test(play)) {
     side = "total:under";
@@ -1035,8 +1041,6 @@ export function mergeKey(p: { game: string; play: string; market?: string }): st
     side = "ml:draw";
   } else if (market === "ml" || /\bml\b/.test(play)) {
     side = "ml:" + play.replace(/\bml\b/g, "").trim();
-  } else if (market === "prop") {
-    side = "prop:" + play;
   } else {
     // Spread (default): the team before the +/-number, e.g. "Nevada -9.5" -> "nevada".
     const m = play.match(/^(.+?)\s*[+-]\d/);

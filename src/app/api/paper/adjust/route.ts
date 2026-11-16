@@ -14,6 +14,9 @@ function cleanEnv(v: string | undefined): string {
 /**
  * Admin: adjust the paper bankroll by a delta (e.g. correct a missed reservation).
  * Protected by PICKS_UPDATE_SECRET. Body: { "delta": number, "reason": string }
+ * One-off bet removal (2026-11-16 mergeKey fix): { "removeBet": { "gameContains": string,
+ * "playContains": string } } — removes the first OPEN bet matching both, refunds its
+ * stake to the bankroll. Runs INSTEAD of a delta adjustment.
  */
 export async function POST(req: Request) {
   const secret = cleanEnv(process.env.PICKS_UPDATE_SECRET);
@@ -54,7 +57,29 @@ export async function POST(req: Request) {
     }
   }
   const delta = (body as { delta?: unknown }).delta;
-  if (dropBefore === undefined && (typeof delta !== "number" || !isFinite(delta))) {
+  // One-off bet removal (2026-11-16): remove a mis-placed open bet and refund
+  // its stake. Cannot combine with a nonzero delta.
+  const removeBet = (body as { removeBet?: unknown }).removeBet as
+    | { gameContains?: unknown; playContains?: unknown }
+    | undefined;
+  if (removeBet !== undefined) {
+    if (
+      typeof removeBet?.gameContains !== "string" ||
+      typeof removeBet?.playContains !== "string"
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "removeBet needs gameContains and playContains (strings)" },
+        { status: 400 }
+      );
+    }
+    if (typeof delta === "number" && delta !== 0) {
+      return NextResponse.json(
+        { ok: false, error: "removeBet cannot be combined with a nonzero delta" },
+        { status: 400 }
+      );
+    }
+  }
+  if (dropBefore === undefined && removeBet === undefined && (typeof delta !== "number" || !isFinite(delta))) {
     return NextResponse.json({ ok: false, error: "delta must be a number" }, { status: 400 });
   }
   // Optional one-off bet correction (e.g. a mis-parsed price): rewrites the
@@ -107,6 +132,37 @@ export async function POST(req: Request) {
         dropped,
         kept: kept.length,
         bankroll,
+      });
+    }
+    if (removeBet !== undefined) {
+      const bets =
+        (await redis.get<
+          { id: string; game: string; play: string; status: string; stake: number }[]
+        >("moyline:paper:bets")) || [];
+      const idx = bets.findIndex(
+        (b) =>
+          b.status === "open" &&
+          b.game.toLowerCase().includes((removeBet.gameContains as string).toLowerCase()) &&
+          b.play.toLowerCase().includes((removeBet.playContains as string).toLowerCase())
+      );
+      if (idx < 0) {
+        return NextResponse.json(
+          { ok: false, error: "no open paper bet matching that game/play" },
+          { status: 404 }
+        );
+      }
+      const [removed] = bets.splice(idx, 1);
+      await redis.set("moyline:paper:bets", bets);
+      const refund = removed.stake || 0;
+      const newVal =
+        refund > 0
+          ? await redis.incrbyfloat("moyline:paper:bankroll", refund)
+          : await getBankroll();
+      return NextResponse.json({
+        ok: true,
+        removed: { id: removed.id, game: removed.game, play: removed.play, stake: removed.stake },
+        refunded: refund,
+        bankroll: Math.round(Number(newVal) * 100) / 100,
       });
     }
     let fixedBet: { id: string; game: string; odds: number; pnl: number } | null = null;

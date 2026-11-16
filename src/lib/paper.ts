@@ -1,5 +1,5 @@
 import { Redis } from "@upstash/redis";
-import { mergeKey } from "./card-utils";
+import { mergeKey, normalizeGame } from "./card-utils";
 
 /** Virtual bankroll start and flat stake per paper bet. */
 export const PAPER_START = 1000;
@@ -22,6 +22,9 @@ export interface PaperBet {
   placed_at: string;
   settled_at?: string;
   source: PaperSource; // "card" = main card, "backpage" = admin-only backpage tab
+  market?: string; // "spread" | "total" | "ml" | "prop" — stored so settlement
+  // can tell a prop "Over 20.5 rushing yards" from a game total "Over 38.5"
+  // on the same game (mergeKey collision, 2026-11-16).
 }
 
 function redis() {
@@ -98,7 +101,7 @@ async function saveBets(bets: PaperBet[]): Promise<void> {
  * concurrent pushes can no longer double-place the same pick either.
  * Returns the bets that were actually added. */
 export async function placePaperBets(
-  picks: { game: string; play: string; price: string; status?: string | null }[],
+  picks: { game: string; play: string; price: string; status?: string | null; market?: string }[],
   date: string,
   source: PaperSource = "card"
 ): Promise<PaperBet[]> {
@@ -111,7 +114,9 @@ export async function placePaperBets(
     // play was published in error and is dead. Corrected picks stay
     // placeable: they are live plays with a fixed line.
     if (p.status === "voided") continue;
-    const key = mergeKey({ game: p.game, play: p.play });
+    // Market rides along: without it a prop "Over 20.5 rushing yards"
+    // merges into the game total's key and shadows it (2026-11-16).
+    const key = mergeKey({ game: p.game, play: p.play, market: p.market });
     if (seen.has(key)) continue;
     seen.add(key);
     const odds = parseOdds(p.price || "");
@@ -128,6 +133,7 @@ export async function placePaperBets(
       pnl: null,
       placed_at: now,
       source,
+      market: p.market,
     });
   }
   if (candidates.length === 0) return [];
@@ -170,23 +176,50 @@ export async function placePaperBets(
 
 /**
  * Settle open paper bets against graded results.
- * grades: [{ game, play, result: "win" | "loss" | "push" }]
- * Returns the settled bets.
+ * grades: [{ game, play, result: "win" | "loss" | "push", market? }]
+ * Matching order per bet (2026-11-16 mergeKey fix): (1) market-aware
+ * mergeKey when both sides carry a market; (2) exact normalized
+ * (game, play) text; (3) no-market mergeKey ONLY when exactly one grade
+ * maps to that key. Step 3's ambiguity guard is what stops a prop
+ * "Over 20.5 rushing yards" from settling on the game total's result
+ * (or vice versa) when the grader sends grades without a market.
+ * A bet that matches nothing stays open — never settle on a guess.
  */
 export async function settlePaperBets(
-  grades: { game: string; play: string; result: PaperStatus }[]
+  grades: { game: string; play: string; result: PaperStatus; market?: string }[]
 ): Promise<PaperBet[]> {
   const r = redis();
   const bets = (await r.get<PaperBet[]>(BETS_KEY)) || [];
-  const gradeByKey = new Map(
-    grades.map((g) => [mergeKey({ game: g.game, play: g.play }), g.result])
-  );
+  const gradeByMarketKey = new Map<string, PaperStatus>();
+  const gradeByExactText = new Map<string, PaperStatus>();
+  const gradeByKey = new Map<string, PaperStatus>();
+  const keyCounts = new Map<string, number>();
+  for (const g of grades) {
+    if (g.market) gradeByMarketKey.set(mergeKey({ game: g.game, play: g.play, market: g.market }), g.result);
+    gradeByExactText.set(
+      `${normalizeGame(g.game)}|${g.play.trim().toLowerCase()}`,
+      g.result
+    );
+    const k = mergeKey({ game: g.game, play: g.play });
+    gradeByKey.set(k, g.result);
+    keyCounts.set(k, (keyCounts.get(k) || 0) + 1);
+  }
   const now = new Date().toISOString();
   let bankrollDelta = 0;
   const settled: PaperBet[] = [];
   for (const b of bets) {
     if (b.status !== "open") continue;
-    const result = gradeByKey.get(mergeKey({ game: b.game, play: b.play }));
+    let result: PaperStatus | undefined;
+    if (b.market) {
+      result = gradeByMarketKey.get(mergeKey({ game: b.game, play: b.play, market: b.market }));
+    }
+    if (!result) {
+      result = gradeByExactText.get(`${normalizeGame(b.game)}|${b.play.trim().toLowerCase()}`);
+    }
+    if (!result) {
+      const k = mergeKey({ game: b.game, play: b.play });
+      if (keyCounts.get(k) === 1) result = gradeByKey.get(k);
+    }
     if (!result || result === "open") continue;
     b.status = result;
     b.settled_at = now;
