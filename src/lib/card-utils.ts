@@ -137,6 +137,37 @@ export function bestPriceForPick(pick: FeedPick, game: GameVM): BestPrice {
   return fallback;
 }
 
+/**
+ * American odds inside a board cell display: always parenthesized
+ * ("-3.5 (-110)" for spread/total cells, "(-152)" for moneyline
+ * cells). Deliberately NOT the shared parseAmerican scan: a
+ * three-digit total point ("210.5 (-110)") would fool its first-match
+ * scan into reading the point as the price.
+ */
+function americanFromDisplay(display: string): number | null {
+  const paren = display.match(/\(([+-]?\d{3,})\)/);
+  return paren ? parseInt(paren[1], 10) : null;
+}
+
+/**
+ * The live best price a member tailing this pick right now would
+ * actually get, as a clean American-odds string ("-150") —
+ * optimization #82. A tail grades at its stored price (tailUnits), so
+ * a member who tails after the line has moved must be recorded at the
+ * live number, not the published one their record would otherwise be
+ * graded against. Null when the board carries no price for the pick,
+ * or when the live price equals the published one (published stands).
+ */
+export function liveTailPrice(pick: FeedPick, game: GameVM): string | null {
+  const bp = bestPriceForPick(pick, game);
+  if (!bp) return null;
+  const live = americanFromDisplay(bp.display);
+  if (live === null) return null;
+  const published = parseAmerican(pick.price);
+  if (published !== null && published === live) return null;
+  return live > 0 ? `+${live}` : `${live}`;
+}
+
 /** The price at one named book for this pick's market+side (steal #5 "my book"). */
 export function bookPriceForPick(pick: FeedPick, game: GameVM, bookLabel: string): BestPrice {
   const cellKey = cellKeyForPick(pick);

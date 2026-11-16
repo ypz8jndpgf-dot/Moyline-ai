@@ -9,7 +9,7 @@ import { gradeTail, tailUnits } from "@/lib/tail-results";
 import { formatUnits } from "@/lib/records";
 import { getOdds, getOpenings } from "@/lib/odds";
 import { buildBoard } from "@/lib/board";
-import { findBoardGame, bestPriceForPick, movedAgainstNote, movedInFavorNote } from "@/lib/card-utils";
+import { findBoardGame, bestPriceForPick, movedAgainstNote, movedInFavorNote, selectCardSteamMoves } from "@/lib/card-utils";
 
 /**
  * Tailed-pick alerts (optimization #19, 2026-10-28).
@@ -38,7 +38,10 @@ import { findBoardGame, bestPriceForPick, movedAgainstNote, movedInFavorNote } f
  *    TTL, which for a same-day pick is effectively permanent.
  * Also on this route (it runs on every odds refresh): the once-a-day
  * card-locks broadcast (optimization #53) — one push when the card's
- * first game is within two hours of starting, deduped per date.
+ * first game is within two hours of starting, deduped per date — and
+ * the ★ steam broadcast (optimization #83): one push per ★ pick per
+ * day when the board's strict steam selection flags it, so members
+ * who haven't tailed yet hear it before the number moves further.
  * Dedupe marks are written only after a push is actually accepted.
  */
 export const dynamic = "force-dynamic";
@@ -116,7 +119,7 @@ export async function POST(req: Request) {
 }
 
 async function checkTailAlerts() {
-  const results = { checked: 0, sent: 0, cardLocks: 0, errors: [] as string[] };
+  const results = { checked: 0, sent: 0, cardLocks: 0, starSteam: 0, errors: [] as string[] };
   try {
     const redis = getRedis();
     if (!redis) return NextResponse.json({ ok: true, ...results, message: "No storage" });
@@ -130,7 +133,7 @@ async function checkTailAlerts() {
     }
 
     const [oddsResult, openings] = await Promise.all([getOdds(), getOpenings()]);
-    const { games } = buildBoard(oddsResult.events, openings);
+    const { games, movers } = buildBoard(oddsResult.events, openings);
 
     const today = todayET();
     const now = Date.now();
@@ -177,6 +180,70 @@ async function checkTailAlerts() {
     } catch (e) {
       results.errors.push(
         `card-locks: ${e instanceof Error ? e.message : String(e)}`
+      );
+    }
+
+    // ★ STEAM PUSH (optimization #83): the per-tail alerts only reach
+    // members who already tailed, and the card-locks broadcast never
+    // mentions steam — so a member who hasn't tailed a ★ pick hears
+    // nothing while its line runs. When the board's own steam
+    // selection (the strict v3 rules: the pick's own game, market and
+    // side only, one line per game+market+side across books) flags a
+    // ★ pick, broadcast ONE push for it. Deduped per pick per day via
+    // an NX claim on the move's v3 id (same pattern as card-locks);
+    // the claim is released when push isn't configured or the send
+    // throws, so a later refresh can still fire it. Non-★ picks never
+    // trigger this push, and a game that has already started is too
+    // late to tail — no push.
+    try {
+      if (feed && feed.date === today) {
+        const starPicks = (feed.picks || []).filter(
+          (p) => p.star && p.status !== "voided"
+        );
+        if (starPicks.length > 0) {
+          const starMoves = selectCardSteamMoves(starPicks, games, movers);
+          const starByGame = new Map<string, FeedPick>();
+          for (const p of starPicks) {
+            const bg = findBoardGame(p, games);
+            if (bg) starByGame.set(`${bg.away} @ ${bg.home}`, p);
+          }
+          for (const move of starMoves) {
+            const pick = starByGame.get(move.game);
+            if (!pick) continue;
+            const bg = findBoardGame(pick, games);
+            const commenceMs = bg ? Date.parse(bg.commence) : NaN;
+            if (!isNaN(commenceMs) && commenceMs <= now) continue;
+            const claimKey = `moyline:starsteam-push:${today}:${Buffer.from(move.id)
+              .toString("base64url")
+              .slice(0, 100)}`;
+            const claimed = await redis.set(claimKey, "1", {
+              nx: true,
+              ex: 48 * 3600,
+            });
+            if (!claimed) continue;
+            try {
+              const push = await broadcastPush({
+                title: "🔥 ★ pick steaming",
+                body: `${move.game} — ${pick.play} ${pick.price} is running: ${move.label} (${move.detail}). Tail before the number moves further →`,
+                url: "/picks",
+                kind: "star-steam",
+              });
+              if (push.vapid) {
+                results.starSteam += push.sent;
+              } else {
+                // Push not configured — release the claim so a later check can send.
+                await redis.del(claimKey);
+              }
+            } catch (e) {
+              await redis.del(claimKey);
+              throw e;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      results.errors.push(
+        `star-steam: ${e instanceof Error ? e.message : String(e)}`
       );
     }
 

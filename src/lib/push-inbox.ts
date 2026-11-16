@@ -19,6 +19,7 @@ export type PushKind =
   | "card-live"
   | "new-picks"
   | "card-locks"
+  | "star-steam"
   | "five-star"
   | "results"
   | "tail"
@@ -36,6 +37,7 @@ export const PUSH_KIND_LABELS: Record<string, string> = {
   "card-live": "📋 Card live",
   "new-picks": "➕ New picks",
   "card-locks": "⏰ Card locks",
+  "star-steam": "🔥 ★ steam",
   "five-star": "🚨 5-star alarm",
   results: "🏁 Daily results",
   tail: "🎯 Tail alert",

@@ -4,7 +4,7 @@ import { getSubscription, hasAccess, isFounder } from "@/lib/store";
 import { getPicksFeed, PicksFeed, FeedPick, sportFromGame } from "@/lib/picks";
 import { getOdds, getOpenings } from "@/lib/odds";
 import { buildBoard, MoverVM } from "@/lib/board";
-import { findBoardGame, bestPriceForPick, badgeBeatsPlay, movedAgainstNote, edgeGoneNote, propEdgeGoneNote, lineStoryForPick, bookPriceForPick, bookPricesForPick, selectCardSteamMoves, alertSpecForPick, BestPrice, BookPriceRow, PickAlertSpec } from "@/lib/card-utils";
+import { findBoardGame, bestPriceForPick, liveTailPrice, badgeBeatsPlay, movedAgainstNote, edgeGoneNote, propEdgeGoneNote, lineStoryForPick, bookPriceForPick, bookPricesForPick, selectCardSteamMoves, alertSpecForPick, BestPrice, BookPriceRow, PickAlertSpec } from "@/lib/card-utils";
 import { pickWinEdge, winEdgeInfo, formatWinEdge } from "@/lib/winprob";
 import { parseProp, livePropQuote } from "@/lib/cheatsheet";
 import { readTails } from "@/lib/tails";
@@ -155,6 +155,7 @@ function PickCard({
   bookPrices,
   yourBook,
   alert,
+  livePrice,
   initiallyTailed,
   cardDate,
   feedDate,
@@ -172,6 +173,9 @@ function PickCard({
   alert?: PickAlertSpec | null;
   /** Per-book live prices for this pick's market (optimization #58). */
   bookPrices?: BookPriceRow[] | null;
+  /** Live best price when it differs from published (optimization #82);
+   *  the tail is recorded at this price — the one the member got. */
+  livePrice?: string | null;
   yourBook?: BestPrice;
   initiallyTailed: boolean;
   cardDate: string;
@@ -349,7 +353,7 @@ function PickCard({
           </button>
         ) : (
           <>
-            <TailButton game={p.game} play={p.play} price={p.price} initiallyTailed={initiallyTailed} />
+            <TailButton game={p.game} play={p.play} price={p.price} livePrice={livePrice} initiallyTailed={initiallyTailed} />
             <ShareButton
               game={p.game}
               play={p.play}
@@ -574,6 +578,12 @@ export default async function PicksPage({
   const prefs = email ? await getPrefs(email) : { sports: [] as string[], book: "", tailAlerts: false };
 
   const bestByPick = new Map<string, BestPrice>();
+  // Live tail price (optimization #82): the best live odds when they
+  // differ from the published price — computed independently of the
+  // best-price badge (which hides worse-than-published numbers),
+  // because a member tailing now gets the live number either way and
+  // their My Tails record grades at the price stored.
+  const liveTailByPick = new Map<string, string>();
   const movedByPick = new Map<string, string | null>();
   const edgeGoneByPick = new Map<string, string | null>();
   const storyByPick = new Map<string, string | null>();
@@ -584,6 +594,8 @@ export default async function PicksPage({
     const key = `${p.game}|${p.play}`;
     const bg = findBoardGame(p, boardGames);
     if (bg) {
+      const lt = liveTailPrice(p, bg);
+      if (lt) liveTailByPick.set(key, lt);
       // Compare-all-books rows (#58): same cached board, no new pulls.
       booksByPick.set(key, bookPricesForPick(p, bg));
       // Line alert on the pick itself (optimization #79): upcoming games
@@ -725,7 +737,13 @@ export default async function PicksPage({
         p.status !== "voided" && // a dead play is never mass-tailed (#62)
         !tailedSet.has(`${p.game}|${p.play}`)
     )
-    .map(({ p }) => ({ game: p.game, play: p.play, price: p.price }));
+    // Bulk tails record at the live price too (optimization #82) —
+    // same member-record honesty as the per-pick button.
+    .map(({ p }) => ({
+      game: p.game,
+      play: p.play,
+      price: liveTailByPick.get(`${p.game}|${p.play}`) || p.price,
+    }));
 
   // Thin-card note (optimization #54): a 1–2 pick card says nothing
   // about why today, and can read as "they gave up". One honest line —
@@ -734,13 +752,32 @@ export default async function PicksPage({
   const thinCard = rankedPicks.length >= 1 && rankedPicks.length <= 2;
 
   // Plain-text version of the whole grid for the copy-card button
-  // (optimization #33): ranked order, one line per pick.
+  // (optimization #33): ranked order, one line per pick. Optimization
+  // #84: the teaser, parlay and longshot lines ride along — a member
+  // pasting the card into a group chat gets the WHOLE card, not just
+  // the grid. Each extra appears only when the feed carries it, so
+  // "No teaser today" days copy cleanly without the block.
   const cardCopyText = [
     `MoyLine AI — ${cardDate}`,
     ...rankedPicks.map(({ p }) => {
       const badge = pickWinEdge(p);
       return `${p.star ? "★ " : ""}${p.game} · ${p.play}${p.price ? ` ${p.price}` : ""}${badge ? ` (${badge})` : ""}`;
     }),
+    ...(feed?.teaser
+      ? [
+          `Teaser of the Day (${feed.teaser.points}-pt): ${feed.teaser.legs.join(" · ")}`,
+        ]
+      : []),
+    ...(feed?.parlay
+      ? [
+          `Parlay of the Day ${feed.parlay.odds} (${feed.parlay.book}): ${feed.parlay.legs.join(" · ")}`,
+        ]
+      : []),
+    ...(feed?.longshot
+      ? [
+          `🎯 Longshot of the Day: ${feed.longshot.game} · ${feed.longshot.play} ${feed.longshot.price}`,
+        ]
+      : []),
     "Full card: moylineai.com/picks",
   ].join("\n");
 
@@ -967,6 +1004,7 @@ export default async function PicksPage({
                   bookPrices={booksByPick.get(key) || null}
                   yourBook={yourBookByPick.get(key) || null}
                   alert={alertByPick.get(key) || null}
+                  livePrice={liveTailByPick.get(key) || null}
                   initiallyTailed={tailedSet.has(key)}
                   cardDate={cardDate}
                   feedDate={feed?.date}
