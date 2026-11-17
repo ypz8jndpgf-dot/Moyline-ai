@@ -52,6 +52,25 @@ function etDateString(daysAgo: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** "YYYY-MM-DD" `days` days before the given "YYYY-MM-DD" date. */
+function dateMinusDays(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * The most recent date carrying graded picks — the anchor for day-based
+ * windows. Windows end on the last graded day, never on today ET, so a
+ * day with no graded picks yet can't silently push the oldest day of
+ * the window out (the Nov 17 audit tie-out failure).
+ */
+function lastGradedDate(graded: TrackPick[]): string | null {
+  let max: string | null = null;
+  for (const p of graded) if (max === null || p.date > max) max = p.date;
+  return max;
+}
+
 export async function getShowcaseRecords(): Promise<ShowcaseRecords> {
   const rec = await getTrackRecord();
   const graded = rec.picks.filter((p) => p.result !== "Pending");
@@ -74,9 +93,12 @@ export async function getShowcaseRecords(): Promise<ShowcaseRecords> {
   const showSinceRecal =
     sinceTotal >= 5 && sinceRecal.pct !== null && sinceRecal.pct >= 55;
 
-  // Last 7 days (today ET + previous 6 days), graded picks only.
-  const cutoff = etDateString(6);
-  const last7 = tally(graded.filter((p) => p.date >= cutoff));
+  // Last 7 days — the 7 calendar days ending on the last graded day,
+  // graded picks only.
+  const anchor = lastGradedDate(graded);
+  const last7 = anchor
+    ? tally(graded.filter((p) => p.date >= dateMinusDays(anchor, 6)))
+    : tally([]);
   const showLast7 = last7.w + last7.l >= 5 && last7.pct !== null && last7.pct >= 50;
 
   return { allTime, stars, sinceRecal, last7, showStars, showSinceRecal, showLast7 };
@@ -517,8 +539,20 @@ export async function getFeaturedMetrics(): Promise<FeaturedMetrics> {
     sinceRecal.pct !== null &&
     sinceRecal.pct >= 55;
 
-  const last30 = tallyWithUnits(graded.filter((p) => p.date >= etDateString(29)));
-  const last7 = tallyWithUnits(graded.filter((p) => p.date >= etDateString(6)));
+  // Day windows end on the last graded day (see lastGradedDate), so
+  // "Last 30 days" is [lastGraded - 29d, lastGraded] and "Last 7 days"
+  // is [lastGraded - 6d, lastGraded] — never anchored on today ET.
+  const windowAnchor = lastGradedDate(graded);
+  const last30 = windowAnchor
+    ? tallyWithUnits(
+        graded.filter((p) => p.date >= dateMinusDays(windowAnchor, 29))
+      )
+    : tallyWithUnits([]);
+  const last7 = windowAnchor
+    ? tallyWithUnits(
+        graded.filter((p) => p.date >= dateMinusDays(windowAnchor, 6))
+      )
+    : tallyWithUnits([]);
 
   const candidates: (FeaturedMetric & {
     sport?: string;
