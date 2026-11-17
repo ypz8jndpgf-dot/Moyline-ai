@@ -40,6 +40,12 @@ export default function SignInPage() {
       <form onSubmit={submit} className="card p-6 space-y-4">
         <input
           type="email"
+          name="email"
+          id="email"
+          autoComplete="email"
+          inputMode="email"
+          autoCapitalize="none"
+          autoCorrect="off"
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}

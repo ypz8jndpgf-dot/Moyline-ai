@@ -82,6 +82,11 @@ export default function FeedbackForm() {
       />
       <input
         type="email"
+        name="email"
+        autoComplete="email"
+        inputMode="email"
+        autoCapitalize="none"
+        autoCorrect="off"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         placeholder="Email for a reply (optional)"
