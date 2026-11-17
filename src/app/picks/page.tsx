@@ -662,6 +662,42 @@ export default async function PicksPage({
     }
   }
 
+  // Edge-gone for the Notable props strip (optimization #85): the strip
+  // leans live in feed.props, separate from the grid picks above, and
+  // until now showed only the published price — yet props move fastest.
+  // Same live quote, same note math, same thresholds as grid prop picks
+  // (#52): the board-props cache via livePropQuote, judged by
+  // propEdgeGoneNote (line moved past the stated projection, or the
+  // same-line price ate the published edge). Upcoming, non-voided leans
+  // only; no cache match → no note, by design. Kept in its own map so a
+  // lean that shares game|play with a grid pick is judged on its own
+  // published price and edge, never the grid pick's.
+  const stripEdgeGoneByProp = new Map<string, string | null>();
+  if (feed?.date && feed.props && feed.props.length > 0) {
+    const stripProps = feed.props.filter(
+      (p) =>
+        p.status !== "voided" &&
+        statusFor(parseStart(p.starts), nowMins) === "upcoming"
+    );
+    if (stripProps.length > 0) {
+      try {
+        const quotes = await Promise.all(
+          stripProps.map((p) => livePropQuote(p, feed.date))
+        );
+        stripProps.forEach((p, i) => {
+          const parsed = parseProp(p.play);
+          if (!parsed) return;
+          stripEdgeGoneByProp.set(
+            `${p.game}|${p.play}`,
+            propEdgeGoneNote(p, parsed, quotes[i])
+          );
+        });
+      } catch {
+        /* board-props cache unavailable — strip renders without the note */
+      }
+    }
+  }
+
   // Steam section: the same strict selection as the alert emails — the
   // pick's own game, market and side only, collapsed to one line per
   // game+market+side across books. (The old per-pick fuzzy matcher listed
@@ -1084,6 +1120,13 @@ export default async function PicksPage({
                         </p>
                         {prop.reasoning && (
                           <p className="text-xs text-muted mt-1">{prop.reasoning}</p>
+                        )}
+                        {stripEdgeGoneByProp.get(key) && (
+                          <p className="text-xs mt-2">
+                            <span className="inline-block bg-red-500/15 text-red-100 px-2 py-0.5 rounded border border-red-400/40 font-bold">
+                              🚫 {stripEdgeGoneByProp.get(key)}
+                            </span>
+                          </p>
                         )}
                         <PickStatusBanner p={prop} className="mt-2" />
                         {prop.status !== "voided" && (
