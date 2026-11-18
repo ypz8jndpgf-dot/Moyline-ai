@@ -1215,3 +1215,170 @@ export async function livePropLine(
     dateET
   );
 }
+
+/* ------------------- odds-board Props tab (#90) ------------------- */
+
+/**
+ * View model for the homepage board's Props tab (optimization #90):
+ * the board-props cache the Cheatsheet maintains, reshaped for
+ * line-shopping — per game, per player + market, every distinct priced
+ * line with the best Over/Under price + book, and the consensus main
+ * line flagged. Cache-only, exactly like buildLadder/livePropQuote:
+ * this never triggers an Odds API fetch, so on days the sheet never
+ * topped up from the board the tab simply has nothing to show.
+ */
+export type BoardPropSideVM = { price: number; book: string };
+export type BoardPropLineVM = {
+  line: number;
+  over: BoardPropSideVM | null;
+  under: BoardPropSideVM | null;
+  main: boolean;
+};
+export type BoardPropRowVM = {
+  player: string;
+  market: string;
+  marketLabel: string;
+  mainLine: number | null;
+  lines: BoardPropLineVM[];
+};
+export type BoardPropGameVM = {
+  game: string; // "Away @ Home (NBA)" — the suffix is stripped in the UI
+  sportKey: string; // OddsBoard tab key, e.g. "basketball_nba"
+  sportLabel: string; // "NBA"
+  starts: string | null; // "7:00pm ET" as cached on the board picks
+  rows: BoardPropRowVM[];
+};
+
+const BOARD_PROP_SPORT_KEYS: Record<string, { key: string; label: string }> = {
+  NBA: { key: "basketball_nba", label: "NBA" },
+  NHL: { key: "icehockey_nhl", label: "NHL" },
+  NFL: { key: "americanfootball_nfl", label: "NFL" },
+};
+
+/** Row order inside a game card: headline markets first. */
+const BOARD_PROP_MARKET_ORDER = [
+  "points",
+  "goals",
+  "passYds",
+  "rushYds",
+  "recYds",
+  "rebounds",
+  "assists",
+  "receptions",
+  "passTd",
+  "threes",
+  "shots",
+];
+
+export async function getBoardPropsView(dateET: string): Promise<BoardPropGameVM[]> {
+  const cache = await readBoardCache(dateET).catch(() => null);
+  if (!cache || (cache.picks.length === 0 && cache.rungs.length === 0)) return [];
+
+  // Consensus main lines + start times from the board picks; the picks
+  // also carry the fallback rows for legacy caches written before
+  // ladder rungs existed (one line per player + market, both sides).
+  type PickRow = {
+    game: string;
+    player: string;
+    market: string;
+    line: number;
+    over: BoardPropSideVM | null;
+    under: BoardPropSideVM | null;
+  };
+  const mainByKey = new Map<string, number>();
+  const startsByGame = new Map<string, string>();
+  const pickRows = new Map<string, PickRow>();
+  for (const pick of cache.picks) {
+    const parsed = parseProp(pick.play);
+    if (!parsed) continue;
+    const key = `${pick.game}|${normalizeName(parsed.playerQuery)}|${parsed.market}`;
+    if (!mainByKey.has(key)) mainByKey.set(key, parsed.line);
+    if (pick.starts && !startsByGame.has(pick.game)) {
+      startsByGame.set(pick.game, pick.starts);
+    }
+    let row = pickRows.get(key);
+    if (!row) {
+      row = {
+        game: pick.game,
+        player: parsed.playerQuery,
+        market: parsed.market,
+        line: parsed.line,
+        over: null,
+        under: null,
+      };
+      pickRows.set(key, row);
+    }
+    const tag = parsePriceTag(pick.price);
+    if (tag) {
+      if (parsed.direction === "over" && !row.over) row.over = tag;
+      if (parsed.direction === "under" && !row.under) row.under = tag;
+    }
+  }
+
+  const games = new Map<string, BoardPropGameVM>();
+  const gameOf = (game: string): BoardPropGameVM => {
+    let g = games.get(game);
+    if (!g) {
+      const m = game.match(/\(([^)]+)\)\s*$/);
+      const sport = (m && BOARD_PROP_SPORT_KEYS[m[1]]) || { key: "", label: m?.[1] || "" };
+      g = {
+        game,
+        sportKey: sport.key,
+        sportLabel: sport.label,
+        starts: startsByGame.get(game) ?? null,
+        rows: [],
+      };
+      games.set(game, g);
+    }
+    return g;
+  };
+
+  const seenRows = new Set<string>();
+  for (const entry of cache.rungs) {
+    const key = `${entry.game}|${normalizeName(entry.player)}|${entry.market}`;
+    const mainLine = mainByKey.get(key) ?? null;
+    const lines: BoardPropLineVM[] = entry.lines.map((l) => ({
+      line: l.line,
+      over: l.over ?? null,
+      under: l.under ?? null,
+      main: mainLine !== null && Math.abs(l.line - mainLine) < 1e-9,
+    }));
+    if (lines.length === 0) continue;
+    gameOf(entry.game).rows.push({
+      player: entry.player,
+      market: entry.market,
+      marketLabel: MARKETS.find((mk) => mk.key === entry.market)?.label ?? entry.market,
+      mainLine,
+      lines,
+    });
+    seenRows.add(key);
+  }
+
+  // Any pick with no rung row (always the case for legacy caches):
+  // a single-line row from the pick's own consensus prices.
+  for (const [key, row] of pickRows) {
+    if (seenRows.has(key)) continue;
+    if (!row.over && !row.under) continue;
+    gameOf(row.game).rows.push({
+      player: row.player,
+      market: row.market,
+      marketLabel: MARKETS.find((mk) => mk.key === row.market)?.label ?? row.market,
+      mainLine: row.line,
+      lines: [{ line: row.line, over: row.over, under: row.under, main: true }],
+    });
+  }
+
+  const orderOf = (market: string) => {
+    const i = BOARD_PROP_MARKET_ORDER.indexOf(market);
+    return i === -1 ? 99 : i;
+  };
+  const out = [...games.values()].filter((g) => g.rows.length > 0);
+  for (const g of out) {
+    g.rows.sort(
+      (a, b) =>
+        orderOf(a.market) - orderOf(b.market) ||
+        a.player.localeCompare(b.player)
+    );
+  }
+  return out;
+}

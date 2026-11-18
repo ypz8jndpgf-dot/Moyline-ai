@@ -17,6 +17,7 @@ import LongshotStrip from "@/components/LongshotStrip";
 import { auth } from "@/lib/auth";
 import { getPrefs } from "@/lib/prefs";
 import { getPicksFeed } from "@/lib/picks";
+import { getBoardPropsView, type BoardPropGameVM } from "@/lib/cheatsheet";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,19 @@ export default async function Home() {
     cardGames = (feed?.picks ?? []).map((p) => p.game).filter(Boolean);
   } catch {
     /* the toggle simply doesn't render */
+  }
+
+  // Player props for the board's Props tab (optimization #90) — a
+  // cache-only read of the board-props cache the Cheatsheet maintains;
+  // best-effort: no cache today, the tab shows its empty state.
+  let propGames: BoardPropGameVM[] = [];
+  try {
+    const todayET = new Date().toLocaleDateString("en-CA", {
+      timeZone: "America/New_York",
+    });
+    propGames = await getBoardPropsView(todayET);
+  } catch {
+    /* the Props tab simply shows its empty state */
   }
 
   // Personalization (steal #5): a signed-in member's favorite sports lead
@@ -172,6 +186,7 @@ export default async function Home() {
         movers={movers}
         sports={sports}
         cardGames={cardGames}
+        propGames={propGames}
         primaryBook={primaryBook}
         updatedAt={oddsResult.fetchedAt ? new Date(oddsResult.fetchedAt).toISOString() : ""}
         quotaNote={
