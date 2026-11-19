@@ -791,8 +791,11 @@ export default async function PicksPage({
   // (optimization #33): ranked order, one line per pick. Optimization
   // #84: the teaser, parlay and longshot lines ride along — a member
   // pasting the card into a group chat gets the WHOLE card, not just
-  // the grid. Each extra appears only when the feed carries it, so
-  // "No teaser today" days copy cleanly without the block.
+  // the grid. Optimization #93: the 🏈 Top 3 Football Plays block
+  // rides along too, ranked, one line per play under its header.
+  // Each extra appears only when the feed carries it, so "No teaser
+  // today" days — and weekdays, which never carry a Top 3 — copy
+  // cleanly without the block.
   const cardCopyText = [
     `MoyLine AI — ${cardDate}`,
     ...rankedPicks.map(({ p }) => {
@@ -812,6 +815,15 @@ export default async function PicksPage({
     ...(feed?.longshot
       ? [
           `🎯 Longshot of the Day: ${feed.longshot.game} · ${feed.longshot.play} ${feed.longshot.price}`,
+        ]
+      : []),
+    ...(feed?.top3 && feed.top3.length > 0
+      ? [
+          "🏈 Top 3 Football Plays:",
+          ...feed.top3.map(
+            (tp, i) =>
+              `#${i + 1} ${tp.game} · ${tp.play}${tp.price ? ` ${tp.price}` : ""}`
+          ),
         ]
       : []),
     "Full card: moylineai.com/picks",

@@ -15,6 +15,18 @@ export type WhatsNewEntry = {
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
     date: "2026-11-19",
+    title: "\"Your book only\" — now on the Props tab",
+    blurb:
+      "The odds board's Player props tab takes the same \"Your book only\" toggle as the Games view: prop lines narrow to where your book hangs the best price, and any player it doesn't lead keeps the full ladder.",
+  },
+  {
+    date: "2026-11-19",
+    title: "Copy card includes the Top 3",
+    blurb:
+      "Weekend copy-card pastes now carry the 🏈 Top 3 Football Plays block too — the whole card drops into a group chat in one paste.",
+  },
+  {
+    date: "2026-11-19",
     title: "Open at your book — now on props too",
     blurb:
       "Notable props carry the same \"Open at <book>\" link as card picks: one tap from the prop lean to the book that quoted its price.",

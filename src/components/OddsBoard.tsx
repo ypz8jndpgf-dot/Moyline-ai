@@ -249,7 +249,24 @@ function propLineWindow(row: BoardPropRowVM) {
   return lines.slice(start, start + 5);
 }
 
-function PropRow({ row }: { row: BoardPropRowVM }) {
+function PropRow({ row, onlyBook }: { row: BoardPropRowVM; onlyBook?: string | null }) {
+  // "Your book only" (optimization #92): the prop cache carries only
+  // the best price per line + side, so the filter keeps the sides
+  // where the member's book hangs that best price. A row where their
+  // book is best nowhere falls back to the full ladder rather than an
+  // empty row — the #81 GameCard rule, one level down. Each chip
+  // labels its book, so a fallback row never masquerades as the
+  // member's own price.
+  const atBook = onlyBook
+    ? row.lines
+        .map((l) => ({
+          ...l,
+          over: l.over && l.over.book === onlyBook ? l.over : null,
+          under: l.under && l.under.book === onlyBook ? l.under : null,
+        }))
+        .filter((l) => l.over || l.under)
+    : [];
+  const lines = atBook.length > 0 ? atBook : row.lines;
   return (
     <div className="py-2 border-t border-line/60 first:border-t-0">
       <div className="flex items-baseline justify-between gap-2 mb-1.5">
@@ -264,7 +281,7 @@ function PropRow({ row }: { row: BoardPropRowVM }) {
         )}
       </div>
       <div className="flex flex-wrap gap-1.5">
-        {propLineWindow(row).map((l) => (
+        {propLineWindow({ ...row, lines }).map((l) => (
           <span
             key={l.line}
             className={`inline-flex items-center gap-1.5 rounded px-2 py-1 text-[11px] whitespace-nowrap border ${
@@ -297,7 +314,7 @@ function PropRow({ row }: { row: BoardPropRowVM }) {
 
 const PROP_ROWS_PREVIEW = 10;
 
-function PropGameCard({ game }: { game: BoardPropGameVM }) {
+function PropGameCard({ game, onlyBook }: { game: BoardPropGameVM; onlyBook?: string | null }) {
   const [expanded, setExpanded] = useState(false);
   const matchup = game.game.replace(/\s*\([^)]+\)\s*$/, "");
   const rows = expanded ? game.rows : game.rows.slice(0, PROP_ROWS_PREVIEW);
@@ -315,7 +332,7 @@ function PropGameCard({ game }: { game: BoardPropGameVM }) {
       <h3 className="font-display text-lg mb-2">{matchup}</h3>
       <div>
         {rows.map((r) => (
-          <PropRow key={`${r.player}|${r.market}`} row={r} />
+          <PropRow key={`${r.player}|${r.market}`} row={r} onlyBook={onlyBook} />
         ))}
       </div>
       {game.rows.length > PROP_ROWS_PREVIEW && (
@@ -383,9 +400,35 @@ export default function OddsBoard({
     return seen;
   }, [games]);
 
+  // Books appearing on the Props tab (optimization #92): the prop
+  // cache's best-price attributions. Same four books as the game
+  // board in practice; kept separate so the toggle + picker validate
+  // against the view actually on screen.
+  const propBooks = useMemo(() => {
+    const seen: string[] = [];
+    for (const g of propGames ?? []) {
+      for (const r of g.rows) {
+        for (const l of r.lines) {
+          for (const s of [l.over, l.under]) {
+            if (s && !seen.includes(s.book)) seen.push(s.book);
+          }
+        }
+      }
+    }
+    return seen;
+  }, [propGames]);
+
+  const knownBooks = useMemo(() => {
+    const seen = [...boardBooks];
+    for (const b of propBooks) if (!seen.includes(b)) seen.push(b);
+    return seen;
+  }, [boardBooks, propBooks]);
+
+  const viewBooks = view === "props" ? propBooks : boardBooks;
+
   const effBook =
-    [bookPick, primaryBook || "", ...boardBooks].find(
-      (b) => b && boardBooks.includes(b)
+    [bookPick, primaryBook || "", ...knownBooks].find(
+      (b) => b && knownBooks.includes(b)
     ) || "";
 
   const cardCount = useMemo(
@@ -497,7 +540,7 @@ export default function OddsBoard({
             🎯 Card games only ({cardCount})
           </button>
         )}
-        {view === "games" && boardBooks.length > 1 && (
+        {viewBooks.length > 1 && (
           <button
             onClick={() => setBookOnly((v) => !v)}
             aria-pressed={bookOnly}
@@ -508,14 +551,14 @@ export default function OddsBoard({
             📚 Your book only
           </button>
         )}
-        {view === "games" && bookOnly && boardBooks.length > 1 && (
+        {bookOnly && viewBooks.length > 1 && (
           <select
             value={effBook}
             onChange={(e) => setBookPick(e.target.value)}
             aria-label="Choose your book"
             className="px-3 py-1.5 rounded-full text-sm font-bold bg-white/5 border border-line text-paper focus:border-gold focus:outline-none"
           >
-            {boardBooks.map((b) => (
+            {viewBooks.map((b) => (
               <option key={b} value={b}>
                 {b}
               </option>
@@ -527,6 +570,11 @@ export default function OddsBoard({
       {view === "props" ? (
         <p className="text-xs text-muted mb-4">
           Best price across DraftKings, FanDuel, BetMGM and Caesars at each line · gold chip = the main line most books hang · lines from the live prop board — they post with the morning sheet and refresh through the day
+          {bookOnly && effBook && (
+            <span>
+              {" "}· 📚 {effBook} only: showing the lines where your book hangs the best price — a player whose row your book doesn&apos;t lead keeps the full ladder
+            </span>
+          )}
         </p>
       ) : (
         <p className="text-xs text-muted mb-4">
@@ -548,7 +596,7 @@ export default function OddsBoard({
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
             {filteredProps.map((g) => (
-              <PropGameCard key={g.game} game={g} />
+              <PropGameCard key={g.game} game={g} onlyBook={bookOnly ? effBook : null} />
             ))}
           </div>
         )
