@@ -14,6 +14,12 @@ export type WhatsNewEntry = {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    date: "2026-11-19",
+    title: "Open at your book — now on props too",
+    blurb:
+      "Notable props carry the same \"Open at <book>\" link as card picks: one tap from the prop lean to the book that quoted its price.",
+  },
+  {
     date: "2026-11-14",
     title: "Open at your book",
     blurb:

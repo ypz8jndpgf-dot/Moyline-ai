@@ -1102,6 +1102,16 @@ export default async function PicksPage({
                   // edge-gone badge uses; unparseable plays get no button.
                   const parsedProp =
                     prop.status !== "voided" ? parseProp(prop.play) : null;
+                  // "Open at your book" (optimization #91): the same link
+                  // the grid carries (#76), aimed at the book the strip
+                  // prop's price was quoted at — parsed from the price's
+                  // trailing "(Book)". No verified URL for that book →
+                  // no link, never a dead one.
+                  const propBook =
+                    prop.status !== "voided"
+                      ? prop.price?.match(/\(([^)]+)\)\s*$/)?.[1] ?? null
+                      : null;
+                  const propOpenUrl = propBook ? bookSportsbookUrl(propBook) : null;
                   return (
                     <div
                       key={i}
@@ -1155,12 +1165,24 @@ export default async function PicksPage({
                           🚫 Voided
                         </span>
                       ) : (
-                        <TailButton
-                          game={prop.game}
-                          play={prop.play}
-                          price={prop.price}
-                          initiallyTailed={tailedSet.has(key)}
-                        />
+                        <div className="flex shrink-0 flex-col items-end gap-1.5">
+                          <TailButton
+                            game={prop.game}
+                            play={prop.play}
+                            price={prop.price}
+                            initiallyTailed={tailedSet.has(key)}
+                          />
+                          {propOpenUrl && propBook && (
+                            <a
+                              href={propOpenUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs font-bold px-3 py-1.5 rounded-full border border-line text-muted hover:border-gold hover:text-gold transition-colors"
+                            >
+                              Open at {propBook} →
+                            </a>
+                          )}
+                        </div>
                       )}
                     </div>
                   );
