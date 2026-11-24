@@ -71,6 +71,19 @@ function lastGradedDate(graded: TrackPick[]): string | null {
   return max;
 }
 
+/**
+ * Graded bets in the recalibrated regime (on/after RECAL_DATE) — the live
+ * count behind every "bets analyzed" badge on the site. Derived from the
+ * same track record as everything else so the badges can never go stale
+ * (the hardcoded 359 they replaced was a pre-reset leftover).
+ */
+export async function getRecalBetsAnalyzed(): Promise<number> {
+  const rec = await getTrackRecord();
+  return rec.picks.filter(
+    (p) => p.date >= RECAL_DATE && p.result !== "Pending"
+  ).length;
+}
+
 export async function getShowcaseRecords(): Promise<ShowcaseRecords> {
   const rec = await getTrackRecord();
   const graded = rec.picks.filter((p) => p.result !== "Pending");

@@ -11,7 +11,7 @@ import RecentResults from "@/components/RecentResults";
 import GoldenRun from "@/components/GoldenRun";
 import TrackHighlights from "@/components/TrackHighlights";
 import TrackTicker from "@/components/TrackTicker";
-import { getTrendCards } from "@/lib/records";
+import { getTrendCards, getRecalBetsAnalyzed } from "@/lib/records";
 import PromoVideo from "@/components/PromoVideo";
 import LongshotStrip from "@/components/LongshotStrip";
 import { auth } from "@/lib/auth";
@@ -22,10 +22,11 @@ import { getBoardPropsView, type BoardPropGameVM } from "@/lib/cheatsheet";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [oddsResult, openings, trends] = await Promise.all([
+  const [oddsResult, openings, trends, betsAnalyzed] = await Promise.all([
     getOdds(),
     getOpenings(),
     getTrendCards(),
+    getRecalBetsAnalyzed(),
   ]);
   const { games, movers, sports } = buildBoard(oddsResult.events, openings);
 
@@ -82,7 +83,7 @@ export default async function Home() {
       <div className="mb-8 text-center sm:text-left">
         <div className="inline-flex items-center gap-2 mb-3 px-3 py-1.5 rounded-full border border-gold/40 bg-gold/10 text-gold text-[11px] font-bold uppercase tracking-[0.2em]">
           <span>✦</span>
-          Algo recalibrated Oct 16 — 359 bets analyzed
+          Algo recalibrated Oct 16 — {betsAnalyzed} bets analyzed
         </div>
         <h1 className="font-display text-4xl sm:text-6xl leading-tight">
           EVERY BOOK. <span className="gold-text">EVERY LINE.</span>
@@ -153,7 +154,7 @@ export default async function Home() {
           We found the leak. <span className="gold-text">We fixed it.</span>
         </h2>
         <p className="text-sm text-muted mb-5 max-w-3xl leading-relaxed">
-          359 graded bets analyzed. The data was blunt: our "highest confidence" plays were
+          {betsAnalyzed} graded bets analyzed. The data was blunt: our "highest confidence" plays were
           hitting 38% while mid-tier plays hit 54% — the scale was upside-down. So we rebuilt
           it: tiers recalibrated, stars sharpened, moneylines prioritized, sport-specific rules.
           These are the segments that keep winning:

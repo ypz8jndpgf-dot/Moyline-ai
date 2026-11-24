@@ -646,8 +646,8 @@ function CalibrationSection({ cal }: { cal: CalibrationData }) {
   );
 }
 
-const REGIME_RULES = [
-  ["Recalibrated Oct 16", "359 bets analyzed — confidence tiers fixed, stars sharpened"],
+const regimeRules = (betsAnalyzed: number) => [
+  ["Recalibrated Oct 16", `${betsAnalyzed} bets analyzed — confidence tiers fixed, stars sharpened`],
   ["Quantified edge", "Every play states its edge as a number. No number, no grid spot"],
   ["Workhorse tier", "Conf-3 is the primary tier (54%); conf-4 is star-quality only"],
   ["Sharpened stars", "★ only for NHL/NFL ML & spread — 74% hit rate"],
@@ -668,6 +668,10 @@ export default function RecordTabs({
   const optStart = rec.optimizedStartDate ?? "2026-10-16";
   const allPicks = rec.picks.filter((x) => x.result !== "Pending");
   const optPicks = rec.picks.filter((x) => x.date >= optStart);
+  // Live graded count in the recalibrated regime — the "bets analyzed"
+  // number, derived from the same record this page renders (never a
+  // hardcode; the 359 it replaced was a pre-reset leftover).
+  const optGraded = optPicks.filter((x) => x.result !== "Pending").length;
   const shown = tab === "all" ? allPicks : optPicks;
   const t = tally(shown);
 
@@ -704,10 +708,10 @@ export default function RecordTabs({
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-xs font-bold uppercase tracking-[0.3em] text-gold">Recalibrated regime</span>
-            <span className="text-[11px] text-muted">since {optStart} · 359 bets analyzed</span>
+            <span className="text-[11px] text-muted">since {optStart} · {optGraded} bets analyzed</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {REGIME_RULES.map(([title, desc]) => (
+            {regimeRules(optGraded).map(([title, desc]) => (
               <div key={title} className="card p-4 border-gold/20">
                 <div className="font-bold text-sm text-gold mb-1">{title}</div>
                 <div className="text-xs text-muted leading-relaxed">{desc}</div>
