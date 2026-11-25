@@ -84,6 +84,25 @@ export async function getRecalBetsAnalyzed(): Promise<number> {
   ).length;
 }
 
+/**
+ * Display label for the homepage Receipts strip's "verified" stamp: the
+ * latest graded pick date in the live track record, formatted
+ * "Nov 24, 2026". Derived from the same record as the bet count beside
+ * it so the stamp advances with nightly grading instead of sitting on a
+ * hardcoded date (the Oct 31, 2026 stamp it replaced). Falls back to
+ * the recalibration date when the record carries no graded picks.
+ */
+export function receiptsVerifiedLabel(picks: TrackPick[]): string {
+  const graded = picks.filter((p) => p.result !== "Pending");
+  const latest = lastGradedDate(graded) ?? RECAL_DATE;
+  return new Date(`${latest}T12:00:00Z`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 export async function getShowcaseRecords(): Promise<ShowcaseRecords> {
   const rec = await getTrackRecord();
   const graded = rec.picks.filter((p) => p.result !== "Pending");

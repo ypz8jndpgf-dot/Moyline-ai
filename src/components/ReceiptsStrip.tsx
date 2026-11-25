@@ -1,16 +1,21 @@
 import Link from "next/link";
 import { getTrackRecord } from "@/lib/store";
+import { receiptsVerifiedLabel } from "@/lib/records";
 
 /**
  * Receipts strip (DeepChamp-inspired "proof by product", MoyLine-honest
  * version, 2026-10-31): operational facts a member can verify, instead of
- * win-rate claims. The bet count comes from the live track record; if it
- * can't load, the strip still renders with the count omitted.
+ * win-rate claims. The bet count and the "verified" stamp both come from
+ * the live track record (the stamp is the latest graded pick date); if
+ * it can't load, the strip still renders with the count omitted and the
+ * stamp on its recalibration-date fallback.
  */
 export default async function ReceiptsStrip() {
   let betCount: number | null = null;
+  let verifiedLabel = receiptsVerifiedLabel([]);
   try {
     const rec = await getTrackRecord();
+    verifiedLabel = receiptsVerifiedLabel(rec.picks);
     const t = rec.totals;
     if (t && t.w + t.l + t.p > 0) betCount = t.w + t.l + t.p;
   } catch {
@@ -51,7 +56,7 @@ export default async function ReceiptsStrip() {
         ))}
       </div>
       <p className="text-[11px] text-muted mt-4 italic">
-        Operational facts, verified Oct 31, 2026. New here?{" "}
+        Operational facts, verified {verifiedLabel}. New here?{" "}
         <Link href="/guide" className="text-gold not-italic font-bold hover:underline">
           Read the game-day routine →
         </Link>
