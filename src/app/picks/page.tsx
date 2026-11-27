@@ -935,10 +935,24 @@ export default async function PicksPage({
         </div>
       )}
 
-      {!feed || feed.picks.length === 0 ? (
+      {!feed ? (
         <div className="card p-8 text-center">
           <p className="text-lg mb-2">Today&apos;s card is being prepared.</p>
           <p className="text-sm text-muted">Check back shortly — picks post with the 7am brief.</p>
+        </div>
+      ) : feed.picks.length === 0 ? (
+        // Empty card, explained (optimization #97): the feed posted with
+        // zero grid picks — the slate was researched and nothing cleared
+        // the gates. Say that plainly instead of "being prepared", and
+        // let the sections below (props, passes, Top 3) still render.
+        <div className="card p-8 text-center">
+          <p className="text-lg mb-2">No plays cleared the gates today.</p>
+          <p className="text-sm text-muted">
+            The full slate was researched — the card is empty because no play
+            carried both a quantified edge and a confirmed driver, not because
+            it wasn&apos;t posted. The card is never padded; what was
+            considered is listed below.
+          </p>
         </div>
       ) : (
         <>
@@ -1062,7 +1076,11 @@ export default async function PicksPage({
             })}
           </div>
           )}
+        </>
+      )}
 
+      {feed && (
+        <>
           {feed.top3 && feed.top3.length > 0 && (
             <div className="card p-5 mb-8 border-gold/30">
               <h2 className="font-display text-xl mb-1">🏈 Top 3 Football Plays</h2>
